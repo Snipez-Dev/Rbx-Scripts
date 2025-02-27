@@ -1,92 +1,106 @@
 -- IceHubLib.lua
 local IceHubLib = {}
 
--- Init baut das komplette UI (basierend auf deinem Code) auf und erstellt einen Container ("CustomContent")
--- in den du mit den Create*-Funktionen Elemente einfügen kannst.
 function IceHubLib:Init(scriptName, scriptVersion)
-    -- Services & Spieler
-    local Players          = game:GetService("Players")
+    ------------------------------------------------
+    -- Services, Spieler & Grundeinstellungen
+    ------------------------------------------------
+    local Players = game:GetService("Players")
     local UserInputService = game:GetService("UserInputService")
-    local RunService       = game:GetService("RunService")
-    local Stats            = game:GetService("Stats")
-    local player           = Players.LocalPlayer
+    local RunService = game:GetService("RunService")
+    local Stats = game:GetService("Stats")
+    local TeleportService = game:GetService("TeleportService")
+    local VoiceChatService = game:FindService("VoiceChatService")
+    local player = Players.LocalPlayer
 
-    -- Einstellungen
     local uiWidth, uiHeight = 600, 300
-    local topBarColor  = Color3.fromRGB(20, 20, 20)
-    local hoverColor   = Color3.fromRGB(40, 40, 40)
-    local bgColor      = Color3.fromRGB(35, 35, 35)
-    local textColor    = Color3.fromRGB(0, 255, 255)
+    local topBarColor = Color3.fromRGB(20,20,20)
+    local hoverColor  = Color3.fromRGB(40,40,40)
+    local bgColor     = Color3.fromRGB(35,35,35)
+    local textColor   = Color3.fromRGB(0,255,255)
+    local WIDE_BUTTON_WIDTH = 455
 
+    ------------------------------------------------
     -- Alte GUI entfernen
+    ------------------------------------------------
     local oldGui = player:WaitForChild("PlayerGui"):FindFirstChild("IceHubUI")
     if oldGui then
         oldGui:Destroy()
     end
 
+    ------------------------------------------------
+    -- Anti-AFK (Input Simulation)
+    ------------------------------------------------
+    spawn(function()
+        while true do
+            wait(60)
+            local vu = game:GetService("VirtualUser")
+            vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            wait(0.1)
+            vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        end
+    end)
+
+    ------------------------------------------------
     -- ScreenGui erstellen
+    ------------------------------------------------
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "IceHubUI"
     screenGui.ResetOnSpawn = false
     screenGui.DisplayOrder = 998
     screenGui.Parent = player:WaitForChild("PlayerGui")
 
-    --------------------------------------------
+    ------------------------------------------------
     -- Watermark (oben links, Drag & Drop, Uptime)
-    --------------------------------------------
+    ------------------------------------------------
     local startTime = tick()
     local watermarkFrame = Instance.new("Frame")
     watermarkFrame.Name = "Watermark"
-    watermarkFrame.Position = UDim2.new(0, 10, 0, 5)
-    watermarkFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    watermarkFrame.Position = UDim2.new(0,10,0,5)
+    watermarkFrame.BackgroundColor3 = Color3.fromRGB(40,40,40)
     watermarkFrame.BorderSizePixel = 0
-    watermarkFrame.Parent = screenGui
     watermarkFrame.AutomaticSize = Enum.AutomaticSize.XY
+    watermarkFrame.ClipsDescendants = false
+    watermarkFrame.Parent = screenGui
 
     local wmSizeConstraint = Instance.new("UISizeConstraint")
-    wmSizeConstraint.MaxSize = Vector2.new(300, 9999)
+    wmSizeConstraint.MaxSize = Vector2.new(300,9999)
     wmSizeConstraint.Parent = watermarkFrame
 
-    local watermarkCorner = Instance.new("UICorner")
-    watermarkCorner.CornerRadius = UDim.new(0, 8)
-    watermarkCorner.Parent = watermarkFrame
+    local wmCorner = Instance.new("UICorner")
+    wmCorner.CornerRadius = UDim.new(0,8)
+    wmCorner.Parent = watermarkFrame
 
-    local uiList = Instance.new("UIListLayout")
-    uiList.FillDirection = Enum.FillDirection.Vertical
-    uiList.SortOrder = Enum.SortOrder.LayoutOrder
-    uiList.Padding = UDim.new(0, 2)
-    uiList.Parent = watermarkFrame
+    local wmLayout = Instance.new("UIListLayout")
+    wmLayout.FillDirection = Enum.FillDirection.Vertical
+    wmLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    wmLayout.Padding = UDim.new(0,2)
+    wmLayout.Parent = watermarkFrame
 
-    local watermarkText = Instance.new("TextLabel")
-    watermarkText.Name = "WatermarkText"
-    watermarkText.BackgroundTransparency = 1
-    watermarkText.TextColor3 = textColor
-    watermarkText.Font = Enum.Font.GothamBold
-    watermarkText.TextSize = 14
-    watermarkText.TextXAlignment = Enum.TextXAlignment.Left
-    watermarkText.Text = scriptName.." | "..player.Name.." | Time: 00:00:00"
-    watermarkText.Parent = watermarkFrame
-    watermarkText.AutomaticSize = Enum.AutomaticSize.XY
-    watermarkText.TextWrapped = false
-    watermarkText.LayoutOrder = 1
+    local wmText = Instance.new("TextLabel")
+    wmText.BackgroundTransparency = 1
+    wmText.TextColor3 = textColor
+    wmText.Font = Enum.Font.GothamBold
+    wmText.TextSize = 14
+    wmText.TextXAlignment = Enum.TextXAlignment.Left
+    wmText.Text = scriptName.." | "..player.Name.." | Uptime: 00:00:00"
+    wmText.AutomaticSize = Enum.AutomaticSize.XY
+    wmText.LayoutOrder = 1
+    wmText.Parent = watermarkFrame
 
-    local watermarkLine = Instance.new("Frame")
-    watermarkLine.Name = "WatermarkLine"
-    watermarkLine.BackgroundColor3 = textColor
-    watermarkLine.BorderSizePixel = 0
-    watermarkLine.Size = UDim2.new(1, 0, 0, 2)
-    watermarkLine.LayoutOrder = 2
-    watermarkLine.Parent = watermarkFrame
+    local wmLine = Instance.new("Frame")
+    wmLine.Size = UDim2.new(1,0,0,2)
+    wmLine.BackgroundColor3 = textColor
+    wmLine.BorderSizePixel = 0
+    wmLine.LayoutOrder = 2
+    wmLine.Parent = watermarkFrame
 
     RunService.RenderStepped:Connect(function()
-        local elapsed = tick() - startTime
-        local hours   = math.floor(elapsed / 3600)
-        local minutes = math.floor((elapsed % 3600) / 60)
-        local seconds = math.floor(elapsed % 60)
-        watermarkText.Text = string.format(
-            "%s | %s | Time: %02d:%02d:%02d",
-            scriptName, player.Name, hours, minutes, seconds
-        )
+        local elapsed = tick()-startTime
+        local h = math.floor(elapsed/3600)
+        local m = math.floor((elapsed%3600)/60)
+        local s = math.floor(elapsed%60)
+        wmText.Text = string.format("%s | %s | Uptime: %02d:%02d:%02d", scriptName, player.Name, h, m, s)
     end)
 
     local wmDragging = false
@@ -95,10 +109,8 @@ function IceHubLib:Init(scriptName, scriptVersion)
         if not wmDragging then return end
         local delta = input.Position - wmMousePos
         watermarkFrame.Position = UDim2.new(
-            wmFramePos.X.Scale,
-            wmFramePos.X.Offset + delta.X,
-            wmFramePos.Y.Scale,
-            wmFramePos.Y.Offset + delta.Y
+            wmFramePos.X.Scale, wmFramePos.X.Offset + delta.X,
+            wmFramePos.Y.Scale, wmFramePos.Y.Offset + delta.Y
         )
     end
     watermarkFrame.InputBegan:Connect(function(input)
@@ -107,9 +119,7 @@ function IceHubLib:Init(scriptName, scriptVersion)
             wmMousePos = input.Position
             wmFramePos = watermarkFrame.Position
             input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    wmDragging = false
-                end
+                if input.UserInputState == Enum.UserInputState.End then wmDragging = false end
             end)
         end
     end)
@@ -119,22 +129,22 @@ function IceHubLib:Init(scriptName, scriptVersion)
         end
     end)
     UserInputService.InputChanged:Connect(function(input)
-        if input == wmDragInput and wmDragging then
-            updateWatermarkDrag(input)
-        end
+        if input == wmDragInput and wmDragging then updateWatermarkDrag(input) end
     end)
 
-    --------------------------------------------
+    ------------------------------------------------
     -- Haupt-Frame und Top-Bar
-    --------------------------------------------
+    ------------------------------------------------
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, uiWidth, 0, uiHeight)
-    mainFrame.Position = UDim2.new(0.5, -uiWidth/2, 0.5, -uiHeight/2)
+    mainFrame.Size = UDim2.new(0,uiWidth,0,uiHeight)
+    mainFrame.Position = UDim2.new(0.5,-uiWidth/2,0.5,-uiHeight/2)
     mainFrame.BackgroundColor3 = bgColor
     mainFrame.BorderSizePixel = 0
     mainFrame.Parent = screenGui
+
     local originalSize = mainFrame.Size
+    local minimized = false
 
     local dragging = false
     local dragInput, mousePos, framePos
@@ -142,80 +152,86 @@ function IceHubLib:Init(scriptName, scriptVersion)
         if not dragging then return end
         local delta = input.Position - mousePos
         mainFrame.Position = UDim2.new(
-            framePos.X.Scale,
-            framePos.X.Offset + delta.X,
-            framePos.Y.Scale,
-            framePos.Y.Offset + delta.Y
+            framePos.X.Scale, framePos.X.Offset + delta.X,
+            framePos.Y.Scale, framePos.Y.Offset + delta.Y
         )
     end
 
-    -- Schließ-Dialog
+    ------------------------------------------------
+    -- Close Dialog
+    ------------------------------------------------
     local closeDialog = Instance.new("Frame")
     closeDialog.Name = "CloseDialog"
-    closeDialog.Size = UDim2.new(0, 300, 0, 150)
-    closeDialog.Position = UDim2.new(0.5, -150, 0.5, -75)
-    closeDialog.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    closeDialog.Size = UDim2.new(0,300,0,150)
+    closeDialog.Position = UDim2.new(0.5,-150,0.5,-75)
+    closeDialog.BackgroundColor3 = Color3.fromRGB(40,40,40)
     closeDialog.BorderSizePixel = 0
     closeDialog.Visible = false
-    closeDialog.Parent = mainFrame
     closeDialog.ZIndex = 999
-    local closeDialogCorner = Instance.new("UICorner")
-    closeDialogCorner.CornerRadius = UDim.new(0, 8)
-    closeDialogCorner.Parent = closeDialog
-    local dialogText = Instance.new("TextLabel")
-    dialogText.Name = "DialogText"
-    dialogText.Size = UDim2.new(1, -20, 0, 60)
-    dialogText.Position = UDim2.new(0, 10, 0, 10)
-    dialogText.BackgroundTransparency = 1
-    dialogText.Text = string.format('Möchtest du "%s" wirklich schließen?', scriptName)
-    dialogText.TextColor3 = textColor
-    dialogText.Font = Enum.Font.GothamBold
-    dialogText.TextSize = 14
-    dialogText.TextWrapped = true
-    dialogText.Parent = closeDialog
-    dialogText.ZIndex = 999
-    local yesButton = Instance.new("TextButton")
-    yesButton.Name = "YesButton"
-    yesButton.Size = UDim2.new(0, 100, 0, 30)
-    yesButton.Position = UDim2.new(0, 20, 1, -40)
-    yesButton.BackgroundColor3 = Color3.fromRGB(60,150,60)
-    yesButton.BorderSizePixel = 0
-    yesButton.Text = "Ja"
-    yesButton.TextColor3 = Color3.fromRGB(255,255,255)
-    yesButton.Font = Enum.Font.GothamBold
-    yesButton.TextSize = 14
-    yesButton.ZIndex = 999
-    yesButton.Parent = closeDialog
-    local noButton = Instance.new("TextButton")
-    noButton.Name = "NoButton"
-    noButton.Size = UDim2.new(0, 100, 0, 30)
-    noButton.Position = UDim2.new(1, -120, 1, -40)
-    noButton.BackgroundColor3 = Color3.fromRGB(200,70,70)
-    noButton.BorderSizePixel = 0
-    noButton.Text = "Nein"
-    noButton.TextColor3 = Color3.fromRGB(255,255,255)
-    noButton.Font = Enum.Font.GothamBold
-    noButton.TextSize = 14
-    noButton.ZIndex = 999
-    noButton.Parent = closeDialog
+    closeDialog.Parent = mainFrame
+
+    local cdCorner = Instance.new("UICorner")
+    cdCorner.CornerRadius = UDim.new(0,8)
+    cdCorner.Parent = closeDialog
+
+    local cdText = Instance.new("TextLabel")
+    cdText.Size = UDim2.new(1,-20,0,60)
+    cdText.Position = UDim2.new(0,10,0,10)
+    cdText.BackgroundTransparency = 1
+    cdText.Text = "Möchtest du \""..scriptName.."\" wirklich schließen?"
+    cdText.TextColor3 = textColor
+    cdText.Font = Enum.Font.GothamBold
+    cdText.TextSize = 14
+    cdText.TextWrapped = true
+    cdText.ZIndex = 999
+    cdText.Parent = closeDialog
+
+    local yesBtn = Instance.new("TextButton")
+    yesBtn.Size = UDim2.new(0,100,0,30)
+    yesBtn.Position = UDim2.new(0,20,1,-40)
+    yesBtn.BackgroundColor3 = Color3.fromRGB(60,150,60)
+    yesBtn.BorderSizePixel = 0
+    yesBtn.Text = "Ja"
+    yesBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    yesBtn.Font = Enum.Font.GothamBold
+    yesBtn.TextSize = 14
+    yesBtn.ZIndex = 999
+    yesBtn.Parent = closeDialog
+
+    local noBtn = Instance.new("TextButton")
+    noBtn.Size = UDim2.new(0,100,0,30)
+    noBtn.Position = UDim2.new(1,-120,1,-40)
+    noBtn.BackgroundColor3 = Color3.fromRGB(200,70,70)
+    noBtn.BorderSizePixel = 0
+    noBtn.Text = "Nein"
+    noBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    noBtn.Font = Enum.Font.GothamBold
+    noBtn.TextSize = 14
+    noBtn.ZIndex = 999
+    noBtn.Parent = closeDialog
+
     local yesCorner = Instance.new("UICorner")
-    yesCorner.CornerRadius = UDim.new(0, 8)
-    yesCorner.Parent = yesButton
+    yesCorner.CornerRadius = UDim.new(0,8)
+    yesCorner.Parent = yesBtn
+
     local noCorner = Instance.new("UICorner")
-    noCorner.CornerRadius = UDim.new(0, 8)
-    noCorner.Parent = noButton
-    yesButton.MouseButton1Click:Connect(function()
+    noCorner.CornerRadius = UDim.new(0,8)
+    noCorner.Parent = noBtn
+
+    yesBtn.MouseButton1Click:Connect(function()
         mainFrame:Destroy()
         watermarkFrame:Destroy()
     end)
-    noButton.MouseButton1Click:Connect(function()
+    noBtn.MouseButton1Click:Connect(function()
         closeDialog.Visible = false
     end)
 
-    -- Top-Bar (Header)
+    ------------------------------------------------
+    -- Top-Bar
+    ------------------------------------------------
     local topBar = Instance.new("Frame")
     topBar.Name = "TopBar"
-    topBar.Size = UDim2.new(1, 0, 0, 30)
+    topBar.Size = UDim2.new(1,0,0,30)
     topBar.BackgroundColor3 = topBarColor
     topBar.BorderSizePixel = 0
     topBar.Parent = mainFrame
@@ -226,9 +242,7 @@ function IceHubLib:Init(scriptName, scriptVersion)
             mousePos = input.Position
             framePos = mainFrame.Position
             input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
         end
     end)
@@ -238,35 +252,30 @@ function IceHubLib:Init(scriptName, scriptVersion)
         end
     end)
     UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            updateDrag(input)
-        end
+        if input == dragInput and dragging then updateDrag(input) end
     end)
+
     local titleLabel = Instance.new("TextLabel")
     titleLabel.Name = "TitleLabel"
-    titleLabel.Size = UDim2.new(1, -80, 1, 0)
-    titleLabel.Position = UDim2.new(0, 10, 0, 0)
+    titleLabel.Size = UDim2.new(1,-80,1,0)
+    titleLabel.Position = UDim2.new(0,10,0,0)
     titleLabel.BackgroundTransparency = 1
     titleLabel.Text = scriptName.." - Brookhaven "..scriptVersion
     titleLabel.TextColor3 = textColor
-    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
     titleLabel.Font = Enum.Font.GothamBold
     titleLabel.TextSize = 14
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
     titleLabel.Parent = topBar
 
     local function addPressedEffect(button, defaultColor)
-        button.MouseButton1Down:Connect(function()
-            button.BackgroundColor3 = hoverColor
-        end)
-        button.MouseButton1Up:Connect(function()
-            button.BackgroundColor3 = defaultColor
-        end)
+        button.MouseButton1Down:Connect(function() button.BackgroundColor3 = hoverColor end)
+        button.MouseButton1Up:Connect(function() button.BackgroundColor3 = defaultColor end)
     end
 
     local minimizeButton = Instance.new("TextButton")
     minimizeButton.Name = "MinimizeButton"
-    minimizeButton.Size = UDim2.new(0, 30, 0, 30)
-    minimizeButton.Position = UDim2.new(1, -60, 0, 0)
+    minimizeButton.Size = UDim2.new(0,30,0,30)
+    minimizeButton.Position = UDim2.new(1,-60,0,0)
     minimizeButton.BackgroundColor3 = topBarColor
     minimizeButton.BorderSizePixel = 0
     minimizeButton.Text = "_"
@@ -278,8 +287,8 @@ function IceHubLib:Init(scriptName, scriptVersion)
 
     local closeButton = Instance.new("TextButton")
     closeButton.Name = "CloseButton"
-    closeButton.Size = UDim2.new(0, 30, 0, 30)
-    closeButton.Position = UDim2.new(1, -30, 0, 0)
+    closeButton.Size = UDim2.new(0,30,0,30)
+    closeButton.Position = UDim2.new(1,-30,0,0)
     closeButton.BackgroundColor3 = topBarColor
     closeButton.BorderSizePixel = 0
     closeButton.Text = "X"
@@ -288,178 +297,315 @@ function IceHubLib:Init(scriptName, scriptVersion)
     closeButton.TextSize = 14
     closeButton.Parent = topBar
     addPressedEffect(closeButton, topBarColor)
-    closeButton.MouseButton1Click:Connect(function()
-        closeDialog.Visible = true
+    closeButton.MouseButton1Click:Connect(function() closeDialog.Visible = true end)
+
+    local function toggleContentVisibility(visible)
+        for _, child in ipairs(mainFrame:GetChildren()) do
+            if child ~= topBar and child ~= closeDialog then
+                child.Visible = visible
+            end
+        end
+    end
+
+    minimizeButton.MouseButton1Click:Connect(function()
+        if minimized then
+            minimized = false
+            mainFrame:TweenSize(originalSize, Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+            task.delay(0.3, function() if not minimized then toggleContentVisibility(true) end end)
+        else
+            minimized = true
+            toggleContentVisibility(false)
+            mainFrame:TweenSize(UDim2.new(0,uiWidth,0,30), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+        end
     end)
 
-    -- Entferne alle Tab-bezogenen Elemente (kein LeftMenu etc.)
-    -- Stattdessen erstellen wir einen einzigen Container für eigene UI-Elemente.
-    local customContent = Instance.new("ScrollingFrame")
-    customContent.Name = "CustomContent"
-    customContent.Size = UDim2.new(1, 0, 1, -30)  -- Unterhalb der Top-Bar
-    customContent.Position = UDim2.new(0, 0, 0, 30)
-    customContent.BackgroundTransparency = 1
-    customContent.Parent = mainFrame
-    customContent.ScrollBarThickness = 8
-    customContent.ScrollingEnabled = true
-    customContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    ------------------------------------------------
+    -- Linke Menüleiste (Tabs)
+    ------------------------------------------------
+    local leftMenu = Instance.new("Frame")
+    leftMenu.Name = "LeftMenu"
+    leftMenu.Size = UDim2.new(0,100,1,-30)
+    leftMenu.Position = UDim2.new(0,0,0,30)
+    leftMenu.BackgroundColor3 = Color3.fromRGB(25,25,25)
+    leftMenu.BorderSizePixel = 0
+    leftMenu.Parent = mainFrame
 
-    local listLayout = Instance.new("UIListLayout")
-    listLayout.Padding = UDim.new(0, 5)
-    listLayout.Parent = customContent
-
-    -- Interne Variable zur Verwaltung des Inhalts (optional)
-    local content = customContent
-
-    -- Rückgabewert: Tabelle mit Funktionen zur Erstellung von Elementen
-    local lib = {}
-
-    function lib:CreateButton(text, callback)
+    local function addTabButton(text, order)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -10, 0, 30)
-        btn.BackgroundColor3 = Color3.fromRGB(25,25,25)
+        btn.Name = text.."Button"
+        btn.Size = UDim2.new(1,-10,0,30)
+        btn.Position = UDim2.new(0,5,0,5+order*35)
+        btn.BackgroundColor3 = topBarColor
         btn.BorderSizePixel = 0
         btn.Text = text
         btn.TextColor3 = textColor
         btn.Font = Enum.Font.GothamBold
         btn.TextSize = 14
-        btn.Parent = content
-        btn.MouseButton1Down:Connect(function()
-            btn.BackgroundColor3 = hoverColor
-        end)
-        btn.MouseButton1Up:Connect(function()
-            btn.BackgroundColor3 = Color3.fromRGB(25,25,25)
-        end)
-        btn.MouseButton1Click:Connect(function()
-            if callback then
-                callback()
-            end
-        end)
+        btn.TextXAlignment = Enum.TextXAlignment.Center
+        addPressedEffect(btn, topBarColor)
+        btn.Parent = leftMenu
+        return btn
     end
 
-    function lib:CreateLabel(text)
-        local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, -10, 0, 30)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = text
-        lbl.TextColor3 = textColor
-        lbl.Font = Enum.Font.GothamBold
-        lbl.TextSize = 14
-        lbl.Parent = content
-    end
+    local menuBtn    = addTabButton("Menu", 0)
+    local spooferBtn = addTabButton("Spoofer", 1)
+    local scriptBtn  = addTabButton("Script", 2)
+    local serverBtn  = addTabButton("Server", 3)
+    local susBtn     = addTabButton("SUS", 4)
+    local otherBtn   = addTabButton("Other", 5)
 
-    function lib:CreateBox(placeholder, callback)
-        local box = Instance.new("TextBox")
-        box.Size = UDim2.new(1, -10, 0, 30)
-        box.BackgroundColor3 = Color3.fromRGB(25,25,25)
-        box.BorderSizePixel = 0
-        box.PlaceholderText = placeholder
-        box.TextColor3 = textColor
-        box.Font = Enum.Font.GothamBold
-        box.TextSize = 14
-        box.Parent = content
-        box.FocusLost:Connect(function(enterPressed)
-            if enterPressed and callback then
-                callback(box.Text)
-            end
-        end)
-    end
+    ------------------------------------------------
+    -- Rechter Bereich (Content)
+    ------------------------------------------------
+    local contentFrame = Instance.new("Frame")
+    contentFrame.Name = "ContentFrame"
+    contentFrame.Size = UDim2.new(1,-100,1,-30)
+    contentFrame.Position = UDim2.new(0,100,0,30)
+    contentFrame.BackgroundColor3 = bgColor
+    contentFrame.BorderSizePixel = 0
+    contentFrame.Parent = mainFrame
 
-    function lib:CreateSlider(text, min, max, default, callback)
-        local sliderFrame = Instance.new("Frame")
-        sliderFrame.Size = UDim2.new(1, -10, 0, 40)
-        sliderFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
-        sliderFrame.BorderSizePixel = 0
-        sliderFrame.Parent = content
+    ------------------------------------------------
+    -- Vordefinierte Tabs
+    ------------------------------------------------
+    local menuContent = Instance.new("Frame")
+    menuContent.Name = "MenuContent"
+    menuContent.Size = UDim2.new(1,0,1,0)
+    menuContent.BackgroundColor3 = bgColor
+    menuContent.BorderSizePixel = 0
+    menuContent.Visible = false
+    menuContent.Parent = contentFrame
 
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, 0, 0, 20)
-        label.BackgroundTransparency = 1
-        label.Text = text .. ": " .. tostring(default)
-        label.TextColor3 = textColor
-        label.Font = Enum.Font.GothamBold
-        label.TextSize = 14
-        label.Parent = sliderFrame
+    local spooferContent = Instance.new("Frame")
+    spooferContent.Name = "SpooferContent"
+    spooferContent.Size = UDim2.new(1,0,1,0)
+    spooferContent.BackgroundTransparency = 1
+    spooferContent.Visible = false
+    spooferContent.Parent = contentFrame
 
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 0, 20)
-        btn.Position = UDim2.new(0, 0, 0, 20)
-        btn.BackgroundColor3 = Color3.fromRGB(35,35,35)
-        btn.BorderSizePixel = 0
-        btn.Text = "Ändern (aktuell: " .. tostring(default) .. ")"
-        btn.TextColor3 = textColor
-        btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 12
-        btn.Parent = sliderFrame
+    local scriptContent = Instance.new("Frame")
+    scriptContent.Name = "ScriptContent"
+    scriptContent.Size = UDim2.new(1,0,1,0)
+    scriptContent.BackgroundTransparency = 1
+    scriptContent.Visible = false
+    scriptContent.Parent = contentFrame
 
-        local currentValue = default
-        btn.MouseButton1Click:Connect(function()
-            currentValue = currentValue + 1
-            if currentValue > max then currentValue = min end
-            label.Text = text .. ": " .. tostring(currentValue)
-            btn.Text = "Ändern (aktuell: " .. tostring(currentValue) .. ")"
-            if callback then
-                callback(currentValue)
-            end
-        end)
-    end
+    local serverContent = Instance.new("Frame")
+    serverContent.Name = "ServerContent"
+    serverContent.Size = UDim2.new(1,0,1,0)
+    serverContent.BackgroundTransparency = 1
+    serverContent.Visible = false
+    serverContent.Parent = contentFrame
 
-    function lib:CreateDropdown(text, options, callback)
-        local ddFrame = Instance.new("Frame")
-        ddFrame.Size = UDim2.new(1, -10, 0, 40)
-        ddFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
-        ddFrame.BorderSizePixel = 0
-        ddFrame.Parent = content
+    local susContent = Instance.new("Frame")
+    susContent.Name = "SUSContent"
+    susContent.Size = UDim2.new(1,0,1,0)
+    susContent.BackgroundTransparency = 1
+    susContent.Visible = false
+    susContent.Parent = contentFrame
+    susContent.Position = UDim2.new(0, -50, 0, 0)  -- 50 Pixel nach links verschoben
 
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, 0, 0, 20)
-        label.BackgroundTransparency = 1
-        label.Text = text
-        label.TextColor3 = textColor
-        label.Font = Enum.Font.GothamBold
-        label.TextSize = 14
-        label.Parent = ddFrame
+    local otherContent = Instance.new("ScrollingFrame")
+    otherContent.Name = "OtherContent"
+    otherContent.Size = UDim2.new(1,0,1,0)
+    otherContent.BackgroundTransparency = 1
+    otherContent.Visible = false
+    otherContent.ScrollingDirection = Enum.ScrollingDirection.Y
+    otherContent.ScrollBarThickness = 6
+    otherContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    otherContent.Parent = contentFrame
 
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 0, 20)
-        btn.Position = UDim2.new(0, 0, 0, 20)
-        btn.BackgroundColor3 = Color3.fromRGB(35,35,35)
-        btn.BorderSizePixel = 0
-        btn.TextColor3 = textColor
-        btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 12
-        btn.Text = options[1]
-        btn.Parent = ddFrame
+    local otherLayout = Instance.new("UIListLayout")
+    otherLayout.Parent = otherContent
+    otherLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    otherLayout.Padding = UDim.new(0,10)
 
-        local currentIndex = 1
-        btn.MouseButton1Click:Connect(function()
-            currentIndex = currentIndex + 1
-            if currentIndex > #options then currentIndex = 1 end
-            btn.Text = options[currentIndex]
-            if callback then
-                callback(options[currentIndex])
-            end
-        end)
-    end
-
-    function lib:CreateCheckbox(text, default, callback)
-        local box = Instance.new("TextButton")
-        box.Size = UDim2.new(1, -10, 0, 30)
-        box.BackgroundColor3 = Color3.fromRGB(25,25,25)
-        box.BorderSizePixel = 0
-        box.Parent = content
-        local state = default or false
-        local function updateText()
-            box.Text = text .. " [" .. (state and "✓" or "✗") .. "]"
+    ------------------------------------------------
+    -- Tabs verwalten
+    ------------------------------------------------
+    local tabContents = { menuContent, spooferContent, scriptContent, serverContent, susContent, otherContent }
+    local function hideAllTabs()
+        for _,frame in ipairs(tabContents) do
+            frame.Visible = false
         end
-        updateText()
-        box.MouseButton1Click:Connect(function()
-            state = not state
-            updateText()
-            if callback then
-                callback(state)
+    end
+    local function showTab(frame)
+        hideAllTabs()
+        frame.Visible = true
+    end
+
+    menuBtn.MouseButton1Click:Connect(function() showTab(menuContent) end)
+    spooferBtn.MouseButton1Click:Connect(function() showTab(spooferContent) end)
+    scriptBtn.MouseButton1Click:Connect(function() showTab(scriptContent) end)
+    serverBtn.MouseButton1Click:Connect(function() showTab(serverContent) end)
+    susBtn.MouseButton1Click:Connect(function() showTab(susContent) end)
+    otherBtn.MouseButton1Click:Connect(function() showTab(otherContent) end)
+
+    hideAllTabs()
+    menuContent.Visible = true
+
+    ------------------------------------------------
+    -- Rückgabe der Library-API
+    ------------------------------------------------
+    local lib = {}
+    -- Für schnellen Zugriff auf die Tabs:
+    lib.Tabs = {
+        Menu = menuContent,
+        Spoofer = spooferContent,
+        Script = scriptContent,
+        Server = serverContent,
+        SUS = susContent,
+        Other = otherContent,
+    }
+    -- API-Funktionen: Erstellen von UI-Elementen in einem bestimmten Tab (über den Tab-Namen)
+    function lib:CreateButton(tabName, text, callback)
+        local parent = self.Tabs[tabName]
+        if parent then
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, -20, 0, 30)
+            btn.BackgroundColor3 = Color3.fromRGB(25,25,25)
+            btn.BorderSizePixel = 0
+            btn.Text = text
+            btn.TextColor3 = textColor
+            btn.Font = Enum.Font.GothamBold
+            btn.TextSize = 14
+            btn.Parent = parent
+            btn.MouseButton1Down:Connect(function() btn.BackgroundColor3 = hoverColor end)
+            btn.MouseButton1Up:Connect(function() btn.BackgroundColor3 = Color3.fromRGB(25,25,25) end)
+            btn.MouseButton1Click:Connect(function() if callback then callback() end end)
+        end
+    end
+
+    function lib:CreateLabel(tabName, text)
+        local parent = self.Tabs[tabName]
+        if parent then
+            local lbl = Instance.new("TextLabel")
+            lbl.Size = UDim2.new(1, -20, 0, 30)
+            lbl.BackgroundTransparency = 1
+            lbl.Text = text
+            lbl.TextColor3 = textColor
+            lbl.Font = Enum.Font.GothamBold
+            lbl.TextSize = 14
+            lbl.Parent = parent
+        end
+    end
+
+    function lib:CreateBox(tabName, placeholder, callback)
+        local parent = self.Tabs[tabName]
+        if parent then
+            local box = Instance.new("TextBox")
+            box.Size = UDim2.new(1, -20, 0, 30)
+            box.BackgroundColor3 = Color3.fromRGB(25,25,25)
+            box.BorderSizePixel = 0
+            box.PlaceholderText = placeholder
+            box.TextColor3 = textColor
+            box.Font = Enum.Font.GothamBold
+            box.TextSize = 14
+            box.Parent = parent
+            box.FocusLost:Connect(function(enterPressed)
+                if enterPressed and callback then callback(box.Text) end
+            end)
+        end
+    end
+
+    function lib:CreateSlider(tabName, text, min, max, default, callback)
+        local parent = self.Tabs[tabName]
+        if parent then
+            local sliderFrame = Instance.new("Frame")
+            sliderFrame.Size = UDim2.new(1, -20, 0, 40)
+            sliderFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+            sliderFrame.BorderSizePixel = 0
+            sliderFrame.Parent = parent
+
+            local label = Instance.new("TextLabel")
+            label.Size = UDim2.new(1, 0, 0, 20)
+            label.BackgroundTransparency = 1
+            label.Text = text..": "..tostring(default)
+            label.TextColor3 = textColor
+            label.Font = Enum.Font.GothamBold
+            label.TextSize = 14
+            label.Parent = sliderFrame
+
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, 0, 0, 20)
+            btn.Position = UDim2.new(0, 0, 0, 20)
+            btn.BackgroundColor3 = Color3.fromRGB(35,35,35)
+            btn.BorderSizePixel = 0
+            btn.TextColor3 = textColor
+            btn.Font = Enum.Font.GothamBold
+            btn.TextSize = 12
+            btn.Text = "Ändern (aktuell: "..tostring(default)..")"
+            btn.Parent = sliderFrame
+
+            local currentValue = default
+            btn.MouseButton1Click:Connect(function()
+                currentValue = currentValue + 1
+                if currentValue > max then currentValue = min end
+                label.Text = text..": "..tostring(currentValue)
+                btn.Text = "Ändern (aktuell: "..tostring(currentValue)..")"
+                if callback then callback(currentValue) end
+            end)
+        end
+    end
+
+    function lib:CreateCheckbox(tabName, text, default, callback)
+        local parent = self.Tabs[tabName]
+        if parent then
+            local box = Instance.new("TextButton")
+            box.Size = UDim2.new(1, -20, 0, 30)
+            box.BackgroundColor3 = Color3.fromRGB(25,25,25)
+            box.BorderSizePixel = 0
+            box.Parent = parent
+            local state = default or false
+            local function updateText()
+                box.Text = text.." ["..(state and "✓" or "✗").."]"
             end
-        end)
+            updateText()
+            box.MouseButton1Click:Connect(function()
+                state = not state
+                updateText()
+                if callback then callback(state) end
+            end)
+        end
+    end
+
+    function lib:CreateDropdown(tabName, text, options, callback)
+        local parent = self.Tabs[tabName]
+        if parent then
+            local ddFrame = Instance.new("Frame")
+            ddFrame.Size = UDim2.new(1, -20, 0, 40)
+            ddFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+            ddFrame.BorderSizePixel = 0
+            ddFrame.Parent = parent
+
+            local label = Instance.new("TextLabel")
+            label.Size = UDim2.new(1,0,0,20)
+            label.BackgroundTransparency = 1
+            label.Text = text
+            label.TextColor3 = textColor
+            label.Font = Enum.Font.GothamBold
+            label.TextSize = 14
+            label.Parent = ddFrame
+
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1,0,0,20)
+            btn.Position = UDim2.new(0,0,0,20)
+            btn.BackgroundColor3 = Color3.fromRGB(35,35,35)
+            btn.BorderSizePixel = 0
+            btn.TextColor3 = textColor
+            btn.Font = Enum.Font.GothamBold
+            btn.TextSize = 12
+            btn.Text = options[1]
+            btn.Parent = ddFrame
+
+            local currentIndex = 1
+            btn.MouseButton1Click:Connect(function()
+                currentIndex = currentIndex + 1
+                if currentIndex > #options then currentIndex = 1 end
+                btn.Text = options[currentIndex]
+                if callback then callback(options[currentIndex]) end
+            end)
+        end
     end
 
     return lib
