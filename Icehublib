@@ -300,8 +300,8 @@ function IceHubLib:Init(scriptName, scriptVersion)
     closeButton.MouseButton1Click:Connect(function() closeDialog.Visible = true end)
 
     local function toggleContentVisibility(visible)
-        for _, child in ipairs(mainFrame:GetChildren()) do
-            if child ~= topBar and child ~= closeDialog then
+        for _,child in ipairs(mainFrame:GetChildren()) do
+            if child ~= topBar and child~=closeDialog then
                 child.Visible = visible
             end
         end
@@ -311,11 +311,11 @@ function IceHubLib:Init(scriptName, scriptVersion)
         if minimized then
             minimized = false
             mainFrame:TweenSize(originalSize, Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
-            task.delay(0.3, function() if not minimized then toggleContentVisibility(true) end end)
+            task.delay(0.3,function() if not minimized then toggleContentVisibility(true) end end)
         else
             minimized = true
             toggleContentVisibility(false)
-            mainFrame:TweenSize(UDim2.new(0,uiWidth,0,30), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+            mainFrame:TweenSize(UDim2.new(0,uiWidth,0,30),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,0.3,true)
         end
     end)
 
@@ -366,8 +366,19 @@ function IceHubLib:Init(scriptName, scriptVersion)
     contentFrame.Parent = mainFrame
 
     ------------------------------------------------
-    -- Vordefinierte Tabs
+    -- Vordefinierte Tabs (jeder erhält einen UIListLayout + UIPadding)
     ------------------------------------------------
+    local function createTabContainer(frame)
+        local layout = Instance.new("UIListLayout")
+        layout.Padding = UDim.new(0,5)
+        layout.Parent = frame
+        local padding = Instance.new("UIPadding")
+        padding.PaddingTop = UDim.new(0,10)
+        padding.PaddingLeft = UDim.new(0,10)
+        padding.PaddingRight = UDim.new(0,10)
+        padding.Parent = frame
+    end
+
     local menuContent = Instance.new("Frame")
     menuContent.Name = "MenuContent"
     menuContent.Size = UDim2.new(1,0,1,0)
@@ -375,6 +386,7 @@ function IceHubLib:Init(scriptName, scriptVersion)
     menuContent.BorderSizePixel = 0
     menuContent.Visible = false
     menuContent.Parent = contentFrame
+    createTabContainer(menuContent)
 
     local spooferContent = Instance.new("Frame")
     spooferContent.Name = "SpooferContent"
@@ -382,6 +394,7 @@ function IceHubLib:Init(scriptName, scriptVersion)
     spooferContent.BackgroundTransparency = 1
     spooferContent.Visible = false
     spooferContent.Parent = contentFrame
+    createTabContainer(spooferContent)
 
     local scriptContent = Instance.new("Frame")
     scriptContent.Name = "ScriptContent"
@@ -389,6 +402,7 @@ function IceHubLib:Init(scriptName, scriptVersion)
     scriptContent.BackgroundTransparency = 1
     scriptContent.Visible = false
     scriptContent.Parent = contentFrame
+    createTabContainer(scriptContent)
 
     local serverContent = Instance.new("Frame")
     serverContent.Name = "ServerContent"
@@ -396,6 +410,7 @@ function IceHubLib:Init(scriptName, scriptVersion)
     serverContent.BackgroundTransparency = 1
     serverContent.Visible = false
     serverContent.Parent = contentFrame
+    createTabContainer(serverContent)
 
     local susContent = Instance.new("Frame")
     susContent.Name = "SUSContent"
@@ -403,7 +418,8 @@ function IceHubLib:Init(scriptName, scriptVersion)
     susContent.BackgroundTransparency = 1
     susContent.Visible = false
     susContent.Parent = contentFrame
-    susContent.Position = UDim2.new(0, -50, 0, 0)  -- 50 Pixel nach links verschoben
+    susContent.Position = UDim2.new(0, -50, 0, 0)  -- 50 Pixel nach links
+    createTabContainer(susContent)
 
     local otherContent = Instance.new("ScrollingFrame")
     otherContent.Name = "OtherContent"
@@ -414,11 +430,14 @@ function IceHubLib:Init(scriptName, scriptVersion)
     otherContent.ScrollBarThickness = 6
     otherContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
     otherContent.Parent = contentFrame
-
     local otherLayout = Instance.new("UIListLayout")
-    otherLayout.Parent = otherContent
-    otherLayout.SortOrder = Enum.SortOrder.LayoutOrder
     otherLayout.Padding = UDim.new(0,10)
+    otherLayout.Parent = otherContent
+    local otherPadding = Instance.new("UIPadding")
+    otherPadding.PaddingTop = UDim.new(0,10)
+    otherPadding.PaddingLeft = UDim.new(0,10)
+    otherPadding.PaddingRight = UDim.new(0,10)
+    otherPadding.Parent = otherContent
 
     ------------------------------------------------
     -- Tabs verwalten
@@ -445,10 +464,9 @@ function IceHubLib:Init(scriptName, scriptVersion)
     menuContent.Visible = true
 
     ------------------------------------------------
-    -- Rückgabe der Library-API
+    -- Rückgabe der API (dynamisches Erstellen von UI-Elementen)
     ------------------------------------------------
     local lib = {}
-    -- Für schnellen Zugriff auf die Tabs:
     lib.Tabs = {
         Menu = menuContent,
         Spoofer = spooferContent,
@@ -457,12 +475,12 @@ function IceHubLib:Init(scriptName, scriptVersion)
         SUS = susContent,
         Other = otherContent,
     }
-    -- API-Funktionen: Erstellen von UI-Elementen in einem bestimmten Tab (über den Tab-Namen)
+
     function lib:CreateButton(tabName, text, callback)
         local parent = self.Tabs[tabName]
         if parent then
             local btn = Instance.new("TextButton")
-            btn.Size = UDim2.new(1, -20, 0, 30)
+            btn.Size = UDim2.new(1,0,0,30)
             btn.BackgroundColor3 = Color3.fromRGB(25,25,25)
             btn.BorderSizePixel = 0
             btn.Text = text
@@ -480,7 +498,7 @@ function IceHubLib:Init(scriptName, scriptVersion)
         local parent = self.Tabs[tabName]
         if parent then
             local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(1, -20, 0, 30)
+            lbl.Size = UDim2.new(1,0,0,30)
             lbl.BackgroundTransparency = 1
             lbl.Text = text
             lbl.TextColor3 = textColor
@@ -494,7 +512,7 @@ function IceHubLib:Init(scriptName, scriptVersion)
         local parent = self.Tabs[tabName]
         if parent then
             local box = Instance.new("TextBox")
-            box.Size = UDim2.new(1, -20, 0, 30)
+            box.Size = UDim2.new(1,0,0,30)
             box.BackgroundColor3 = Color3.fromRGB(25,25,25)
             box.BorderSizePixel = 0
             box.PlaceholderText = placeholder
@@ -512,13 +530,13 @@ function IceHubLib:Init(scriptName, scriptVersion)
         local parent = self.Tabs[tabName]
         if parent then
             local sliderFrame = Instance.new("Frame")
-            sliderFrame.Size = UDim2.new(1, -20, 0, 40)
+            sliderFrame.Size = UDim2.new(1,0,0,40)
             sliderFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
             sliderFrame.BorderSizePixel = 0
             sliderFrame.Parent = parent
 
             local label = Instance.new("TextLabel")
-            label.Size = UDim2.new(1, 0, 0, 20)
+            label.Size = UDim2.new(1,0,0,20)
             label.BackgroundTransparency = 1
             label.Text = text..": "..tostring(default)
             label.TextColor3 = textColor
@@ -527,8 +545,7 @@ function IceHubLib:Init(scriptName, scriptVersion)
             label.Parent = sliderFrame
 
             local btn = Instance.new("TextButton")
-            btn.Size = UDim2.new(1, 0, 0, 20)
-            btn.Position = UDim2.new(0, 0, 0, 20)
+            btn.Size = UDim2.new(1,0,0,20)
             btn.BackgroundColor3 = Color3.fromRGB(35,35,35)
             btn.BorderSizePixel = 0
             btn.TextColor3 = textColor
@@ -552,7 +569,7 @@ function IceHubLib:Init(scriptName, scriptVersion)
         local parent = self.Tabs[tabName]
         if parent then
             local box = Instance.new("TextButton")
-            box.Size = UDim2.new(1, -20, 0, 30)
+            box.Size = UDim2.new(1,0,0,30)
             box.BackgroundColor3 = Color3.fromRGB(25,25,25)
             box.BorderSizePixel = 0
             box.Parent = parent
@@ -573,7 +590,7 @@ function IceHubLib:Init(scriptName, scriptVersion)
         local parent = self.Tabs[tabName]
         if parent then
             local ddFrame = Instance.new("Frame")
-            ddFrame.Size = UDim2.new(1, -20, 0, 40)
+            ddFrame.Size = UDim2.new(1,0,0,40)
             ddFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
             ddFrame.BorderSizePixel = 0
             ddFrame.Parent = parent
@@ -589,7 +606,6 @@ function IceHubLib:Init(scriptName, scriptVersion)
 
             local btn = Instance.new("TextButton")
             btn.Size = UDim2.new(1,0,0,20)
-            btn.Position = UDim2.new(0,0,0,20)
             btn.BackgroundColor3 = Color3.fromRGB(35,35,35)
             btn.BorderSizePixel = 0
             btn.TextColor3 = textColor
