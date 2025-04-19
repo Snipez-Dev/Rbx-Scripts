@@ -56,6 +56,11 @@ local rainbowEnabled = false
 local currentActiveTabColor = activeTextColor  
 local leftMenuRef = nil  
 
+if _G.FrostHubLoaded then
+    warn("FrostHub is already loaded.")
+    return
+end
+_G.FrostHubLoaded = true
 -------------------------------------------------
 -- Helper Functions
 -------------------------------------------------
@@ -338,68 +343,55 @@ end
 -- Watermark (Draggable)
 -------------------------------------------------
 local wmStartTime = tick()
+
 local watermarkFrame = Instance.new("Frame")
 watermarkFrame.Name = "Watermark"
-watermarkFrame.Position = UDim2.new(0,10,0,5)
-watermarkFrame.BackgroundColor3 = Color3.fromRGB(40,40,40)
+watermarkFrame.Position = UDim2.new(0, 10, 0, 5)
+watermarkFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 watermarkFrame.BorderSizePixel = 0
-watermarkFrame.AutomaticSize = Enum.AutomaticSize.XY
+watermarkFrame.AutomaticSize = Enum.AutomaticSize.XY -- passt Breite + Höhe dynamisch an
+watermarkFrame.Size = UDim2.new(0, 0, 0, 0) -- wird ignoriert wegen AutomaticSize
 watermarkFrame.ClipsDescendants = false
 watermarkFrame.Parent = screenGui
 
-local wmSizeConstraint = Instance.new("UISizeConstraint")
-wmSizeConstraint.MaxSize = Vector2.new(500,9999)
-wmSizeConstraint.Parent = watermarkFrame
-
 local wmCorner = Instance.new("UICorner")
-wmCorner.CornerRadius = UDim.new(0,8)
+wmCorner.CornerRadius = UDim.new(0, 4)
 wmCorner.Parent = watermarkFrame
 
-local wmLayout = Instance.new("UIListLayout")
-wmLayout.FillDirection = Enum.FillDirection.Vertical
-wmLayout.SortOrder = Enum.SortOrder.LayoutOrder
-wmLayout.Padding = UDim.new(0,2)
-wmLayout.Parent = watermarkFrame
-
+-- Nur ein Label + eine Linie, kein Layout nötig!
 local wmText = Instance.new("TextLabel")
+wmText.Name = "WatermarkText"
 wmText.BackgroundTransparency = 1
 wmText.TextColor3 = textColor
 wmText.Font = Enum.Font.GothamBold
 wmText.TextSize = 14
 wmText.TextXAlignment = Enum.TextXAlignment.Left
-wmText.Text = "FrostHub | " .. player.Name .. " | Playtime: 00:00:00"
 wmText.AutomaticSize = Enum.AutomaticSize.XY
-wmText.LayoutOrder = 1
+wmText.Size = UDim2.new(0, 0, 0, 0)
+wmText.TextWrapped = false
+wmText.TextTruncate = Enum.TextTruncate.None
 wmText.Parent = watermarkFrame
 
 local wmLine = Instance.new("Frame")
-wmLine.Name = "WatermarkLine"
-wmLine.Size = UDim2.new(1,0,0,2)
+wmLine.Size = UDim2.new(1, 0, 0, 2)
+wmLine.Position = UDim2.new(0, 0, 1, 2)
 wmLine.BackgroundColor3 = textColor
 wmLine.BorderSizePixel = 0
-wmLine.LayoutOrder = 2
 wmLine.Parent = watermarkFrame
 
+-- Update Text
 RunService.RenderStepped:Connect(function()
     local elapsed = tick() - wmStartTime
-    local h = math.floor(elapsed/3600)
-    local m = math.floor((elapsed % 3600) / 60)
-    local s = math.floor(elapsed % 60)
-RunService.RenderStepped:Connect(function()
-    local elapsed = tick() - (wmStartTime or 0)
-    if typeof(elapsed) ~= "number" or elapsed ~= elapsed then elapsed = 0 end
     local h = math.floor(elapsed / 3600)
     local m = math.floor((elapsed % 3600) / 60)
     local s = math.floor(elapsed % 60)
-    h = tonumber(h) or 0
-    m = tonumber(m) or 0
-    s = tonumber(s) or 0
-    wmText.Text = string.format("FrostHub | %s | Playtime: %02d:%02d:%02d", tostring(player.Name), h, m, s)
-end)
+    wmText.Text = string.format("FrostHub | %s | Playtime: %02d:%02d:%02d", player.Name, h, m, s)
 end)
 
+-- Drag Support
 local wmDragging = false
 local wmDragInput, wmMousePos, wmFramePos
+
 local function updateWatermarkDrag(input)
     if not wmDragging then return end
     local delta = input.Position - wmMousePos
@@ -408,6 +400,7 @@ local function updateWatermarkDrag(input)
         wmFramePos.Y.Scale, wmFramePos.Y.Offset + delta.Y
     )
 end
+
 watermarkFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         wmDragging = true
@@ -420,16 +413,19 @@ watermarkFrame.InputBegan:Connect(function(input)
         end)
     end
 end)
+
 watermarkFrame.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
         wmDragInput = input
     end
 end)
+
 UserInputService.InputChanged:Connect(function(input)
     if input == wmDragInput and wmDragging then
         updateWatermarkDrag(input)
     end
 end)
+
 
 -------------------------------------------------
 -- Main Frame & Dragging
@@ -1730,10 +1726,10 @@ flyKeyButton.Text = "Fly Key: " .. flyKey.Name
 -- Save settings on change
 local function saveSettings()
     local data = {
-        color = {r=currentR, g=currentG, b=currentB},
+        color = {r = currentR, g = currentG, b = currentB},
         flyKey = flyKey.Name
     }
-    writefile(settingsFile, HttpService:JSONEncode(data))
+    writefile("FrostHubSettings.json", HttpService:JSONEncode(data))
 end
 
 -------------------------------------------------
