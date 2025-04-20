@@ -10,7 +10,7 @@ local HttpService = getService(game, "HttpService")
 
 -- Localized services for performance
 local Stats = game:GetService("Stats")
-local mainUI = screenGui
+local screenGui = screenGui
 local LocalizationService = getService(game, "LocalizationService")
 local TweenService = getService(game, "TweenService")
 local findService = game.FindService
@@ -29,15 +29,15 @@ local function reloadScript()
 end
 
 local UserInputService = game:GetService("UserInputService")
-local mainUI = script.Parent  -- Hier wird davon ausgegangen, dass mainUI ein direktes Kind des Skripts ist
+local screenGui = script.Parent  -- Hier wird davon ausgegangen, dass screenGui ein direktes Kind des Skripts ist
 local screenSize = workspace.CurrentCamera.ViewportSize  -- Bildschirmgröße (in Pixeln)
 
 -- Überprüfe, ob es sich um ein mobiles Gerät handelt (TouchEnabled ohne Keyboard)
 if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
-    print("Mobile device detected – adjusting UI.")
+    print("Mobile device detected — adjusting UI")
     
     -- Beispiel: Alles in der UI kleiner machen
-    for _, element in ipairs(mainUI:GetDescendants()) do
+    for _, element in ipairs(screenGui:GetDescendants()) do
         if element:IsA("TextLabel") or element:IsA("TextButton") or element:IsA("TextBox") then
             element.TextSize = element.TextSize * 0.8 -- 80% der originalen Größe
         elseif element:IsA("ImageLabel") or element:IsA("ImageButton") or element:IsA("Frame") then
@@ -47,13 +47,13 @@ if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
     end
 end
 
--- Überprüfe die Bildschirmgröße und passe die UI an
+-- Check screen width and adjust UI
 if screenSize.X < 1000 then
     -- Mobile Geräte oder kleinere Bildschirme
-    print("Small screen detected – adjusting UI.")
+    print("Small screen detected — adjusting UI")
     
     -- Beispiel: Alles in der UI kleiner machen, wenn Bildschirm kleiner als 1000px
-    for _, element in ipairs(mainUI:GetDescendants()) do
+    for _, element in ipairs(screenGui:GetDescendants()) do
         if element:IsA("TextLabel") or element:IsA("TextButton") or element:IsA("TextBox") then
             element.TextSize = element.TextSize * 0.8  -- 80% der originalen Größe
         elseif element:IsA("ImageLabel") or element:IsA("ImageButton") or element:IsA("Frame") then
@@ -63,7 +63,7 @@ if screenSize.X < 1000 then
     end
 else
     -- Größere Bildschirme (Emulatoren oder PCs)
-    print("Larger screen detected – UI remains normal.")
+    print("Large screen detected — UI remains at default scale")
 end
 
 player.AncestryChanged:Connect(function(child, parent)
