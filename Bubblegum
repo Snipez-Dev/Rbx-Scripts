@@ -10,7 +10,7 @@ local HttpService = getService(game, "HttpService")
 
 -- Localized services for performance
 local Stats = game:GetService("Stats")
-
+local mainUI = screenGui
 local LocalizationService = getService(game, "LocalizationService")
 local TweenService = getService(game, "TweenService")
 local findService = game.FindService
@@ -25,6 +25,19 @@ local function reloadScript()
     end)
     if success and response and #response > 0 then
         loadstring(response)()
+    end
+end
+
+if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+    print("Mobile device detected – adjusting UI.")
+    -- Beispiel: Alles in der UI kleiner machen
+    for _, element in ipairs(mainUI:GetDescendants()) do
+        if element:IsA("TextLabel") or element:IsA("TextButton") or element:IsA("TextBox") then
+            element.TextSize = element.TextSize * 0.8 -- 80% der originalen Größe
+        elseif element:IsA("ImageLabel") or element:IsA("ImageButton") or element:IsA("Frame") then
+            local size = element.Size
+            element.Size = UDim2.new(size.X.Scale, size.X.Offset * 0.8, size.Y.Scale, size.Y.Offset * 0.8)
+        end
     end
 end
 
@@ -56,12 +69,8 @@ local rainbowEnabled = false
 local currentActiveTabColor = activeTextColor  
 local leftMenuRef = nil  
 
-if _G.FrostHubLoaded then
-    warn("FrostHub is already loaded.")
-    return
-end
-_G.FrostHubLoaded = true
--------------------------------------------------
+
+--------------
 -- Helper Functions
 -------------------------------------------------
 local function addRoundedCorner(obj)
@@ -278,6 +287,11 @@ if oldGui then
     oldGui:Destroy()
 end
 
+local player = game.Players.LocalPlayer
+local oldGui = player.PlayerGui:FindFirstChild("FrostHubUI")
+if oldGui then
+    oldGui:Destroy()  -- Lösche die alte GUI
+end
 -------------------------------------------------
 -- Main ScreenGui & UIScale
 -------------------------------------------------
@@ -894,9 +908,9 @@ local function createWideButton(parent, text, posY)
     return btn
 end
 
-local spoofCallBtn = createWideButton(spooferContent, "Voice Chat", 20)
+local spoofCallBtn = createWideButton(spooferContent, "Connect Voice Chat", 20)
 spoofCallBtn.MouseButton1Click:Connect(function()
-    print("Spoof Call pressed!")
+   
     if VoiceChatService and VoiceChatService.joinVoice then
         VoiceChatService:joinVoice()
     else
@@ -1096,6 +1110,7 @@ for _, item in ipairs(susScriptsData) do
         end
     end)
 end
+
 
 -------------------------------------------------
 -- OTHER TAB (Local Features)
