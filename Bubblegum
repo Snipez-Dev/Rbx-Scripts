@@ -1913,7 +1913,7 @@ createCenteredSliderForColor(greenSec, "Green", 0, 255, currentG, function(val)
     previewFrame.BackgroundColor3 = newColor
 end)
 
-local blueSec = Instance.new("Frame")
+blueSec = Instance.new("Frame")
 blueSec.Size = UDim2.new(1, 0, 0, 40)
 blueSec.BackgroundTransparency = 1
 blueSec.Position = UDim2.new(0, 0, 0, 120)
