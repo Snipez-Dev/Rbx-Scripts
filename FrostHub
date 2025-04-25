@@ -28,21 +28,54 @@ local UserInputService = game:GetService("UserInputService")
 local screenGui = script.Parent  -- Hier wird davon ausgegangen, dass screenGui ein direktes Kind des Skripts ist
 local screenSize = workspace.CurrentCamera.ViewportSize  -- Bildschirmgröße (in Pixeln)
 local lastUIUpdate = tick()
+
+
+
 -- Überprüfe, ob es sich um ein mobiles Gerät handelt (TouchEnabled ohne Keyboard)
 if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
     print("Mobile device detected — adjusting UI")
-    
-    -- Beispiel: Alles in der UI kleiner machen
-    -- Nil-Check for screenGui to prevent indexing nil
-for _, element in ipairs(screenGui:GetDescendants()) do
-        if element:IsA("TextLabel") or element:IsA("TextButton") or element:IsA("TextBox") then
-            element.TextSize = element.TextSize * 0.8 -- 80% der originalen Größe
-        elseif element:IsA("ImageLabel") or element:IsA("ImageButton") or element:IsA("Frame") then
-            local size = element.Size
-            element.Size = UDim2.new(size.X.Scale, size.X.Offset * 0.8, size.Y.Scale, size.Y.Offset * 0.8)
+    if screenGui then
+        for _, element in ipairs(screenGui:GetDescendants()) do
+            if element:IsA("TextLabel")
+            or element:IsA("TextButton")
+            or element:IsA("TextBox") then
+                element.TextSize = element.TextSize * 0.8
+            elseif element:IsA("ImageLabel")
+            or element:IsA("ImageButton")
+            or element:IsA("Frame") then
+                local sz = element.Size
+                element.Size = UDim2.new(
+                    sz.X.Scale, sz.X.Offset * 0.8,
+                    sz.Y.Scale, sz.Y.Offset * 0.8
+                )
+            end
         end
     end
 end
+
+if screenSize.X < 1000 then
+    print("[METHOD-2]Small screen detected — adjusting UI")
+    if screenGui then
+        for _, element in ipairs(screenGui:GetDescendants()) do
+            if element:IsA("TextLabel")
+            or element:IsA("TextButton")
+            or element:IsA("TextBox") then
+                element.TextSize = element.TextSize * 0.8
+            elseif element:IsA("ImageLabel")
+            or element:IsA("ImageButton")
+            or element:IsA("Frame") then
+                local sz = element.Size
+                element.Size = UDim2.new(
+                    sz.X.Scale, sz.X.Offset * 0.8,
+                    sz.Y.Scale, sz.Y.Offset * 0.8
+                )
+            end
+        end
+    end
+else
+    print("Large screen detected — UI remains at default scale")
+end
+
 -- Mausposition prüfen mit kleiner Zeitverzögerung
 local function updateMouseOverUI()
 	local mousePos = UserInputService:GetMouseLocation()
