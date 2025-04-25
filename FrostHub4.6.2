@@ -506,6 +506,31 @@ xpcall(function()
     local dragInput, mousePos, framePos
     local function updateDrag(input)
         if not dragging then return end
+
+-- Enable dragging by touching anywhere on the main frame (mobile compatibility)
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        mousePos = input.Position
+        framePos = mainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+mainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        updateDrag(input)
+    end
+end)
+
         local delta = input.Position - mousePos
         mainFrame.Position = UDim2.new(
             framePos.X.Scale, framePos.X.Offset + delta.X,
@@ -1234,30 +1259,22 @@ xpcall(function()
             flyBodyVelocity.Velocity = Vector3.new(0, 1, 0) * flySpeed
         end
         flyConnection = RunService.RenderStepped:Connect(function()
-            local moveDirection = Vector3.new(0,0,0)
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                moveDirection = moveDirection + workspace.CurrentCamera.CFrame.LookVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                moveDirection = moveDirection - workspace.CurrentCamera.CFrame.LookVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                moveDirection = moveDirection - workspace.CurrentCamera.CFrame.RightVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                moveDirection = moveDirection + workspace.CurrentCamera.CFrame.RightVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                moveDirection = moveDirection + Vector3.new(0,1,0)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-                moveDirection = moveDirection - Vector3.new(0,1,0)
-            end
-            if moveDirection.Magnitude > 0 then
-                moveDirection = moveDirection.Unit * flySpeed
-            end
-            flyBodyVelocity.Velocity = moveDirection
-        end)
+    -- Fly movement: support mobile and keyboard via Humanoid.MoveDirection
+    local moveDirection = Vector3.new(0, 0, 0)
+    if player.Character then
+        local hum = player.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            -- Direction from input (including mobile thumbstick)
+            local inputDir = hum.MoveDirection
+            moveDirection = workspace.CurrentCamera.CFrame:VectorToWorldSpace(inputDir)
+        end
+    end
+    -- Apply speed if moving
+    if moveDirection.Magnitude > 0 then
+        moveDirection = moveDirection.Unit * flySpeed
+    end
+    flyBodyVelocity.Velocity = moveDirection
+end)
     end
     
     local function stopFly()
