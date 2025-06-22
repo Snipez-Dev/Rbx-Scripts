@@ -363,6 +363,20 @@ if oldGui then
     oldGui:Destroy()
 end
 
+-- Resizer: passt UI an, wenn sich die Viewport-Größe ändert
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+    if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+        -- auf Mobile: Fullscreen
+        mainFrame.Size     = UDim2.new(1, 0, 1, 0)
+        mainFrame.Position = UDim2.new(0, 0, 0, 0)
+    else
+        -- Desktop: Originalgröße & zentriert
+        mainFrame.Size     = originalSize
+        mainFrame.Position = UDim2.new(0.5, -uiWidth/2, 0.5, -uiHeight/2)
+    end
+end)
+
+
 -------------------------------------------------
 -- Main ScreenGui & UIScale
 -------------------------------------------------
@@ -427,12 +441,26 @@ mainFrame.BackgroundColor3 = bgColor
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = screenGui
 
--- Mobile Support: detect mobile devices and resize UI\ nif UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
-    mainFrame.Size = UDim2.new(1, 0, 1, 0)
+-- Mobile Support: detect mobile devices and resize UI
+if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+    mainFrame.Size     = UDim2.new(1, 0, 1, 0)
     mainFrame.Position = UDim2.new(0, 0, 0, 0)
 end
 
+-- Original-Größe merken
 local originalSize = mainFrame.Size
+
+-- Resizer: passt UI an, wenn sich die Viewport-Größe ändert
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+    if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+        mainFrame.Size     = UDim2.new(1, 0, 1, 0)
+        mainFrame.Position = UDim2.new(0, 0, 0, 0)
+    else
+        mainFrame.Size     = originalSize
+        mainFrame.Position = UDim2.new(0.5, -uiWidth/2, 0.5, -uiHeight/2)
+    end
+end)
+
 local minimized = false
 
 local dragging = false
