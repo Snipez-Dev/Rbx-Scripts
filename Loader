@@ -1,1 +1,15 @@
+-- Ermittelt den Namen des Exploit-Executors
+local executorName = (getexecutorname and getexecutorname():lower()) or "unknown"
 
+-- Die beiden URLs
+local OLD_URL = "https://raw.githubusercontent.com/Snipez-Dev/Rbx-Scripts/refs/heads/main/FrostHub%20OLD"
+local NEW_URL = "https://raw.githubusercontent.com/Snipez-Dev/Rbx-Scripts/refs/heads/main/FrostHub"
+
+-- Prüfen, ob Xeno oder Solara im Namen vorkommt
+if executorName:find("xeno") or executorName:find("solara") then
+    -- Alten Hub laden
+    loadstring(game:HttpGet(OLD_URL, true))()
+else
+    -- Neuen Hub laden
+    loadstring(game:HttpGet(NEW_URL, true))()
+end
