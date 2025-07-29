@@ -2,11 +2,31 @@
 local executorName = (getexecutorname and getexecutorname():lower()) or "unknown"
 local OLD_URL = "https://raw.githubusercontent.com/Snipez-Dev/Rbx-Scripts/refs/heads/main/FrostHub%20OLD"
 local NEW_URL = "https://raw.githubusercontent.com/Snipez-Dev/Rbx-Scripts/refs/heads/main/FrostHub"
+local function fetchIdentity(printId)
+    if type(printidentity) ~= "function" then
+        return 0
+    end
+    local ok, id = pcall(printidentity)
+    id = tonumber(id) or 0
+    if ok and printId then
+        print(("Executor Identity: %d"):format(id))
+    end
+    return id
+end
 
+
+local identity
 if executorName:find("xeno") or executorName:find("solara") then
- 
+    identity = fetchIdentity(true)
+else
+    identity = fetchIdentity(false)
+end
+
+
+if identity >= 1 and identity <= 3 then
+
     loadstring(game:HttpGet(OLD_URL, true))()
 else
- 
+
     loadstring(game:HttpGet(NEW_URL, true))()
 end
