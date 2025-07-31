@@ -1,32 +1,29 @@
 
-local executorName = (getexecutorname and getexecutorname():lower()) or "unknown"
+local function _noop(...) end
+local env = (getgenv and getgenv()) or (getfenv and getfenv()) or _G
+local orig_printidentity = (type(env.printidentity) == "function" and env.printidentity or nil)
+for k,v in pairs(env) do
+    if type(v) == "function" then
+        local name = k:lower()
+        if name:find("print") or name:find("warn") then
+            env[k] = _noop
+        end
+    end
+end
+env.printidentity = _noop
+local executorName = (env.getexecutorname and env.getexecutorname():lower()) or "unknown"
 local OLD_URL = "https://raw.githubusercontent.com/Snipez-Dev/Rbx-Scripts/refs/heads/main/FrostHub%20OLD"
 local NEW_URL = "https://raw.githubusercontent.com/Snipez-Dev/Rbx-Scripts/refs/heads/main/FrostHub"
-local function fetchIdentity(printId)
-    if type(printidentity) ~= "function" then
+local function fetchIdentity()
+    if type(orig_printidentity) ~= "function" then
         return 0
     end
-    local ok, id = pcall(printidentity)
-    id = tonumber(id) or 0
-    if ok and printId then
-        print(("Executor Identity: %d"):format(id))
-    end
-    return id
+    local ok, id = pcall(orig_printidentity)
+    return tonumber(id) or 0
 end
-
-
-local identity
-if executorName:find("xeno") or executorName:find("solara") then
-    identity = fetchIdentity(true)
-else
-    identity = fetchIdentity(false)
-end
-
-
-if identity >= 1 and identity <= 3 then
-
+local identity = fetchIdentity()
+if identity >= 1 and identity <= 5 then
     loadstring(game:HttpGet(OLD_URL, true))()
 else
-
     loadstring(game:HttpGet(NEW_URL, true))()
 end
