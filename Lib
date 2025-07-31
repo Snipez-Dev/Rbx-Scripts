@@ -1,0 +1,329 @@
+-- FrostHubUI.lua
+-- Lade diese Datei per loadstring und HttpGet
+
+local FrostHubUI = {}
+FrostHubUI.__index = FrostHubUI
+
+-- Farben (1:1 nach Original)
+local COLOR_BACKGROUND = Color3.fromRGB(18, 18, 18)
+local COLOR_PANEL      = Color3.fromRGB(25, 25, 25)
+local COLOR_SIDEBAR    = Color3.fromRGB(15, 15, 15)
+local COLOR_HIGHLIGHT  = Color3.fromRGB(0, 240, 255)
+local COLOR_TEXT       = Color3.fromRGB(220, 220, 220)
+
+-- Ecken-Helfer
+local function addCorner(guiObject, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius or 8)
+    c.Parent = guiObject
+    return c
+end
+
+--- Konstruktor
+-- @param parent (Instance) Parent, typischerweise PlayerGui
+function FrostHubUI.new(parent)
+    local self = setmetatable({}, FrostHubUI)
+    self.Parent = parent or (game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"))
+    self:_buildUI()
+    return self
+end
+
+function FrostHubUI:_buildUI()
+    -- ScreenGui
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "FrostHubClone"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = self.Parent
+    self.screenGui = screenGui
+
+    -- Main Frame
+    local main = Instance.new("Frame")
+    main.Name = "MainFrame"
+    main.Size = UDim2.new(0, 620, 0, 380)
+    main.Position = UDim2.new(0.5, -310, 0.5, -190)
+    main.BackgroundColor3 = COLOR_BACKGROUND
+    main.Parent = screenGui
+    addCorner(main, 12)
+    self.main = main
+
+    -- TopBar
+    local top = Instance.new("Frame")
+    top.Name = "TopBar"
+    top.Size = UDim2.new(1,0,0,28)
+    top.BackgroundTransparency = 1
+    top.Parent = main
+
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Text = "FrostHub - Universal v4.7.7"
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 14
+    title.TextColor3 = COLOR_HIGHLIGHT
+    title.BackgroundTransparency = 1
+    title.Position = UDim2.new(0,12,0,0)
+    title.Size = UDim2.new(0,220,1,0)
+    title.Parent = top
+
+    local function makeTopBtn(name, txt, offset)
+        local b = Instance.new("TextButton")
+        b.Name = name
+        b.Text = txt
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 16
+        b.TextColor3 = COLOR_TEXT
+        b.BackgroundTransparency = 1
+        b.Size = UDim2.new(0,28,0,28)
+        b.Position = UDim2.new(1, -offset, 0, 0)
+        b.Parent = top
+        return b
+    end
+    makeTopBtn("Minimize","-", 60)
+    makeTopBtn("Close","X", 28)
+
+    -- Sidebar
+    local sidebar = Instance.new("Frame")
+    sidebar.Name = "Sidebar"
+    sidebar.Size = UDim2.new(0,100,1,-28)
+    sidebar.Position = UDim2.new(0,0,0,28)
+    sidebar.BackgroundColor3 = COLOR_SIDEBAR
+    sidebar.Parent = main
+    addCorner(sidebar, 12)
+    self.sidebar = sidebar
+
+    local tabs = {"Menu","Voice Chat","Local","Script","Server","SUS","Settings"}
+    for i, txt in ipairs(tabs) do
+        local b = Instance.new("TextButton")
+        b.Name = txt.."Tab"
+        b.Text = txt
+        b.Font = Enum.Font.Gotham
+        b.TextSize = 14
+        b.TextColor3 = COLOR_TEXT
+        b.BackgroundTransparency = 1
+        b.Size = UDim2.new(1,0,0,36)
+        b.Position = UDim2.new(0,0,0,(i-1)*44)
+        b.Parent = sidebar
+    end
+
+    -- Content + PageLayout
+    local content = Instance.new("Frame")
+    content.Name = "Content"
+    content.Size = UDim2.new(1,-100,1,-28)
+    content.Position = UDim2.new(0,100,0,28)
+    content.BackgroundColor3 = COLOR_PANEL
+    content.Parent = main
+    addCorner(content, 12)
+
+    local pages = Instance.new("UIPageLayout")
+    pages.Parent = content
+    pages.SortOrder = Enum.SortOrder.LayoutOrder
+    pages.FillDirection = Enum.FillDirection.Horizontal
+    pages.TweenTime = 0.3
+
+    -- Seite 1: Dashboard
+    local dash = Instance.new("Frame")
+    dash.Name = "Dashboard"
+    dash.Size = UDim2.new(1,0,1,0)
+    dash.BackgroundTransparency = 1
+    dash.LayoutOrder = 1
+    dash.Parent = content
+
+    local avatar = Instance.new("ImageLabel")
+    avatar.Name = "Avatar"
+    avatar.Size = UDim2.new(0,64,0,64)
+    avatar.Position = UDim2.new(0,16,0,16)
+    avatar.BackgroundColor3 = COLOR_PANEL
+    avatar.Image = "rbxassetid://0"
+    avatar.Parent = dash
+    addCorner(avatar, 32)
+
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.Name = "Username"
+    nameLbl.Text = "Mayonaise_Swift"
+    nameLbl.Font = Enum.Font.GothamBold
+    nameLbl.TextSize = 18
+    nameLbl.TextColor3 = COLOR_HIGHLIGHT
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Position = UDim2.new(0,92,0,20)
+    nameLbl.Size = UDim2.new(0,200,0,24)
+    nameLbl.Parent = dash
+
+    local verLbl = Instance.new("TextLabel")
+    verLbl.Name = "Version"
+    verLbl.Text = "Version: v4.7.7"
+    verLbl.Font = Enum.Font.Gotham
+    verLbl.TextSize = 14
+    verLbl.TextColor3 = COLOR_TEXT
+    verLbl.BackgroundTransparency = 1
+    verLbl.Position = UDim2.new(0,92,0,44)
+    verLbl.Size = UDim2.new(0,200,0,20)
+    verLbl.Parent = dash
+
+    local join = Instance.new("TextButton")
+    join.Name = "JoinDiscord"
+    join.Text = "Join Discord"
+    join.Font = Enum.Font.GothamBold
+    join.TextSize = 14
+    join.TextColor3 = COLOR_TEXT
+    join.BackgroundColor3 = COLOR_SIDEBAR
+    join.Size = UDim2.new(0,120,0,28)
+    join.Position = UDim2.new(0,92,0,68)
+    join.Parent = dash
+    addCorner(join, 6)
+
+    local stats = Instance.new("Frame")
+    stats.Name = "Stats"
+    stats.Size = UDim2.new(0,140,0,64)
+    stats.Position = UDim2.new(1,-156,0,16)
+    stats.BackgroundColor3 = COLOR_PANEL
+    stats.Parent = dash
+    addCorner(stats, 8)
+
+    local fps = Instance.new("TextLabel")
+    fps.Name = "FPS"
+    fps.Text = "FPS: 65"
+    fps.Font = Enum.Font.Gotham
+    fps.TextSize = 14
+    fps.TextColor3 = COLOR_TEXT
+    fps.BackgroundTransparency = 1
+    fps.Position = UDim2.new(0,8,0,8)
+    fps.Size = UDim2.new(1,-16,0,20)
+    fps.Parent = stats
+
+    local ping = Instance.new("TextLabel")
+    ping.Name = "Ping"
+    ping.Text = "Ping: 22 ms"
+    ping.Font = Enum.Font.Gotham
+    ping.TextSize = 14
+    ping.TextColor3 = COLOR_TEXT
+    ping.BackgroundTransparency = 1
+    ping.Position = UDim2.new(0,8,0,28)
+    ping.Size = UDim2.new(1,-16,0,20)
+    ping.Parent = stats
+
+    local unlock = Instance.new("TextButton")
+    unlock.Name = "UnlockFPS"
+    unlock.Text = "Unlock FPS"
+    unlock.Font = Enum.Font.GothamBold
+    unlock.TextSize = 14
+    unlock.TextColor3 = COLOR_TEXT
+    unlock.BackgroundColor3 = COLOR_SIDEBAR
+    unlock.Size = UDim2.new(1,-16,0,24)
+    unlock.Position = UDim2.new(0,8,1,-32)
+    unlock.Parent = stats
+    addCorner(unlock, 6)
+
+    local log = Instance.new("TextLabel")
+    log.Name = "Changelog"
+    log.Text = "Changelog:\n- Fixed UI\n- Bug Fixes\n- Added functions\n- Added protections\n- Removed functions\n- Some broken functions"
+    log.Font = Enum.Font.Gotham
+    log.TextSize = 14
+    log.TextColor3 = COLOR_TEXT
+    log.TextXAlignment = Enum.TextXAlignment.Left
+    log.TextYAlignment = Enum.TextYAlignment.Top
+    log.BackgroundColor3 = COLOR_SIDEBAR
+    log.Size = UDim2.new(1,-32,0,120)
+    log.Position = UDim2.new(0,16,0,100)
+    log.Parent = dash
+    addCorner(log, 8)
+
+    -- Seite 2: Spectate
+    local spec = Instance.new("Frame")
+    spec.Name = "Spectate"
+    spec.Size = UDim2.new(1,0,1,0)
+    spec.BackgroundTransparency = 1
+    spec.LayoutOrder = 2
+    spec.Parent = content
+
+    local txtBox = Instance.new("TextBox")
+    txtBox.Name = "SpectatePlayer"
+    txtBox.PlaceholderText = "Spectate Player"
+    txtBox.Font = Enum.Font.Gotham
+    txtBox.TextSize = 14
+    txtBox.TextColor3 = COLOR_TEXT
+    txtBox.BackgroundColor3 = COLOR_SIDEBAR
+    txtBox.Size = UDim2.new(1,-32,0,32)
+    txtBox.Position = UDim2.new(0,16,0,16)
+    txtBox.Parent = spec
+    addCorner(txtBox, 6)
+
+    local btnSpec = Instance.new("TextButton")
+    btnSpec.Name = "SpectateToggle"
+    btnSpec.Text = "Spectate"
+    btnSpec.Font = Enum.Font.GothamBold
+    btnSpec.TextSize = 14
+    btnSpec.TextColor3 = COLOR_TEXT
+    btnSpec.BackgroundColor3 = COLOR_SIDEBAR
+    btnSpec.Size = UDim2.new(0,100,0,28)
+    btnSpec.Position = UDim2.new(0,16,0,60)
+    btnSpec.Parent = spec
+    addCorner(btnSpec, 6)
+
+    -- Seite 3: Local
+    local localP = Instance.new("Frame")
+    localP.Name = "Local"
+    localP.Size = UDim2.new(1,0,1,0)
+    localP.BackgroundTransparency = 1
+    localP.LayoutOrder = 3
+    localP.Parent = content
+
+    local speed = Instance.new("TextLabel")
+    speed.Name = "SpeedLabel"
+    speed.Text = "Speed: 16"
+    speed.Font = Enum.Font.Gotham
+    speed.TextSize = 14
+    speed.TextColor3 = COLOR_TEXT
+    speed.BackgroundColor3 = COLOR_SIDEBAR
+    speed.Size = UDim2.new(0,120,0,32)
+    speed.Position = UDim2.new(0,16,0,16)
+    speed.Parent = localP
+    addCorner(speed, 6)
+
+    local jump = Instance.new("TextLabel")
+    jump.Name = "JumpLabel"
+    jump.Text = "JumpPower: 50"
+    jump.Font = Enum.Font.Gotham
+    jump.TextSize = 14
+    jump.TextColor3 = COLOR_TEXT
+    jump.BackgroundColor3 = COLOR_SIDEBAR
+    jump.Size = UDim2.new(0,140,0,32)
+    jump.Position = UDim2.new(0,16,0,60)
+    jump.Parent = localP
+    addCorner(jump, 6)
+
+    -- Seite 4: SUS
+    local susP = Instance.new("Frame")
+    susP.Name = "SUS"
+    susP.Size = UDim2.new(1,0,1,0)
+    susP.BackgroundTransparency = 1
+    susP.LayoutOrder = 4
+    susP.Parent = content
+
+    local susBtns = {"Bang V2 (R15)","Get Banged (R15)","Suck (R15)","Get Suc (R15)","Jerk (R15)"}
+    for i, txt in ipairs(susBtns) do
+        local b = Instance.new("TextButton")
+        b.Name = "SUSBtn"..i
+        b.Text = txt
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 14
+        b.TextColor3 = COLOR_TEXT
+        b.BackgroundColor3 = COLOR_SIDEBAR
+        b.Size = UDim2.new(1,-32,0,36)
+        b.Position = UDim2.new(0,16,0,16 + (i-1)*44)
+        b.Parent = susP
+        addCorner(b, 6)
+    end
+
+    -- Tab-Wechsel
+    for i, txt in ipairs(tabs) do
+        local tabBtn = sidebar:FindFirstChild(txt.."Tab")
+        if tabBtn then
+            tabBtn.MouseButton1Click:Connect(function()
+                pages:JumpToIndex(i)
+            end)
+        end
+    end
+
+    pages:JumpToIndex(1)
+end
+
+return FrostHubUI
