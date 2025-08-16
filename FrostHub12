@@ -98,30 +98,42 @@ local function round(obj, r)
     c.CornerRadius = UDim.new(0, r or 4)
     return c
 end
--- Mobile-Resizer
-if isMobile then
-    -- Fenstergröße kleiner machen
-    WIDTH  = math.floor(BASE_W * 0.75)  -- z. B. 75% der Originalbreite
-    HEIGHT = math.floor(BASE_H * 0.75)  -- 75% der Originalhöhe
+-- Skalierungsfaktor für Mobile
+local SCALE = 0.75  
 
-    -- Startposition weiter zentrieren
-    START_POS = UDim2.new(0.2, 0, 0.25, 0)
+local function scaleGui(obj)
+    if obj:IsA("GuiObject") then
+        local s = obj.Size
+        local p = obj.Position
 
-    -- Standard-Textgröße reduzieren
-    local function scaleText(obj)
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-            obj.TextSize = math.max(12, math.floor(obj.TextSize * 0.85))
-        end
-        for _, child in ipairs(obj:GetChildren()) do
-            scaleText(child)
-        end
+        -- Nur Offset-Werte anpassen (Scale bleibt unverändert!)
+        obj.Size = UDim2.new(
+            s.X.Scale, math.floor(s.X.Offset * SCALE),
+            s.Y.Scale, math.floor(s.Y.Offset * SCALE)
+        )
+        obj.Position = UDim2.new(
+            p.X.Scale, math.floor(p.X.Offset * SCALE),
+            p.Y.Scale, math.floor(p.Y.Offset * SCALE)
+        )
     end
 
-    -- Später nach dem GUI-Aufbau ausführen
+    -- Text skalieren
+    if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+        obj.TextSize = math.max(12, math.floor(obj.TextSize * SCALE))
+    end
+
+    -- Kinder rekursiv skalieren
+    for _, child in ipairs(obj:GetChildren()) do
+        scaleGui(child)
+    end
+end
+
+if isMobile then
     task.defer(function()
-        scaleText(screenGui)
+        scaleGui(screenGui) -- komplettes GUI skalieren
     end)
 end
+
 -- Save config
 local function saveConfig()
     if writefile then
