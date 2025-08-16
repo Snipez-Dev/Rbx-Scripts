@@ -37,30 +37,7 @@ local function clearContainer(container)
     end
 end
 
--- Mobile-Resizer
-if isMobile then
-    -- Fenstergröße kleiner machen
-    WIDTH  = math.floor(BASE_W * 0.75)  -- z. B. 75% der Originalbreite
-    HEIGHT = math.floor(BASE_H * 0.75)  -- 75% der Originalhöhe
 
-    -- Startposition weiter zentrieren
-    START_POS = UDim2.new(0.2, 0, 0.25, 0)
-
-    -- Standard-Textgröße reduzieren
-    local function scaleText(obj)
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-            obj.TextSize = math.max(12, math.floor(obj.TextSize * 0.85))
-        end
-        for _, child in ipairs(obj:GetChildren()) do
-            scaleText(child)
-        end
-    end
-
-    -- Später nach dem GUI-Aufbau ausführen
-    task.defer(function()
-        scaleText(screenGui)
-    end)
-end
 
 clearContainer(CoreGui)
 
@@ -121,7 +98,30 @@ local function round(obj, r)
     c.CornerRadius = UDim.new(0, r or 4)
     return c
 end
+-- Mobile-Resizer
+if isMobile then
+    -- Fenstergröße kleiner machen
+    WIDTH  = math.floor(BASE_W * 0.75)  -- z. B. 75% der Originalbreite
+    HEIGHT = math.floor(BASE_H * 0.75)  -- 75% der Originalhöhe
 
+    -- Startposition weiter zentrieren
+    START_POS = UDim2.new(0.2, 0, 0.25, 0)
+
+    -- Standard-Textgröße reduzieren
+    local function scaleText(obj)
+        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+            obj.TextSize = math.max(12, math.floor(obj.TextSize * 0.85))
+        end
+        for _, child in ipairs(obj:GetChildren()) do
+            scaleText(child)
+        end
+    end
+
+    -- Später nach dem GUI-Aufbau ausführen
+    task.defer(function()
+        scaleText(screenGui)
+    end)
+end
 -- Save config
 local function saveConfig()
     if writefile then
