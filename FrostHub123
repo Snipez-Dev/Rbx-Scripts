@@ -99,14 +99,20 @@ local function round(obj, r)
     return c
 end
 -- Skalierungsfaktor für Mobile
+-- Skalierungsfaktor für Mobile
 local SCALE = 0.75  
 
 local function scaleGui(obj)
+    -- Nur weitermachen, wenn obj existiert und ein Roblox Instance ist
+    if not (obj and obj:IsA("Instance")) then
+        return
+    end
+
     if obj:IsA("GuiObject") then
         local s = obj.Size
         local p = obj.Position
 
-        -- Nur Offset-Werte anpassen (Scale bleibt unverändert!)
+        -- Offset-Werte anpassen
         obj.Size = UDim2.new(
             s.X.Scale, math.floor(s.X.Offset * SCALE),
             s.Y.Scale, math.floor(s.Y.Offset * SCALE)
@@ -117,12 +123,10 @@ local function scaleGui(obj)
         )
     end
 
-    -- Text skalieren
     if obj:IsA("TextLabel") or obj:IsA("TextButton") then
         obj.TextSize = math.max(12, math.floor(obj.TextSize * SCALE))
     end
 
-    -- Kinder rekursiv skalieren
     for _, child in ipairs(obj:GetChildren()) do
         scaleGui(child)
     end
@@ -130,9 +134,12 @@ end
 
 if isMobile then
     task.defer(function()
-        scaleGui(screenGui) -- komplettes GUI skalieren
+        if screenGui then
+            scaleGui(screenGui)
+        end
     end)
 end
+
 
 -- Save config
 local function saveConfig()
