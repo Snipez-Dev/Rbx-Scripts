@@ -1,0 +1,672 @@
+-- VanithUI.luau
+-- Minimal Roblox UI library (single Main page) with FPS & Ping metrics.
+
+local VanithUI = {}
+
+-- Services
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+
+-- Theme defaults
+local DEFAULT_HUE = 0.55
+local COLOR_BG        = Color3.fromRGB(18,18,18)
+local COLOR_PANEL     = Color3.fromRGB(25,25,25)
+local COLOR_HUD       = Color3.fromRGB(15,15,15)
+local COLOR_TEXT      = Color3.fromRGB(220,220,220)
+
+local function round(obj, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 6)
+    c.Parent = obj
+    return c
+end
+
+local function getParentGui()
+    local ok, ui = pcall(function()
+        local f = gethui and gethui()
+        if typeof(f) == "Instance" then return f end
+        return CoreGui
+    end)
+    return ok and ui or CoreGui
+end
+
+local function getPingMs()
+    local ok, val = pcall(function()
+        local item = Stats.Network.ServerStatsItem["Data Ping"]
+        if not item then return nil end
+        local s = item:GetValueString() -- "35 ms"
+        local num = tonumber(string.match(s or "", "(%d+)"))
+        return num
+    end)
+    if ok then return val end
+    return nil
+end
+
+-- Notifications
+local function createNotifier(root, themeColor)
+    local holder = Instance.new("Frame")
+    holder.Name = "Notifications"
+    holder.BackgroundTransparency = 1
+    holder.Size = UDim2.new(0, 300, 1, 0)
+    holder.Position = UDim2.new(1, -320, 0, 20)
+    holder.Parent = root
+
+    local layout = Instance.new("UIListLayout")
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0,8)
+    layout.Parent = holder
+
+    local function notify(title, message, duration)
+        local card = Instance.new("Frame")
+        card.Size = UDim2.new(1,0,0,80)
+        card.BackgroundColor3 = COLOR_PANEL
+        card.BorderSizePixel = 0
+        round(card, 8)
+        card.Parent = holder
+
+        local accent = Instance.new("Frame")
+        accent.Size = UDim2.new(0,4,1,0)
+        accent.BackgroundColor3 = themeColor
+        accent.BorderSizePixel = 0
+        round(accent,8)
+        accent.Parent = card
+
+        local t = Instance.new("TextLabel")
+        t.BackgroundTransparency = 1
+        t.Font = Enum.Font.GothamBold
+        t.TextSize = 16
+        t.TextXAlignment = Enum.TextXAlignment.Left
+        t.TextColor3 = themeColor
+        t.Text = title
+        t.Size = UDim2.new(1,-32,0,20)
+        t.Position = UDim2.new(0,16,0,8)
+        t.Parent = card
+
+        local m = Instance.new("TextLabel")
+        m.BackgroundTransparency = 1
+        m.Font = Enum.Font.Gotham
+        m.TextSize = 14
+        m.TextXAlignment = Enum.TextXAlignment.Left
+        m.TextYAlignment = Enum.TextYAlignment.Top
+        m.TextWrapped = true
+        m.TextColor3 = COLOR_TEXT
+        m.Text = message
+        m.Size = UDim2.new(1,-32,0,40)
+        m.Position = UDim2.new(0,16,0,32)
+        m.Parent = card
+
+        task.delay(duration or 2, function()
+            local tween = TweenService:Create(card, TweenInfo.new(0.25), {BackgroundTransparency = 1})
+            tween:Play()
+            tween.Completed:Connect(function()
+                if card then card:Destroy() end
+            end)
+        end)
+    end
+
+    return notify
+end
+
+-- Components
+local Component = {}
+
+function Component.Label(container, text, themeColor)
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 14
+    lbl.TextColor3 = COLOR_TEXT
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Text = text or ""
+    lbl.Size = UDim2.new(1, -20, 0, 20)
+    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.Parent = container
+
+    local holder = Instance.new("Frame")
+    holder.BackgroundTransparency = 1
+    holder.Size = UDim2.new(1,0,0,24)
+    holder.Parent = container
+
+    return lbl
+end
+
+function Component.Button(container, text, themeColor, callback)
+    local btn = Instance.new("TextButton")
+    btn.AutoButtonColor = true
+    btn.Text = text or "Button"
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 16
+    btn.TextColor3 = themeColor
+    btn.BackgroundColor3 = COLOR_HUD
+    btn.Size = UDim2.new(1, -20, 0, 30)
+    btn.Position = UDim2.new(0, 10, 0, 0)
+    round(btn, 6)
+    btn.Parent = container
+    btn.MouseButton1Click:Connect(function()
+        if typeof(callback) == "function" then
+            task.spawn(callback)
+        end
+    end)
+
+    local holder = Instance.new("Frame")
+    holder.BackgroundTransparency = 1
+    holder.Size = UDim2.new(1,0,0,34)
+    holder.Parent = container
+
+    return btn
+end
+
+function Component.Toggle(container, text, themeColor, default, callback)
+    local frame = Instance.new("Frame")
+    frame.BackgroundColor3 = COLOR_HUD
+    frame.Size = UDim2.new(1,-20,0,30)
+    frame.Position = UDim2.new(0,10,0,0)
+    frame.BorderSizePixel = 0
+    round(frame, 6)
+    frame.Parent = container
+
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text or "Toggle"
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 14
+    lbl.TextColor3 = COLOR_TEXT
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Size = UDim2.new(1,-60,1,0)
+    lbl.Position = UDim2.new(0,10,0,0)
+    lbl.Parent = frame
+
+    local knob = Instance.new("TextButton")
+    knob.AutoButtonColor = false
+    knob.Text = ""
+    knob.Size = UDim2.new(0, 40, 0, 18)
+    knob.Position = UDim2.new(1,-50,0.5,-9)
+    knob.BackgroundColor3 = (default and true or false) and themeColor or Color3.fromRGB(60,60,60)
+    round(knob, 9)
+    knob.Parent = frame
+
+    local dot = Instance.new("Frame")
+    dot.Size = UDim2.new(0,14,0,14)
+    dot.Position = UDim2.new(default and 1 or 0, default and -16 or 2, 0.5, -7)
+    dot.BackgroundColor3 = COLOR_PANEL
+    dot.BorderSizePixel = 0
+    round(dot, 7)
+    dot.Parent = knob
+
+    local state = default and true or false
+    local function set(v)
+        state = not not v
+        knob.BackgroundColor3 = state and themeColor or Color3.fromRGB(60,60,60)
+        dot.Position = UDim2.new(state and 1 or 0, state and -16 or 2, 0.5, -7)
+        if typeof(callback)=="function" then callback(state) end
+    end
+    knob.MouseButton1Click:Connect(function() set(not state) end)
+
+    local holder = Instance.new("Frame")
+    holder.BackgroundTransparency = 1
+    holder.Size = UDim2.new(1,0,0,36)
+    holder.Parent = container
+
+    return {
+        Instance = frame,
+        Set = set,
+        Get = function() return state end,
+    }
+end
+
+function Component.Slider(container, text, themeColor, min, max, default, callback)
+    min, max = min or 0, max or 100
+    if default == nil then default = min end
+
+    local frame = Instance.new("Frame")
+    frame.BackgroundColor3 = COLOR_HUD
+    frame.Size = UDim2.new(1,-20,0,40)
+    frame.Position = UDim2.new(0,10,0,0)
+    frame.BorderSizePixel = 0
+    round(frame, 6)
+    frame.Parent = container
+
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.Text = string.format("%s: %s", text or "Slider", tostring(default))
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 14
+    lbl.TextColor3 = COLOR_TEXT
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Size = UDim2.new(1,-20,0,18)
+    lbl.Position = UDim2.new(0,10,0,6)
+    lbl.Parent = frame
+
+    local bar = Instance.new("Frame")
+    bar.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    bar.BorderSizePixel = 0
+    bar.Position = UDim2.new(0,10,0,26)
+    bar.Size = UDim2.new(1,-20,0,6)
+    round(bar, 3)
+    bar.Parent = frame
+
+    local fill = Instance.new("Frame")
+    fill.BackgroundColor3 = themeColor
+    fill.BorderSizePixel = 0
+    fill.Size = UDim2.new((default-min)/(max-min),0,1,0)
+    round(fill, 3)
+    fill.Parent = bar
+
+    local dragging = false
+    local value = default
+    local function setFromX(x)
+        local rel = math.clamp((x - bar.AbsolutePosition.X) / (bar.AbsoluteSize.X), 0, 1)
+        value = math.floor(min + (max - min)*rel + 0.5)
+        fill.Size = UDim2.new(rel, 0, 1, 0)
+        lbl.Text = string.format("%s: %s", text or "Slider", tostring(value))
+        if typeof(callback) == "function" then callback(value) end
+    end
+
+    bar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            setFromX(input.Position.X)
+        end
+    end)
+    bar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            setFromX(input.Position.X)
+        end
+    end)
+
+    return {
+        Instance = frame,
+        Set = function(v)
+            v = math.clamp(v, min, max)
+            local rel = (v-min)/(max-min)
+            fill.Size = UDim2.new(rel, 0, 1, 0)
+            lbl.Text = string.format("%s: %s", text or "Slider", tostring(v))
+            value = v
+            if typeof(callback)=="function" then callback(value) end
+        end,
+        Get = function() return value end
+    }
+end
+
+-- Main window (single "Main" page only)
+function VanithUI.CreateWindow(opts)
+    opts = opts or {}
+    local title = opts.Title or "Vanith | Eternal Nights"
+    local width = (opts.Width or 650)
+    local height = (opts.Height or 300)
+    local hue = (opts.Hue ~= nil) and opts.Hue or DEFAULT_HUE
+    local themeColor = Color3.fromHSV(hue, 1, 1)
+    local version = opts.Version or "v1.0.2"
+    local onDiscord = opts.OnDiscord or function() end
+    local onUnlockFPS = opts.OnUnlockFPS or function() end
+
+    -- Root GUI
+    local rootGui = Instance.new("ScreenGui")
+    rootGui.Name = "VanithUI"
+    rootGui.ResetOnSpawn = false
+    rootGui.IgnoreGuiInset = true
+    rootGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    rootGui.Parent = getParentGui()
+
+    -- Main window
+    local main = Instance.new("Frame")
+    main.Name = "Window"
+    main.Size = UDim2.new(0, width, 0, height)
+    main.Position = UDim2.new(0.15, 0, 0.22, 0)
+    main.BackgroundColor3 = COLOR_BG
+    main.BorderSizePixel = 0
+    round(main, 6)
+    main.Parent = rootGui
+
+    -- Top bar
+    local top = Instance.new("Frame")
+    top.Name = "TopBar"
+    top.BackgroundTransparency = 1
+    top.Size = UDim2.new(1,0,0,28)
+    top.Parent = main
+
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Text = title
+    titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.TextSize = 16
+    titleLbl.TextColor3 = themeColor
+    titleLbl.Position = UDim2.new(0, -60, 0, 0)
+    titleLbl.Size = UDim2.new(0, 320, 1, 0)
+    titleLbl.Parent = top
+
+    local btnMin = Instance.new("TextButton")
+    btnMin.Text = "_"
+    btnMin.Font = Enum.Font.GothamBold
+    btnMin.TextSize = 20
+    btnMin.BackgroundTransparency = 1
+    btnMin.TextColor3 = themeColor
+    btnMin.Size = UDim2.new(0,28,0,28)
+    btnMin.Position = UDim2.new(1,-60,0,0)
+    btnMin.Parent = top
+
+    local btnClose = Instance.new("TextButton")
+    btnClose.Text = "X"
+    btnClose.Font = Enum.Font.GothamBold
+    btnClose.TextSize = 18
+    btnClose.BackgroundTransparency = 1
+    btnClose.TextColor3 = themeColor
+    btnClose.Size = UDim2.new(0,28,0,28)
+    btnClose.Position = UDim2.new(1,-32,0,0)
+    btnClose.Parent = top
+
+    -- Drag
+    do
+        local dragging, dragInput, dragStart, startPos
+        top.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging, dragStart, startPos = true, i.Position, main.Position
+                i.Changed:Connect(function()
+                    if i.UserInputState == Enum.UserInputState.End then dragging = false end
+                end)
+            end
+        end)
+        top.InputChanged:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseMovement then dragInput = i end
+        end)
+        UserInputService.InputChanged:Connect(function(i)
+            if dragging and i == dragInput then
+                local delta = i.Position - dragStart
+                main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+    end
+
+    -- Minimize
+    local minimized, mini
+    btnMin.MouseButton1Click:Connect(function()
+        if minimized then
+            minimized = false
+            if mini then mini:Destroy() end
+            main.Visible = true
+            btnMin.Text = "_"
+            return
+        end
+        minimized = true
+        main.Visible = false
+
+        mini = Instance.new("Frame")
+        mini.Name = "Mini"
+        mini.Size = UDim2.new(0,50,0,50)
+        mini.Position = UDim2.new(0.15, 0, 0.22, 0)
+        mini.BackgroundColor3 = COLOR_BG
+        mini.BorderSizePixel = 0
+        round(mini,6)
+        mini.Parent = rootGui
+
+        local icon = Instance.new("TextLabel")
+        icon.BackgroundTransparency = 1
+        icon.Text = "❄️"
+        icon.Font = Enum.Font.GothamBold
+        icon.TextSize = 28
+        icon.TextColor3 = themeColor
+        icon.Size = UDim2.new(1,0,1,0)
+        icon.Parent = mini
+
+        local dragging, dragInput, dragStart, startPos, tapped = false, nil, nil, nil, false
+        mini.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true; tapped = true
+                dragStart = i.Position; startPos = mini.Position
+                i.Changed:Connect(function()
+                    if i.UserInputState == Enum.UserInputState.End then dragging = false end
+                end)
+            end
+        end)
+        mini.InputChanged:Connect(function(i)
+            if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+                tapped = false
+                local delta = i.Position - dragStart
+                mini.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+        mini.InputEnded:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 and tapped then
+                minimized = false
+                if mini then mini:Destroy() end
+                main.Visible = true
+                btnMin.Text = "_"
+            end
+        end)
+        btnMin.Text = "⬆"
+    end)
+
+    -- Close
+    btnClose.MouseButton1Click:Connect(function() rootGui:Destroy() end)
+
+    -- Content (single page)
+    local content = Instance.new("Frame")
+    content.Name = "Content"
+    content.Size = UDim2.new(1,0,1,-28)
+    content.Position = UDim2.new(0,0,0,28)
+    content.BackgroundColor3 = COLOR_PANEL
+    content.BorderSizePixel = 0
+    round(content, 6)
+    content.Parent = main
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.BackgroundTransparency = 1
+    scroll.Size = UDim2.new(1,0,1,0)
+    scroll.CanvasSize = UDim2.new(0,0,0,0)
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scroll.ScrollBarThickness = 0
+    scroll.Parent = content
+
+    local padding = Instance.new("UIPadding")
+    padding.PaddingLeft = UDim.new(0,12)
+    padding.PaddingTop = UDim.new(0,12)
+    padding.PaddingRight = UDim.new(0,12)
+    padding.PaddingBottom = UDim.new(0,12)
+    padding.Parent = scroll
+
+    local list = Instance.new("UIListLayout")
+    list.SortOrder = Enum.SortOrder.LayoutOrder
+    list.Padding = UDim.new(0,12)
+    list.Parent = scroll
+
+    -- === Main header card ===
+    local header = Instance.new("Frame")
+    header.BackgroundColor3 = COLOR_HUD
+    header.BorderSizePixel = 0
+    header.Size = UDim2.new(1, -0, 0, 110)
+    round(header, 8)
+    header.Parent = scroll
+
+    local avatar = Instance.new("ImageLabel")
+    avatar.BackgroundTransparency = 1
+    avatar.Size = UDim2.new(0, 64, 0, 64)
+    avatar.Position = UDim2.new(0, 16, 0, 16)
+    round(avatar, 32)
+    avatar.Parent = header
+    task.spawn(function()
+        local p = Players.LocalPlayer
+        local img = Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+        avatar.Image = img
+    end)
+
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Font = Enum.Font.GothamBold
+    nameLbl.TextSize = 20
+    nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    nameLbl.TextColor3 = themeColor
+    nameLbl.Text = Players.LocalPlayer.Name
+    nameLbl.Position = UDim2.new(0, 96, 0, 16)
+    nameLbl.Size = UDim2.new(0, 240, 0, 24)
+    nameLbl.Parent = header
+
+    local verLbl = Instance.new("TextLabel")
+    verLbl.BackgroundTransparency = 1
+    verLbl.Font = Enum.Font.Gotham
+    verLbl.TextSize = 14
+    verLbl.TextXAlignment = Enum.TextXAlignment.Left
+    verLbl.TextColor3 = themeColor
+    verLbl.Text = "Version: "..tostring(version)
+    verLbl.Position = UDim2.new(0, 96, 0, 44)
+    verLbl.Size = UDim2.new(0, 240, 0, 18)
+    verLbl.Parent = header
+
+    local joinBtn = Instance.new("TextButton")
+    joinBtn.Text = "Join Discord"
+    joinBtn.Font = Enum.Font.GothamBold
+    joinBtn.TextSize = 16
+    joinBtn.TextColor3 = themeColor
+    joinBtn.BackgroundColor3 = COLOR_HUD
+    joinBtn.Size = UDim2.new(0, 180, 0, 30)
+    joinBtn.Position = UDim2.new(0, 96, 0, 74)
+    round(joinBtn, 6)
+    joinBtn.Parent = header
+    joinBtn.MouseButton1Click:Connect(function()
+        onDiscord()
+    end)
+
+    -- === Metrics card: FPS + Ping + Unlock FPS ===
+    local metrics = Instance.new("Frame")
+    metrics.BackgroundColor3 = COLOR_HUD
+    metrics.BorderSizePixel = 0
+    metrics.Size = UDim2.new(1, -0, 0, 110)
+    round(metrics, 8)
+    metrics.Parent = scroll
+
+    local fpsLbl = Instance.new("TextLabel")
+    fpsLbl.BackgroundTransparency = 1
+    fpsLbl.Font = Enum.Font.Gotham
+    fpsLbl.TextSize = 16
+    fpsLbl.TextColor3 = themeColor
+    fpsLbl.TextXAlignment = Enum.TextXAlignment.Left
+    fpsLbl.Text = "FPS: —"
+    fpsLbl.Position = UDim2.new(0, 10, 0, 20)
+    fpsLbl.Size = UDim2.new(0, 200, 0, 20)
+    fpsLbl.Parent = metrics
+
+    local pingLbl = fpsLbl:Clone()
+    pingLbl.Text = "Ping: —"
+    pingLbl.Position = UDim2.new(0, 10, 0, 48)
+    pingLbl.Parent = metrics
+
+    local unlockBtn = Instance.new("TextButton")
+    unlockBtn.Text = "Unlock FPS"
+    unlockBtn.Font = Enum.Font.GothamBold
+    unlockBtn.TextSize = 16
+    unlockBtn.TextColor3 = themeColor
+    unlockBtn.BackgroundColor3 = COLOR_HUD
+    unlockBtn.Size = UDim2.new(0, 160, 0, 30)
+    unlockBtn.Position = UDim2.new(1, -170, 0, 74)
+    round(unlockBtn, 6)
+    unlockBtn.Parent = metrics
+    unlockBtn.MouseButton1Click:Connect(function()
+        onUnlockFPS()
+    end)
+
+    -- === Changelog (static UI block) ===
+    local changelog = Instance.new("TextLabel")
+    changelog.BackgroundColor3 = COLOR_HUD
+    changelog.BorderSizePixel = 0
+    changelog.Font = Enum.Font.Gotham
+    changelog.TextSize = 14
+    changelog.TextColor3 = themeColor
+    changelog.TextXAlignment = Enum.TextXAlignment.Left
+    changelog.TextYAlignment = Enum.TextYAlignment.Top
+    changelog.TextWrapped = true
+    changelog.Size = UDim2.new(1, 0, 0, 120)
+    changelog.Text = table.concat({
+        "Changelog (UI Library Main Page):",
+        "- Single-page window (Main)",
+        "- FPS & Ping metrics (live)",
+        "- Minimize / Close / Drag",
+        "- Basic components API (Label, Button, Toggle, Slider)",
+    }, "\n")
+    round(changelog, 8)
+    changelog.Parent = scroll
+
+    -- Metrics update
+    local fpsSmoothed = 60
+    local last = tick()
+    RunService.Heartbeat:Connect(function()
+        local now = tick()
+        local dt = now - last
+        last = now
+        local inst = (dt > 0) and (1/dt) or 60
+        fpsSmoothed = fpsSmoothed * 0.9 + inst * 0.1
+        fpsLbl.Text = ("FPS: %d"):format(math.floor(fpsSmoothed + 0.5))
+    end)
+
+    task.spawn(function()
+        while rootGui.Parent do
+            local p = getPingMs()
+            pingLbl.Text = p and ("Ping: %d ms"):format(p) or "Ping: —"
+            task.wait(0.5)
+        end
+    end)
+
+    -- Public API on window
+    local notifier = createNotifier(rootGui, themeColor)
+
+    local window = {}
+
+    function window:Notify(title, msg, dur)
+        notifier(title, msg, dur)
+    end
+
+    function window:SetHue(newHue)
+        newHue = tonumber(newHue) or DEFAULT_HUE
+        newHue = math.clamp(newHue, 0, 1)
+        local theme = Color3.fromHSV(newHue, 1, 1)
+        -- update highlight widgets
+        titleLbl.TextColor3 = theme
+        btnMin.TextColor3 = theme
+        btnClose.TextColor3 = theme
+        nameLbl.TextColor3 = theme
+        verLbl.TextColor3 = theme
+        fpsLbl.TextColor3 = theme
+        pingLbl.TextColor3 = theme
+        unlockBtn.TextColor3 = theme
+    end
+
+    function window:GetRoot()
+        return rootGui
+    end
+
+    function window:GetContent()
+        return scroll
+    end
+
+    -- Component API
+    function window:AddLabel(text)       return Component.Label(scroll, text) end
+    function window:AddButton(text, cb)  return Component.Button(scroll, text, titleLbl.TextColor3, cb) end
+    function window:AddToggle(text, default, cb)
+        return Component.Toggle(scroll, text, titleLbl.TextColor3, default, cb)
+    end
+    function window:AddSlider(text, mi, ma, de, cb)
+        return Component.Slider(scroll, text, titleLbl.TextColor3, mi, ma, de, cb)
+    end
+
+    function window:Destroy()
+        rootGui:Destroy()
+    end
+
+    -- M toggles visibility
+    UserInputService.InputBegan:Connect(function(i, g)
+        if not g and i.KeyCode == Enum.KeyCode.M then
+            rootGui.Enabled = not rootGui.Enabled
+        end
+    end)
+
+    return window
+end
+
+return VanithUI
