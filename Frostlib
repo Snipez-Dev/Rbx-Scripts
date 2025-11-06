@@ -1,5 +1,7 @@
--- VanithUI.luau
--- Minimal Roblox UI library (single Main page) with FPS & Ping metrics.
+-- VanithUI_Tabs.luau
+-- Roblox UI library with Sidebar Tabs.
+-- Main tab keeps the previous look (avatar card + FPS/Ping card + changelog).
+-- Other tabs are empty containers you can populate via the API.
 
 local VanithUI = {}
 
@@ -15,9 +17,10 @@ local Stats = game:GetService("Stats")
 local DEFAULT_HUE = 0.55
 local COLOR_BG        = Color3.fromRGB(18,18,18)
 local COLOR_PANEL     = Color3.fromRGB(25,25,25)
-local COLOR_HUD       = Color3.fromRGB(15,15,15)
+local COLOR_SIDEBAR   = Color3.fromRGB(15,15,15)
 local COLOR_TEXT      = Color3.fromRGB(220,220,220)
 
+-- Helpers
 local function round(obj, r)
     local c = Instance.new("UICorner")
     c.CornerRadius = UDim.new(0, r or 6)
@@ -38,7 +41,7 @@ local function getPingMs()
     local ok, val = pcall(function()
         local item = Stats.Network.ServerStatsItem["Data Ping"]
         if not item then return nil end
-        local s = item:GetValueString() -- "35 ms"
+        local s = item:GetValueString() -- e.g. "35 ms"
         local num = tonumber(string.match(s or "", "(%d+)"))
         return num
     end)
@@ -53,6 +56,7 @@ local function createNotifier(root, themeColor)
     holder.BackgroundTransparency = 1
     holder.Size = UDim2.new(0, 300, 1, 0)
     holder.Position = UDim2.new(1, -320, 0, 20)
+    holder.ZIndex = 5
     holder.Parent = root
 
     local layout = Instance.new("UIListLayout")
@@ -65,6 +69,7 @@ local function createNotifier(root, themeColor)
         card.Size = UDim2.new(1,0,0,80)
         card.BackgroundColor3 = COLOR_PANEL
         card.BorderSizePixel = 0
+        card.ZIndex = 6
         round(card, 8)
         card.Parent = holder
 
@@ -72,6 +77,7 @@ local function createNotifier(root, themeColor)
         accent.Size = UDim2.new(0,4,1,0)
         accent.BackgroundColor3 = themeColor
         accent.BorderSizePixel = 0
+        accent.ZIndex = 7
         round(accent,8)
         accent.Parent = card
 
@@ -82,6 +88,7 @@ local function createNotifier(root, themeColor)
         t.TextXAlignment = Enum.TextXAlignment.Left
         t.TextColor3 = themeColor
         t.Text = title
+        t.ZIndex = 7
         t.Size = UDim2.new(1,-32,0,20)
         t.Position = UDim2.new(0,16,0,8)
         t.Parent = card
@@ -95,6 +102,7 @@ local function createNotifier(root, themeColor)
         m.TextWrapped = true
         m.TextColor3 = COLOR_TEXT
         m.Text = message
+        m.ZIndex = 7
         m.Size = UDim2.new(1,-32,0,40)
         m.Position = UDim2.new(0,16,0,32)
         m.Parent = card
@@ -126,10 +134,10 @@ function Component.Label(container, text, themeColor)
     lbl.Position = UDim2.new(0, 10, 0, 0)
     lbl.Parent = container
 
-    local holder = Instance.new("Frame")
-    holder.BackgroundTransparency = 1
-    holder.Size = UDim2.new(1,0,0,24)
-    holder.Parent = container
+    local spacer = Instance.new("Frame")
+    spacer.BackgroundTransparency = 1
+    spacer.Size = UDim2.new(1,0,0,24)
+    spacer.Parent = container
 
     return lbl
 end
@@ -141,7 +149,7 @@ function Component.Button(container, text, themeColor, callback)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 16
     btn.TextColor3 = themeColor
-    btn.BackgroundColor3 = COLOR_HUD
+    btn.BackgroundColor3 = COLOR_SIDEBAR
     btn.Size = UDim2.new(1, -20, 0, 30)
     btn.Position = UDim2.new(0, 10, 0, 0)
     round(btn, 6)
@@ -152,17 +160,17 @@ function Component.Button(container, text, themeColor, callback)
         end
     end)
 
-    local holder = Instance.new("Frame")
-    holder.BackgroundTransparency = 1
-    holder.Size = UDim2.new(1,0,0,34)
-    holder.Parent = container
+    local spacer = Instance.new("Frame")
+    spacer.BackgroundTransparency = 1
+    spacer.Size = UDim2.new(1,0,0,34)
+    spacer.Parent = container
 
     return btn
 end
 
 function Component.Toggle(container, text, themeColor, default, callback)
     local frame = Instance.new("Frame")
-    frame.BackgroundColor3 = COLOR_HUD
+    frame.BackgroundColor3 = COLOR_SIDEBAR
     frame.Size = UDim2.new(1,-20,0,30)
     frame.Position = UDim2.new(0,10,0,0)
     frame.BorderSizePixel = 0
@@ -206,10 +214,10 @@ function Component.Toggle(container, text, themeColor, default, callback)
     end
     knob.MouseButton1Click:Connect(function() set(not state) end)
 
-    local holder = Instance.new("Frame")
-    holder.BackgroundTransparency = 1
-    holder.Size = UDim2.new(1,0,0,36)
-    holder.Parent = container
+    local spacer = Instance.new("Frame")
+    spacer.BackgroundTransparency = 1
+    spacer.Size = UDim2.new(1,0,0,36)
+    spacer.Parent = container
 
     return {
         Instance = frame,
@@ -223,7 +231,7 @@ function Component.Slider(container, text, themeColor, min, max, default, callba
     if default == nil then default = min end
 
     local frame = Instance.new("Frame")
-    frame.BackgroundColor3 = COLOR_HUD
+    frame.BackgroundColor3 = COLOR_SIDEBAR
     frame.Size = UDim2.new(1,-20,0,40)
     frame.Position = UDim2.new(0,10,0,0)
     frame.BorderSizePixel = 0
@@ -297,12 +305,40 @@ function Component.Slider(container, text, themeColor, min, max, default, callba
     }
 end
 
--- Main window (single "Main" page only)
+-- Internal: Tab object creator
+local function makeTabObj(name, button, pageScroll, themeColor)
+    local Tab = {}
+
+    function Tab:AddLabel(text)
+        return Component.Label(pageScroll, text, themeColor)
+    end
+    function Tab:AddButton(text, callback)
+        return Component.Button(pageScroll, text, themeColor, callback)
+    end
+    function Tab:AddToggle(text, default, callback)
+        return Component.Toggle(pageScroll, text, themeColor, default, callback)
+    end
+    function Tab:AddSlider(text, mi, ma, de, callback)
+        return Component.Slider(pageScroll, text, themeColor, mi, ma, de, callback)
+    end
+    function Tab:GetContainer()
+        return pageScroll
+    end
+    function Tab:GetButton()
+        return button
+    end
+    function Tab:GetName()
+        return name
+    end
+    return Tab
+end
+
+-- Main window with Sidebar Tabs
 function VanithUI.CreateWindow(opts)
     opts = opts or {}
     local title = opts.Title or "Vanith | Eternal Nights"
-    local width = (opts.Width or 650)
-    local height = (opts.Height or 300)
+    local width = (opts.Width or 800)
+    local height = (opts.Height or 360)
     local hue = (opts.Hue ~= nil) and opts.Hue or DEFAULT_HUE
     local themeColor = Color3.fromHSV(hue, 1, 1)
     local version = opts.Version or "v1.0.2"
@@ -317,7 +353,7 @@ function VanithUI.CreateWindow(opts)
     rootGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     rootGui.Parent = getParentGui()
 
-    -- Main window
+    -- Window
     local main = Instance.new("Frame")
     main.Name = "Window"
     main.Size = UDim2.new(0, width, 0, height)
@@ -448,172 +484,261 @@ function VanithUI.CreateWindow(opts)
     -- Close
     btnClose.MouseButton1Click:Connect(function() rootGui:Destroy() end)
 
-    -- Content (single page)
+    -- ===== Layout: Sidebar + Content =====
+    local sidebar = Instance.new("Frame")
+    sidebar.Name = "Sidebar"
+    sidebar.Size = UDim2.new(0,110,1,-28)
+    sidebar.Position = UDim2.new(0,0,0,28)
+    sidebar.BackgroundColor3 = COLOR_SIDEBAR
+    sidebar.BorderSizePixel = 0
+    round(sidebar,6)
+    sidebar.Parent = main
+
+    local sbList = Instance.new("UIListLayout")
+    sbList.Padding = UDim.new(0,6)
+    sbList.FillDirection = Enum.FillDirection.Vertical
+    sbList.SortOrder = Enum.SortOrder.LayoutOrder
+    sbList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    sbList.Parent = sidebar
+
     local content = Instance.new("Frame")
     content.Name = "Content"
-    content.Size = UDim2.new(1,0,1,-28)
-    content.Position = UDim2.new(0,0,0,28)
+    content.Size = UDim2.new(1,-110,1,-28)
+    content.Position = UDim2.new(0,110,0,28)
     content.BackgroundColor3 = COLOR_PANEL
     content.BorderSizePixel = 0
-    round(content, 6)
+    round(content,6)
     content.Parent = main
 
-    local scroll = Instance.new("ScrollingFrame")
-    scroll.BackgroundTransparency = 1
-    scroll.Size = UDim2.new(1,0,1,0)
-    scroll.CanvasSize = UDim2.new(0,0,0,0)
-    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    scroll.ScrollBarThickness = 0
-    scroll.Parent = content
+    local pages = {}   -- [name] = frame
+    local buttons = {} -- [name] = button
+    local tabs = {}    -- [name] = Tab object
+    local active = nil
 
-    local padding = Instance.new("UIPadding")
-    padding.PaddingLeft = UDim.new(0,12)
-    padding.PaddingTop = UDim.new(0,12)
-    padding.PaddingRight = UDim.new(0,12)
-    padding.PaddingBottom = UDim.new(0,12)
-    padding.Parent = scroll
-
-    local list = Instance.new("UIListLayout")
-    list.SortOrder = Enum.SortOrder.LayoutOrder
-    list.Padding = UDim.new(0,12)
-    list.Parent = scroll
-
-    -- === Main header card ===
-    local header = Instance.new("Frame")
-    header.BackgroundColor3 = COLOR_HUD
-    header.BorderSizePixel = 0
-    header.Size = UDim2.new(1, -0, 0, 110)
-    round(header, 8)
-    header.Parent = scroll
-
-    local avatar = Instance.new("ImageLabel")
-    avatar.BackgroundTransparency = 1
-    avatar.Size = UDim2.new(0, 64, 0, 64)
-    avatar.Position = UDim2.new(0, 16, 0, 16)
-    round(avatar, 32)
-    avatar.Parent = header
-    task.spawn(function()
-        local p = Players.LocalPlayer
-        local img = Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-        avatar.Image = img
-    end)
-
-    local nameLbl = Instance.new("TextLabel")
-    nameLbl.BackgroundTransparency = 1
-    nameLbl.Font = Enum.Font.GothamBold
-    nameLbl.TextSize = 20
-    nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-    nameLbl.TextColor3 = themeColor
-    nameLbl.Text = Players.LocalPlayer.Name
-    nameLbl.Position = UDim2.new(0, 96, 0, 16)
-    nameLbl.Size = UDim2.new(0, 240, 0, 24)
-    nameLbl.Parent = header
-
-    local verLbl = Instance.new("TextLabel")
-    verLbl.BackgroundTransparency = 1
-    verLbl.Font = Enum.Font.Gotham
-    verLbl.TextSize = 14
-    verLbl.TextXAlignment = Enum.TextXAlignment.Left
-    verLbl.TextColor3 = themeColor
-    verLbl.Text = "Version: "..tostring(version)
-    verLbl.Position = UDim2.new(0, 96, 0, 44)
-    verLbl.Size = UDim2.new(0, 240, 0, 18)
-    verLbl.Parent = header
-
-    local joinBtn = Instance.new("TextButton")
-    joinBtn.Text = "Join Discord"
-    joinBtn.Font = Enum.Font.GothamBold
-    joinBtn.TextSize = 16
-    joinBtn.TextColor3 = themeColor
-    joinBtn.BackgroundColor3 = COLOR_HUD
-    joinBtn.Size = UDim2.new(0, 180, 0, 30)
-    joinBtn.Position = UDim2.new(0, 96, 0, 74)
-    round(joinBtn, 6)
-    joinBtn.Parent = header
-    joinBtn.MouseButton1Click:Connect(function()
-        onDiscord()
-    end)
-
-    -- === Metrics card: FPS + Ping + Unlock FPS ===
-    local metrics = Instance.new("Frame")
-    metrics.BackgroundColor3 = COLOR_HUD
-    metrics.BorderSizePixel = 0
-    metrics.Size = UDim2.new(1, -0, 0, 110)
-    round(metrics, 8)
-    metrics.Parent = scroll
-
-    local fpsLbl = Instance.new("TextLabel")
-    fpsLbl.BackgroundTransparency = 1
-    fpsLbl.Font = Enum.Font.Gotham
-    fpsLbl.TextSize = 16
-    fpsLbl.TextColor3 = themeColor
-    fpsLbl.TextXAlignment = Enum.TextXAlignment.Left
-    fpsLbl.Text = "FPS: —"
-    fpsLbl.Position = UDim2.new(0, 10, 0, 20)
-    fpsLbl.Size = UDim2.new(0, 200, 0, 20)
-    fpsLbl.Parent = metrics
-
-    local pingLbl = fpsLbl:Clone()
-    pingLbl.Text = "Ping: —"
-    pingLbl.Position = UDim2.new(0, 10, 0, 48)
-    pingLbl.Parent = metrics
-
-    local unlockBtn = Instance.new("TextButton")
-    unlockBtn.Text = "Unlock FPS"
-    unlockBtn.Font = Enum.Font.GothamBold
-    unlockBtn.TextSize = 16
-    unlockBtn.TextColor3 = themeColor
-    unlockBtn.BackgroundColor3 = COLOR_HUD
-    unlockBtn.Size = UDim2.new(0, 160, 0, 30)
-    unlockBtn.Position = UDim2.new(1, -170, 0, 74)
-    round(unlockBtn, 6)
-    unlockBtn.Parent = metrics
-    unlockBtn.MouseButton1Click:Connect(function()
-        onUnlockFPS()
-    end)
-
-    -- === Changelog (static UI block) ===
-    local changelog = Instance.new("TextLabel")
-    changelog.BackgroundColor3 = COLOR_HUD
-    changelog.BorderSizePixel = 0
-    changelog.Font = Enum.Font.Gotham
-    changelog.TextSize = 14
-    changelog.TextColor3 = themeColor
-    changelog.TextXAlignment = Enum.TextXAlignment.Left
-    changelog.TextYAlignment = Enum.TextYAlignment.Top
-    changelog.TextWrapped = true
-    changelog.Size = UDim2.new(1, 0, 0, 120)
-    changelog.Text = table.concat({
-        "Changelog (UI Library Main Page):",
-        "- Single-page window (Main)",
-        "- FPS & Ping metrics (live)",
-        "- Minimize / Close / Drag",
-        "- Basic components API (Label, Button, Toggle, Slider)",
-    }, "\n")
-    round(changelog, 8)
-    changelog.Parent = scroll
-
-    -- Metrics update
-    local fpsSmoothed = 60
-    local last = tick()
-    RunService.Heartbeat:Connect(function()
-        local now = tick()
-        local dt = now - last
-        last = now
-        local inst = (dt > 0) and (1/dt) or 60
-        fpsSmoothed = fpsSmoothed * 0.9 + inst * 0.1
-        fpsLbl.Text = ("FPS: %d"):format(math.floor(fpsSmoothed + 0.5))
-    end)
-
-    task.spawn(function()
-        while rootGui.Parent do
-            local p = getPingMs()
-            pingLbl.Text = p and ("Ping: %d ms"):format(p) or "Ping: —"
-            task.wait(0.5)
+    local function showPage(name)
+        for n, fr in pairs(pages) do
+            fr.Visible = (n == name)
         end
-    end)
+        for n, btn in pairs(buttons) do
+            btn.TextColor3 = (n == name) and themeColor or COLOR_TEXT
+            btn.BackgroundColor3 = (n == name) and COLOR_PANEL or Color3.fromRGB(22,22,22)
+        end
+        active = name
+    end
 
-    -- Public API on window
+    local function createSidebarButton(name)
+        local b = Instance.new("TextButton")
+        b.Name = name .. "_Tab"
+        b.Text = name
+        b.Font = Enum.Font.Gotham
+        b.TextSize = 16
+        b.TextColor3 = COLOR_TEXT
+        b.AutoButtonColor = true
+        b.Size = UDim2.new(1,-12,0,32)
+        b.BackgroundColor3 = Color3.fromRGB(22,22,22)
+        round(b,6)
+        b.Parent = sidebar
+        return b
+    end
+
+    local function createPage(name)
+        local page = Instance.new("Frame")
+        page.Name = name .. "_Page"
+        page.Size = UDim2.new(1,0,1,0)
+        page.BackgroundTransparency = 1
+        page.Visible = false
+        page.Parent = content
+
+        local scroll = Instance.new("ScrollingFrame")
+        scroll.BackgroundTransparency = 1
+        scroll.Size = UDim2.new(1,0,1,0)
+        scroll.CanvasSize = UDim2.new(0,0,0,0)
+        scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        scroll.ScrollBarThickness = 0
+        scroll.Parent = page
+
+        local padding = Instance.new("UIPadding")
+        padding.PaddingLeft = UDim.new(0,12)
+        padding.PaddingTop = UDim.new(0,12)
+        padding.PaddingRight = UDim2.new(0,12)
+        padding.PaddingBottom = UDim.new(0,12)
+        padding.Parent = scroll
+
+        local list = Instance.new("UIListLayout")
+        list.SortOrder = Enum.SortOrder.LayoutOrder
+        list.Padding = UDim.new(0,12)
+        list.Parent = scroll
+
+        return page, scroll
+    end
+
+    local function addTab(name)
+        if pages[name] then return tabs[name] end
+        local page, scroll = createPage(name)
+        local btn = createSidebarButton(name)
+        buttons[name] = btn
+        pages[name] = page
+
+        btn.MouseButton1Click:Connect(function()
+            showPage(name)
+        end)
+
+        local tabObj = makeTabObj(name, btn, scroll, themeColor)
+        tabs[name] = tabObj
+        return tabObj
+    end
+
+    -- === MAIN TAB (unchanged look) ===
+    local mainTab = addTab("Main")
+    do
+        -- Build the same header + metrics + changelog inside Main's scroll
+        local scroll = mainTab:GetContainer()
+
+        -- Header card
+        local header = Instance.new("Frame")
+        header.BackgroundColor3 = COLOR_SIDEBAR
+        header.BorderSizePixel = 0
+        header.Size = UDim2.new(1, -0, 0, 110)
+        round(header, 8)
+        header.Parent = scroll
+
+        local avatar = Instance.new("ImageLabel")
+        avatar.BackgroundTransparency = 1
+        avatar.Size = UDim2.new(0, 64, 0, 64)
+        avatar.Position = UDim2.new(0, 16, 0, 16)
+        round(avatar, 32)
+        avatar.Parent = header
+        task.spawn(function()
+            local p = Players.LocalPlayer
+            local img = Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+            avatar.Image = img
+        end)
+
+        local nameLbl = Instance.new("TextLabel")
+        nameLbl.BackgroundTransparency = 1
+        nameLbl.Font = Enum.Font.GothamBold
+        nameLbl.TextSize = 20
+        nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+        nameLbl.TextColor3 = themeColor
+        nameLbl.Text = Players.LocalPlayer.Name
+        nameLbl.Position = UDim2.new(0, 96, 0, 16)
+        nameLbl.Size = UDim2.new(0, 240, 0, 24)
+        nameLbl.Parent = header
+
+        local verLbl = Instance.new("TextLabel")
+        verLbl.BackgroundTransparency = 1
+        verLbl.Font = Enum.Font.Gotham
+        verLbl.TextSize = 14
+        verLbl.TextXAlignment = Enum.TextXAlignment.Left
+        verLbl.TextColor3 = themeColor
+        verLbl.Text = "Version: "..tostring(version)
+        verLbl.Position = UDim2.new(0, 96, 0, 44)
+        verLbl.Size = UDim2.new(0, 240, 0, 18)
+        verLbl.Parent = header
+
+        local joinBtn = Instance.new("TextButton")
+        joinBtn.Text = "Join Discord"
+        joinBtn.Font = Enum.Font.GothamBold
+        joinBtn.TextSize = 16
+        joinBtn.TextColor3 = themeColor
+        joinBtn.BackgroundColor3 = COLOR_SIDEBAR
+        joinBtn.Size = UDim2.new(0, 180, 0, 30)
+        joinBtn.Position = UDim2.new(0, 96, 0, 74)
+        round(joinBtn, 6)
+        joinBtn.Parent = header
+        joinBtn.MouseButton1Click:Connect(function()
+            onDiscord()
+        end)
+
+        -- Metrics card
+        local metrics = Instance.new("Frame")
+        metrics.BackgroundColor3 = COLOR_SIDEBAR
+        metrics.BorderSizePixel = 0
+        metrics.Size = UDim2.new(1, -0, 0, 110)
+        round(metrics, 8)
+        metrics.Parent = scroll
+
+        local fpsLbl = Instance.new("TextLabel")
+        fpsLbl.BackgroundTransparency = 1
+        fpsLbl.Font = Enum.Font.Gotham
+        fpsLbl.TextSize = 16
+        fpsLbl.TextColor3 = themeColor
+        fpsLbl.TextXAlignment = Enum.TextXAlignment.Left
+        fpsLbl.Text = "FPS: —"
+        fpsLbl.Position = UDim2.new(0, 10, 0, 20)
+        fpsLbl.Size = UDim2.new(0, 200, 0, 20)
+        fpsLbl.Parent = metrics
+
+        local pingLbl = fpsLbl:Clone()
+        pingLbl.Text = "Ping: —"
+        pingLbl.Position = UDim2.new(0, 10, 0, 48)
+        pingLbl.Parent = metrics
+
+        local unlockBtn = Instance.new("TextButton")
+        unlockBtn.Text = "Unlock FPS"
+        unlockBtn.Font = Enum.Font.GothamBold
+        unlockBtn.TextSize = 16
+        unlockBtn.TextColor3 = themeColor
+        unlockBtn.BackgroundColor3 = COLOR_SIDEBAR
+        unlockBtn.Size = UDim2.new(0, 160, 0, 30)
+        unlockBtn.Position = UDim2.new(1, -170, 0, 74)
+        round(unlockBtn, 6)
+        unlockBtn.Parent = metrics
+        unlockBtn.MouseButton1Click:Connect(function()
+            onUnlockFPS()
+        end)
+
+        -- Changelog
+        local changelog = Instance.new("TextLabel")
+        changelog.BackgroundColor3 = COLOR_SIDEBAR
+        changelog.BorderSizePixel = 0
+        changelog.Font = Enum.Font.Gotham
+        changelog.TextSize = 14
+        changelog.TextColor3 = themeColor
+        changelog.TextXAlignment = Enum.TextXAlignment.Left
+        changelog.TextYAlignment = Enum.TextYAlignment.Top
+        changelog.TextWrapped = true
+        changelog.Size = UDim2.new(1, 0, 0, 120)
+        changelog.Text = table.concat({
+            "Changelog (UI Library Main Page):",
+            "- Sidebar Tabs (Main + your custom tabs)",
+            "- FPS & Ping metrics (live)",
+            "- Minimize / Close / Drag",
+            "- Components API per-Tab (Label, Button, Toggle, Slider)",
+        }, "\n")
+        round(changelog, 8)
+        changelog.Parent = scroll
+
+        -- Live metrics update
+        local fpsSmoothed = 60
+        local last = tick()
+        RunService.Heartbeat:Connect(function()
+            local now = tick()
+            local dt = now - last
+            last = now
+            local inst = (dt > 0) and (1/dt) or 60
+            fpsSmoothed = fpsSmoothed * 0.9 + inst * 0.1
+            fpsLbl.Text = ("FPS: %d"):format(math.floor(fpsSmoothed + 0.5))
+        end)
+
+        task.spawn(function()
+            while rootGui.Parent do
+                local p = getPingMs()
+                pingLbl.Text = p and ("Ping: %d ms"):format(p) or "Ping: —"
+                task.wait(0.5)
+            end
+        end)
+    end
+
+    -- Default extra tabs (empty): ESP, Misc, Teleport
+    addTab("ESP")
+    addTab("Misc")
+    addTab("Teleport")
+
+    -- Activate Main initially
+    showPage("Main")
+
+    -- Public API
     local notifier = createNotifier(rootGui, themeColor)
 
     local window = {}
@@ -626,40 +751,50 @@ function VanithUI.CreateWindow(opts)
         newHue = tonumber(newHue) or DEFAULT_HUE
         newHue = math.clamp(newHue, 0, 1)
         local theme = Color3.fromHSV(newHue, 1, 1)
-        -- update highlight widgets
+        themeColor = theme
         titleLbl.TextColor3 = theme
         btnMin.TextColor3 = theme
         btnClose.TextColor3 = theme
-        nameLbl.TextColor3 = theme
-        verLbl.TextColor3 = theme
-        fpsLbl.TextColor3 = theme
-        pingLbl.TextColor3 = theme
-        unlockBtn.TextColor3 = theme
+        -- Update active button highlight
+        for n, btn in pairs(buttons) do
+            btn.TextColor3 = (n == active) and theme or COLOR_TEXT
+        end
     end
 
-    function window:GetRoot()
-        return rootGui
+    function window:GetRoot() return rootGui end
+    function window:GetSidebar() return sidebar end
+    function window:GetContent() return content end
+
+    function window:GetTab(name)
+        return tabs[name]
+    end
+    function window:CreateTab(name)
+        return addTab(name)
     end
 
-    function window:GetContent()
-        return scroll
+    -- Back-compat: add to Main by default
+    function window:AddLabel(text)
+        return tabs.Main and tabs.Main:AddLabel(text)
     end
-
-    -- Component API
-    function window:AddLabel(text)       return Component.Label(scroll, text) end
-    function window:AddButton(text, cb)  return Component.Button(scroll, text, titleLbl.TextColor3, cb) end
-    function window:AddToggle(text, default, cb)
-        return Component.Toggle(scroll, text, titleLbl.TextColor3, default, cb)
+    function window:AddButton(text, cb)
+        return tabs.Main and tabs.Main:AddButton(text, cb)
+    end
+    function window:AddToggle(text, def, cb)
+        return tabs.Main and tabs.Main:AddToggle(text, def, cb)
     end
     function window:AddSlider(text, mi, ma, de, cb)
-        return Component.Slider(scroll, text, titleLbl.TextColor3, mi, ma, de, cb)
+        return tabs.Main and tabs.Main:AddSlider(text, mi, ma, de, cb)
+    end
+
+    function window:ShowTab(name)
+        if pages[name] then showPage(name) end
     end
 
     function window:Destroy()
         rootGui:Destroy()
     end
 
-    -- M toggles visibility
+    -- Toggle visibility with M
     UserInputService.InputBegan:Connect(function(i, g)
         if not g and i.KeyCode == Enum.KeyCode.M then
             rootGui.Enabled = not rootGui.Enabled
