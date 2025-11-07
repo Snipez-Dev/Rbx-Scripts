@@ -1,12 +1,12 @@
--- VanithUI_Exact_v7b.luau
+-- VanithUI_Exact_v7c.luau
 -- Fixes/Features:
---  • Minimieren wieder funktionsfähig (Mini-Icon; klick = Restore; dragbar)
---  • Notify-Stacking
---  • Custom Discord-Link API (SetDiscordURL)
---  • Custom Changelog-Text API (SetChangelog / SetChangelogLines)
---  • Symmetrische Abstände links/rechts in Tabs
---  • Dropdown als Expander mit Animation; Pfeil: "<" (zu) / "v" (offen); Items werden korrekt gerendert
---  • CreateTab (max. 7 inkl. Main), Buttons/Slider/Toggle mit gleichmäßigen Rändern
+--  • Minimieren funktionsfähig (Mini-Icon; klick = Restore; dragbar)
+--  • Notify-Stacking (mehrere gleichzeitig)
+--  • Custom Discord-Link (SetDiscordURL)
+--  • Custom Changelog-Text (SetChangelog / SetChangelogLines)
+--  • Symmetrische Abstände (Tabs links/rechts)
+--  • Dropdown-Expander mit Animation; Pfeil "<" (zu) / "v" (offen)
+--  • CreateTab (max. 7 inkl. Main); Buttons/Slider/Toggle konsistente Breite
 
 local VanithUI = {}
 
@@ -110,7 +110,7 @@ local function createNotifier(root, accent)
 
         local m = Instance.new("TextLabel")
         m.BackgroundTransparency = 1
-        m.Font = Enum.Font.Gotham
+        m.Font = Enum.Fo nt.Gotham
         m.TextSize = 14
         m.TextXAlignment = Enum.TextXAlignment.Left
         m.TextYAlignment = Enum.TextYAlignment.Top
@@ -300,6 +300,7 @@ function Component.Dropdown(container, cfg)
     local onChanged = cfg.OnChanged
 
     local root = makeControlFrame(container, 44)
+    root.ZIndex = 10
 
     local header = Instance.new("TextLabel")
     header.BackgroundTransparency = 1
@@ -310,6 +311,7 @@ function Component.Dropdown(container, cfg)
     header.TextXAlignment = Enum.TextXAlignment.Left
     header.Size = UDim2.new(1,-(CTL_HPAD*2)-18,0,18)
     header.Position = UDim2.new(0,CTL_HPAD,0,6)
+    header.ZIndex = 11
     header.Parent = root
 
     local arrow = Instance.new("TextLabel")
@@ -320,6 +322,7 @@ function Component.Dropdown(container, cfg)
     arrow.TextColor3 = accent
     arrow.Size = UDim2.new(0,18,0,18)
     arrow.Position = UDim2.new(1,-(CTL_HPAD+18),0,6)
+    arrow.ZIndex = 11
     arrow.Parent = root
 
     local valueBtn = Instance.new("TextButton")
@@ -331,6 +334,7 @@ function Component.Dropdown(container, cfg)
     valueBtn.AutoButtonColor = true
     valueBtn.Size = UDim2.new(1,-(CTL_HPAD*2),0,18)
     valueBtn.Position = UDim2.new(0,CTL_HPAD,0,22)
+    valueBtn.ZIndex = 11
     round(valueBtn, 4)
     valueBtn.Parent = root
 
@@ -340,6 +344,7 @@ function Component.Dropdown(container, cfg)
     panel.ClipsDescendants = true
     panel.Size = UDim2.new(1,0,0,0) -- collapsed
     panel.Position = UDim2.new(0,0,1,0)
+    panel.ZIndex = 12
     round(panel,6)
     panel.Parent = root
 
@@ -347,7 +352,7 @@ function Component.Dropdown(container, cfg)
     listPad.PaddingLeft   = UDim.new(0,CTL_HPAD)
     listPad.PaddingRight  = UDim.new(0,CTL_HPAD)
     listPad.PaddingTop    = UDim.new(0,CTL_HPAD)
-    listPad.PaddingBottom = UDim2.new(0,CTL_HPAD)
+    listPad.PaddingBottom = UDim.new(0,CTL_HPAD)  -- FIX: UDim (nicht UDim2)
     listPad.Parent = panel
 
     local list = Instance.new("UIListLayout")
@@ -384,7 +389,6 @@ function Component.Dropdown(container, cfg)
         if v == open then return end
         open = v
         arrow.Text = open and "v" or "<"
-        -- Zielhöhe
         local rows = math.max(1, #values)
         local target = open and math.min(rows*28 + CTL_HPAD*2 + ((rows-1)*6), 180) or 0
         TweenService:Create(panel, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
@@ -407,6 +411,7 @@ function Component.Dropdown(container, cfg)
             item.TextSize = 14
             item.Size = UDim2.new(1,0,0,22)
             item.Text = tostring(v)
+            item.ZIndex = 13
             round(item,4)
             item.Parent = panel
 
@@ -420,6 +425,7 @@ function Component.Dropdown(container, cfg)
                 rightMark.TextColor3 = COLOR_TEXT
                 rightMark.Size = UDim2.new(0,18,0,22)
                 rightMark.Position = UDim2.new(1,-(CTL_HPAD+18),0,0)
+                rightMark.ZIndex = 14
                 rightMark.Parent = item
             end
 
@@ -482,11 +488,11 @@ function VanithUI.CreateWindow(opts)
     local accent = Color3.fromHSV(hue,1,1)
     local title  = opts.Title or "Vanith | Eternal Nights"
     local version= opts.Version or "v1.0.3"
-    local discordURL = opts.DiscordURL
+    local discordURL = tostring(opts.DiscordURL or "")
     local onUnlockFPS = opts.OnUnlockFPS or function() end
 
     local root = Instance.new("ScreenGui")
-    root.Name = "VanithUI_Exact_v7b"
+    root.Name = "VanithUI_Exact_v7c"
     root.ResetOnSpawn = false
     root.IgnoreGuiInset = true
     root.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -654,7 +660,7 @@ function VanithUI.CreateWindow(opts)
     -- Main Tab (fixed Layout)
     addTab("Main", false)
 
-    -- ===== Main-Inhalt (Avatar/Info + FPS/Ping + Changelog) =====
+    -- ===== Main-Inhalt =====
     local changelogLabel
     do
         local pad = 16
@@ -715,12 +721,12 @@ function VanithUI.CreateWindow(opts)
         joinBtn.TextColor3 = accent
         joinBtn.BackgroundColor3 = COLOR_SIDEBAR
         joinBtn.Size = UDim2.new(0, 160, 0, 28)
-        joinBtn.Position = UDim2.new(0, 0, 0, 70)  -- leicht höher
+        joinBtn.Position = UDim2.new(0, 0, 0, 70)
         round(joinBtn,6)
         joinBtn.Parent = info
         joinBtn.MouseButton1Click:Connect(function()
-            if discordURL and setclipboard then pcall(function() setclipboard(discordURL) end) end
-            notify("Discord", "Invite kopiert", 1.6)
+            if discordURL ~= "" and setclipboard then pcall(function() setclipboard(discordURL) end) end
+            notify("Discord", (discordURL ~= "" and "Invite kopiert") or "Kein Link gesetzt", 1.6)
         end)
 
         local right = Instance.new("Frame")
@@ -818,7 +824,6 @@ function VanithUI.CreateWindow(opts)
         icon.TextYAlignment = Enum.TextYAlignment.Center
         icon.Parent = m
 
-        -- drag + click restore
         local dragging, dragInput, dragStart, startPos, moved = false, nil, nil, nil, false
         m.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -886,8 +891,7 @@ function VanithUI.CreateWindow(opts)
         createPage(name, true) -- Tabs mit symmetrischem Padding
     end
 
-    -- Main-Objekt
-    addTabPublic("Main")      -- (Main-Seite existiert; das hier macht sie API-bekannt)
+    addTabPublic("Main")      -- API für Main
     makeTabObj("Main")
 
     local window = {}
