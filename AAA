@@ -26,6 +26,7 @@ local COLOR_BG      = Color3.fromRGB(18,18,18)
 local COLOR_PANEL   = Color3.fromRGB(25,25,25)
 local COLOR_SIDEBAR = Color3.fromRGB(15,15,15)
 local COLOR_TEXT    = Color3.fromRGB(220,220,220)
+local COLOR_POPUP = Color3.fromRGB(14,14,14)
 
 local INNER_PAD = 14
 local CTL_HPAD  = 12
@@ -349,15 +350,22 @@ function Component.Dropdown(container, cfg)
     valueBtn.Parent = root
 
     -- FIX: Panel direkt UNTER den Header setzen (Offset = HEADER_H), nicht Y.Scale=1
-    local panel = Instance.new("Frame")
-    panel.BackgroundColor3 = COLOR_PANEL
-    panel.BorderSizePixel = 0
-    panel.ClipsDescendants = true
-    panel.Size = UDim2.new(1,0,0,0)
-    panel.Position = UDim2.new(0,0,0,HEADER_H)  -- <<< entscheidend
-    panel.ZIndex = 30
-    round(panel,6)
-    panel.Parent = root
+   local panel = Instance.new("Frame")
+panel.BackgroundColor3 = COLOR_POPUP
+panel.BorderSizePixel = 0
+panel.ClipsDescendants = true
+panel.Size = UDim2.new(1,0,0,0)
+panel.Position = UDim2.new(0,0,0,HEADER_H) -- bleibt unter dem Header
+panel.ZIndex = 30
+round(panel,6)
+panel.Parent = root
+
+-- dezente Umrandung, damit der Hintergrund sichtbar ist
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 1
+stroke.Color = Color3.fromRGB(40,40,40)
+stroke.Transparency = 0.45
+stroke.Parent = panel
 
     local listScroll = Instance.new("ScrollingFrame")
     listScroll.BackgroundTransparency = 1
@@ -554,15 +562,21 @@ function Component.Dropbox(container, cfg)
     input.Parent = root
 
     -- FIX: Panel direkt unter den Header/Input legen
-    local panel = Instance.new("Frame")
-    panel.BackgroundColor3 = COLOR_PANEL
-    panel.BorderSizePixel = 0
-    panel.ClipsDescendants = true
-    panel.Size = UDim2.new(1,0,0,0)
-    panel.Position = UDim2.new(0,0,0,HEADER_H) -- <<< entscheidend
-    panel.ZIndex = 40
-    round(panel,6)
-    panel.Parent = root
+   local panel = Instance.new("Frame")
+panel.BackgroundColor3 = COLOR_POPUP
+panel.BorderSizePixel = 0
+panel.ClipsDescendants = true
+panel.Size = UDim2.new(1,0,0,0)
+panel.Position = UDim2.new(0,0,0,HEADER_H) -- bleibt unter dem Eingabebereich
+panel.ZIndex = 40
+round(panel,6)
+panel.Parent = root
+
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 1
+stroke.Color = Color3.fromRGB(40,40,40)
+stroke.Transparency = 0.45
+stroke.Parent = panel
 
     local listScroll = Instance.new("ScrollingFrame")
     listScroll.BackgroundTransparency = 1
