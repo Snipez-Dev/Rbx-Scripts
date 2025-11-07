@@ -297,7 +297,6 @@ function Component.Slider(container, text, accent, min, max, default, callback)
     }
 end
 
--- ========== Dropdown (capped height + inner scroll; "<"/"v") ==========
 function Component.Dropdown(container, cfg)
     cfg = cfg or {}
     local title   = cfg.Title or "Dropdown"
@@ -307,7 +306,9 @@ function Component.Dropdown(container, cfg)
     local default = cfg.Default
     local onChanged = cfg.OnChanged
 
-    local root = makeControlFrame(container, 44)
+    local HEADER_H = 44 -- Höhe des geschlossenen Dropdown-Blocks
+
+    local root = makeControlFrame(container, HEADER_H)
     root.ZIndex = 10
 
     local header = Instance.new("TextLabel")
@@ -347,12 +348,13 @@ function Component.Dropdown(container, cfg)
     round(valueBtn, 4)
     valueBtn.Parent = root
 
+    -- FIX: Panel direkt UNTER den Header setzen (Offset = HEADER_H), nicht Y.Scale=1
     local panel = Instance.new("Frame")
     panel.BackgroundColor3 = COLOR_PANEL
     panel.BorderSizePixel = 0
     panel.ClipsDescendants = true
     panel.Size = UDim2.new(1,0,0,0)
-    panel.Position = UDim2.new(0,0,1,0)
+    panel.Position = UDim2.new(0,0,0,HEADER_H)  -- <<< entscheidend
     panel.ZIndex = 30
     round(panel,6)
     panel.Parent = root
@@ -377,18 +379,15 @@ function Component.Dropdown(container, cfg)
     list.SortOrder = Enum.SortOrder.LayoutOrder
     list.Padding = UDim.new(0,6)
     list.Parent = listScroll
-
     list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         listScroll.CanvasSize = UDim2.new(0,0,0, list.AbsoluteContentSize.Y + CTL_HPAD*2)
     end)
 
-    local open = false
-    local current
-    if multi then current = {} else current = nil end
+    local open, current = false, multi and {} or nil
 
     local function renderLabel()
         if multi then
-            local c=0; for _ in pairs(current) do c+=1 end
+            local c=0; for _,v in pairs(current) do if v then c+=1 end end
             valueBtn.Text = (c==0) and "Select..." or (c.." selected")
         else
             valueBtn.Text = current and tostring(current) or "Select..."
@@ -396,31 +395,28 @@ function Component.Dropdown(container, cfg)
     end
 
     local function fireChanged()
-        if typeof(onChanged) == "function" then
+        if typeof(onChanged)=="function" then
             if multi then
-                local t = {}
-                for k,v in pairs(current) do if v then table.insert(t,k) end end
+                local t={} for k,v in pairs(current) do if v then table.insert(t,k) end end
                 onChanged(t)
-            else
-                onChanged(current)
-            end
+            else onChanged(current) end
         end
     end
 
     local function setOpen(v)
-        if v == open then return end
+        if v==open then return end
         open = v
         arrowBtn.Text = open and "v" or "<"
-        local rows = math.max(1, #values)
+        local rows = math.max(1,#values)
         local target = open and math.min(rows*28 + CTL_HPAD*2 + ((rows-1)*6), 180) or 0
-        TweenService:Create(panel, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-            {Size = UDim2.new(1,0,0,target)}):Play()
-        TweenService:Create(root, TweenInfo.new(0.18), {Size = UDim2.new(1,0,0, 44 + target)}):Play()
+        -- Panel bleibt bei Y=HEADER_H; wir erhöhen nur die ROOT-Höhe
+        TweenService:Create(panel, TweenInfo.new(0.18), {Size = UDim2.new(1,0,0,target)}):Play()
+        TweenService:Create(root,  TweenInfo.new(0.18), {Size = UDim2.new(1,0,0, HEADER_H + target)}):Play()
     end
 
     local function rebuild()
         for _,c in ipairs(listScroll:GetChildren()) do
-            if c:IsA("TextButton") and c.Name == "DD_Item" then c:Destroy() end
+            if c:IsA("TextButton") and c.Name=="DD_Item" then c:Destroy() end
         end
         for _,v in ipairs(values) do
             local item = Instance.new("TextButton")
@@ -458,16 +454,15 @@ function Component.Dropdown(container, cfg)
                     renderLabel(); fireChanged()
                 else
                     current = v
-                    renderLabel(); fireChanged()
-                    setOpen(false)
+                    renderLabel(); fireChanged(); setOpen(false)
                 end
             end)
         end
     end
 
     if multi and typeof(default)=="table" then
-        for _,v in ipairs(default) do current[v] = true end
-    elseif (not multi) and default ~= nil then
+        for _,v in ipairs(default) do current[v]=true end
+    elseif (not multi) and default~=nil then
         current = default
     end
     renderLabel(); rebuild()
@@ -478,16 +473,13 @@ function Component.Dropdown(container, cfg)
         if i.UserInputType==Enum.UserInputType.MouseButton1 then setOpen(not open) end
     end)
 
-    -- click-outside to close
-    local rootGui = getRoot()
-    UserInputService.InputBegan:Connect(function(i, gpe)
-        if gpe or not open then return end
-        if i.UserInputType ~= Enum.UserInputType.MouseButton1 and i.UserInputType ~= Enum.UserInputType.Touch then return end
-        local pos = i.Position
-        local abs = panel.AbsolutePosition
-        local size = panel.AbsoluteSize
-        local inside = (pos.X >= abs.X and pos.X <= abs.X+size.X and pos.Y >= abs.Y and pos.Y <= abs.Y+size.Y)
-        if not inside then setOpen(false) end
+    -- Outside-Click -> schließen
+    UserInputService.InputBegan:Connect(function(i,g)
+        if g or not open then return end
+        if i.UserInputType~=Enum.UserInputType.MouseButton1 and i.UserInputType~=Enum.UserInputType.Touch then return end
+        local p = i.Position
+        local a = panel.AbsolutePosition; local s = panel.AbsoluteSize
+        if not (p.X>=a.X and p.X<=a.X+s.X and p.Y>=a.Y and p.Y<=a.Y+s.Y) then setOpen(false) end
     end)
 
     return {
@@ -496,27 +488,18 @@ function Component.Dropdown(container, cfg)
         Close     = function() setOpen(false) end,
         SetValues = function(vs) values = vs or {}; rebuild(); if open then setOpen(true) end end,
         Set       = function(v)
-            if multi then
-                current = {}
-                if typeof(v)=="table" then for _,x in ipairs(v) do current[x]=true end end
-            else
-                current = v
-            end
+            if multi then current = {}; if typeof(v)=="table" then for _,x in ipairs(v) do current[x]=true end end
+            else current = v end
             renderLabel(); fireChanged()
         end,
         Get       = function()
-            if multi then
-                local t = {}
-                for k,v in pairs(current) do if v then table.insert(t,k) end end
-                return t
-            else
-                return current
-            end
+            if multi then local t={} for k,v in pairs(current) do if v then table.insert(t,k) end end; return t
+            else return current end
         end
     }
 end
 
--- ========== Dropbox (searchable; capped height + inner scroll; "<"/"v") ==========
+
 function Component.Dropbox(container, cfg)
     cfg = cfg or {}
     local title   = cfg.Title or "Dropbox"
@@ -527,7 +510,9 @@ function Component.Dropbox(container, cfg)
     local onChanged = cfg.OnChanged
     local placeholder = cfg.Placeholder or "Type to filter..."
 
-    local root = makeControlFrame(container, 68)
+    local HEADER_H = 68 -- geschlossen (Label + Input)
+
+    local root = makeControlFrame(container, HEADER_H)
     root.ZIndex = 20
 
     local header = Instance.new("TextLabel")
@@ -568,12 +553,13 @@ function Component.Dropbox(container, cfg)
     round(input, 4)
     input.Parent = root
 
+    -- FIX: Panel direkt unter den Header/Input legen
     local panel = Instance.new("Frame")
     panel.BackgroundColor3 = COLOR_PANEL
     panel.BorderSizePixel = 0
     panel.ClipsDescendants = true
     panel.Size = UDim2.new(1,0,0,0)
-    panel.Position = UDim2.new(0,0,1,0)
+    panel.Position = UDim2.new(0,0,0,HEADER_H) -- <<< entscheidend
     panel.ZIndex = 40
     round(panel,6)
     panel.Parent = root
@@ -598,27 +584,22 @@ function Component.Dropbox(container, cfg)
     list.SortOrder = Enum.SortOrder.LayoutOrder
     list.Padding = UDim.new(0,6)
     list.Parent = listScroll
-
     list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         listScroll.CanvasSize = UDim2.new(0,0,0, list.AbsoluteContentSize.Y + CTL_HPAD*2)
     end)
 
-    local open = false
-    local current
-    if multi then current = {} else current = nil end
-
+    local open, current = false, multi and {} or nil
     local filtered = {}
-    local function filter(query)
-        filtered = {}
-        local q = string.lower(query or "")
+
+    local function filter(q)
+        q = string.lower(q or "")
+        table.clear(filtered)
         for _,v in ipairs(values) do
             if q == "" or string.find(string.lower(tostring(v)), q, 1, true) then
                 table.insert(filtered, v)
             end
         end
-        if #filtered == 0 then
-            filtered = {"<no matches>"}
-        end
+        if #filtered == 0 then table.insert(filtered, "<no matches>") end
     end
 
     local function renderLabelFromCurrent()
@@ -631,31 +612,25 @@ function Component.Dropbox(container, cfg)
     end
 
     local function fireChanged()
-        if typeof(onChanged) == "function" then
-            if multi then
-                local t = {}
-                for k,v in pairs(current) do if v then table.insert(t,k) end end
-                onChanged(t)
-            else
-                onChanged(current)
-            end
+        if typeof(onChanged)=="function" then
+            if multi then local t={} for k,v in pairs(current) do if v then table.insert(t,k) end end; onChanged(t)
+            else onChanged(current) end
         end
     end
 
     local function setOpen(v)
-        if v == open then return end
+        if v==open then return end
         open = v
         arrowBtn.Text = open and "v" or "<"
-        local rows = math.max(1, #filtered)
+        local rows = math.max(1,#filtered)
         local target = open and math.min(rows*28 + CTL_HPAD*2 + ((rows-1)*6), 180) or 0
-        TweenService:Create(panel, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-            {Size = UDim2.new(1,0,0,target)}):Play()
-        TweenService:Create(root, TweenInfo.new(0.18), {Size = UDim2.new(1,0,0, 68 + target)}):Play()
+        TweenService:Create(panel, TweenInfo.new(0.18), {Size = UDim2.new(1,0,0,target)}):Play()
+        TweenService:Create(root,  TweenInfo.new(0.18), {Size = UDim2.new(1,0,0, HEADER_H + target)}):Play()
     end
 
     local function rebuild()
         for _,c in ipairs(listScroll:GetChildren()) do
-            if c:IsA("TextButton") and c.Name == "DB_Item" then c:Destroy() end
+            if c:IsA("TextButton") and c.Name=="DB_Item" then c:Destroy() end
         end
         for _,v in ipairs(filtered) do
             local item = Instance.new("TextButton")
@@ -673,7 +648,7 @@ function Component.Dropbox(container, cfg)
             item.Parent = listScroll
 
             local rightMark
-            if multi and v ~= "<no matches>" then
+            if multi and v~="<no matches>" then
                 rightMark = Instance.new("TextLabel")
                 rightMark.BackgroundTransparency = 1
                 rightMark.Text = current[v] and "✓" or ""
@@ -687,24 +662,22 @@ function Component.Dropbox(container, cfg)
             end
 
             item.MouseButton1Click:Connect(function()
-                if v == "<no matches>" then return end
+                if v=="<no matches>" then return end
                 if multi then
                     current[v] = not current[v]
                     if rightMark then rightMark.Text = current[v] and "✓" or "" end
                     renderLabelFromCurrent(); fireChanged()
                 else
                     current = v
-                    renderLabelFromCurrent(); fireChanged()
-                    setOpen(false)
+                    renderLabelFromCurrent(); fireChanged(); setOpen(false)
                 end
             end)
         end
     end
 
-    -- defaults
     if multi and typeof(default)=="table" then
-        for _,v in ipairs(default) do current[v] = true end
-    elseif (not multi) and default ~= nil then
+        for _,v in ipairs(default) do current[v]=true end
+    elseif (not multi) and default~=nil then
         current = default
     end
     filter("")
@@ -714,54 +687,33 @@ function Component.Dropbox(container, cfg)
     input.Focused:Connect(function() setOpen(true) end)
     input.FocusLost:Connect(function() setOpen(false) end)
     input:GetPropertyChangedSignal("Text"):Connect(function()
-        filter(input.Text or "")
-        rebuild()
-        if not open then setOpen(true) end
+        filter(input.Text or ""); rebuild(); if not open then setOpen(true) end
     end)
     arrowBtn.MouseButton1Click:Connect(function() setOpen(not open) end)
     header.InputBegan:Connect(function(i)
         if i.UserInputType==Enum.UserInputType.MouseButton1 then setOpen(not open) end
     end)
 
-    -- click-outside to close
-    local rootGui = getRoot()
-    UserInputService.InputBegan:Connect(function(i, gpe)
-        if gpe or not open then return end
-        if i.UserInputType ~= Enum.UserInputType.MouseButton1 and i.UserInputType ~= Enum.UserInputType.Touch then return end
-        local pos = i.Position
-        local abs = panel.AbsolutePosition
-        local size = panel.AbsoluteSize
-        local inside = (pos.X >= abs.X and pos.X <= abs.X+size.X and pos.Y >= abs.Y and pos.Y <= abs.Y+size.Y)
-        if not inside then setOpen(false) end
+    UserInputService.InputBegan:Connect(function(i,g)
+        if g or not open then return end
+        if i.UserInputType~=Enum.UserInputType.MouseButton1 and i.UserInputType~=Enum.UserInputType.Touch then return end
+        local p=i.Position; local a=panel.AbsolutePosition; local s=panel.AbsoluteSize
+        if not (p.X>=a.X and p.X<=a.X+s.X and p.Y>=a.Y and p.Y<=a.Y+s.Y) then setOpen(false) end
     end)
 
     return {
         Instance  = root,
         Open      = function() setOpen(true) end,
         Close     = function() setOpen(false) end,
-        SetValues = function(vs)
-            values = vs or {}
-            filter(input.Text or "")
-            rebuild()
-            if open then setOpen(true) end
-        end,
-        Set   = function(v)
-            if multi then
-                current = {}
-                if typeof(v)=="table" then for _,x in ipairs(v) do current[x]=true end end
-            else
-                current = v
-            end
+        SetValues = function(vs) values = vs or {}; filter(input.Text or ""); rebuild(); if open then setOpen(true) end end,
+        Set       = function(v)
+            if multi then current = {}; if typeof(v)=="table" then for _,x in ipairs(v) do current[x]=true end end
+            else current = v end
             renderLabelFromCurrent(); fireChanged()
         end,
-        Get   = function()
-            if multi then
-                local t = {}
-                for k,v in pairs(current) do if v then table.insert(t,k) end end
-                return t
-            else
-                return current
-            end
+        Get       = function()
+            if multi then local t={} for k,v in pairs(current) do if v then table.insert(t,k) end end; return t
+            else return current end
         end
     }
 end
