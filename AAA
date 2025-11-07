@@ -1,9 +1,12 @@
--- VanithUI_Exact_v7a.luau
--- Fixes:
---  - Symmetrische Abstände (links = rechts zum Content)
---  - Kein 'Parent locked' (kein Reparent von UIListLayout/UIPadding)
---  - Dropdown als schöner Expander (auf/zu, animiert, optional Multi)
---  - Notify-Stacking bleibt
+-- VanithUI_Exact_v7b.luau
+-- Fixes/Features:
+--  • Minimieren wieder funktionsfähig (Mini-Icon; klick = Restore; dragbar)
+--  • Notify-Stacking
+--  • Custom Discord-Link API (SetDiscordURL)
+--  • Custom Changelog-Text API (SetChangelog / SetChangelogLines)
+--  • Symmetrische Abstände links/rechts in Tabs
+--  • Dropdown als Expander mit Animation; Pfeil: "<" (zu) / "v" (offen); Items werden korrekt gerendert
+--  • CreateTab (max. 7 inkl. Main), Buttons/Slider/Toggle mit gleichmäßigen Rändern
 
 local VanithUI = {}
 
@@ -16,7 +19,7 @@ local RunService = game:GetService("RunService")
 local Stats = game:GetService("Stats")
 
 -- Theme / Layout
-local DEFAULT_HUE = 0.55
+local DEFAULT_HUE = 0.58
 local BASE_W, BASE_H = 650, 300
 local TOP_H          = 28
 local START_POS      = UDim2.new(0.15,0,0.2,20)
@@ -27,12 +30,12 @@ local COLOR_PANEL   = Color3.fromRGB(25,25,25)
 local COLOR_SIDEBAR = Color3.fromRGB(15,15,15)
 local COLOR_TEXT    = Color3.fromRGB(220,220,220)
 
--- Im Content selbst sorgen wir per UIPadding für Symmetrie;
--- Controls benutzen dann volle Breite (1,0) ohne eigene X-Offsets.
-local INNER_PAD = 14        -- Padding im ScrollingFrame (links/rechts/oben/unten)
+-- Content-Innenabstände (symmetrisch)
+local INNER_PAD = 14        -- Padding in jedem Tab-Scroll (links/rechts/oben/unten)
 local CTL_HPAD  = 12        -- Innenabstand in Controls
 local CTL_GAP   = 8         -- Abstand zwischen Controls
 
+-- Utils
 local function round(o, r)
     local c = Instance.new("UICorner")
     c.CornerRadius = UDim.new(0, r or 6)
@@ -60,7 +63,7 @@ local function getPingMs()
     return nil
 end
 
--- =============== Notify (stacking) ===============
+-- ================== Notify (stacking) ==================
 local function createNotifier(root, accent)
     local holder = root:FindFirstChild("Vanith_Notify")
     if not holder then
@@ -130,7 +133,7 @@ local function createNotifier(root, accent)
     return notify
 end
 
--- =============== Hilfs-Builder ===============
+-- ================== Component Builder ==================
 local Component = {}
 
 local function makeControlFrame(container, h)
@@ -158,7 +161,6 @@ end
 
 function Component.Button(container, text, accent, callback)
     local btn = makeControlFrame(container, 32)
-    btn.BackgroundColor3 = COLOR_SIDEBAR
 
     local t = Instance.new("TextButton")
     t.BackgroundTransparency = 1
@@ -287,7 +289,7 @@ function Component.Slider(container, text, accent, min, max, default, callback)
     }
 end
 
--- ========= Dropdown (Expander mit Animation, Single/Multi) =========
+-- ========== Dropdown (Expander; "<" zu / "v" offen) ==========
 function Component.Dropdown(container, cfg)
     cfg = cfg or {}
     local title   = cfg.Title or "Dropdown"
@@ -312,7 +314,7 @@ function Component.Dropdown(container, cfg)
 
     local arrow = Instance.new("TextLabel")
     arrow.BackgroundTransparency = 1
-    arrow.Text = "▸"
+    arrow.Text = "<" -- zu
     arrow.Font = Enum.Font.GothamBold
     arrow.TextSize = 16
     arrow.TextColor3 = accent
@@ -332,7 +334,6 @@ function Component.Dropdown(container, cfg)
     round(valueBtn, 4)
     valueBtn.Parent = root
 
-    -- Expander Panel
     local panel = Instance.new("Frame")
     panel.BackgroundColor3 = COLOR_PANEL
     panel.BorderSizePixel = 0
@@ -343,10 +344,10 @@ function Component.Dropdown(container, cfg)
     panel.Parent = root
 
     local listPad = Instance.new("UIPadding")
-    listPad.PaddingLeft = UDim.new(0,CTL_HPAD)
-    listPad.PaddingRight= UDim.new(0,CTL_HPAD)
-    listPad.PaddingTop  = UDim.new(0,CTL_HPAD)
-    listPad.PaddingBottom=UDim.new(0,CTL_HPAD)
+    listPad.PaddingLeft   = UDim.new(0,CTL_HPAD)
+    listPad.PaddingRight  = UDim.new(0,CTL_HPAD)
+    listPad.PaddingTop    = UDim.new(0,CTL_HPAD)
+    listPad.PaddingBottom = UDim2.new(0,CTL_HPAD)
     listPad.Parent = panel
 
     local list = Instance.new("UIListLayout")
@@ -355,7 +356,7 @@ function Component.Dropdown(container, cfg)
     list.Parent = panel
 
     local open = false
-    local current -- string oder { [v]=true }
+    local current
     if multi then current = {} else current = nil end
 
     local function renderLabel()
@@ -382,23 +383,22 @@ function Component.Dropdown(container, cfg)
     local function setOpen(v)
         if v == open then return end
         open = v
-        -- Zielhöhe: min(n*28 + padding*2, 180)
+        arrow.Text = open and "v" or "<"
+        -- Zielhöhe
         local rows = math.max(1, #values)
-        local target = v and math.min(rows*28 + CTL_HPAD*2 + ((rows-1)*6), 180) or 0
+        local target = open and math.min(rows*28 + CTL_HPAD*2 + ((rows-1)*6), 180) or 0
         TweenService:Create(panel, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
             {Size = UDim2.new(1,0,0,target)}):Play()
-        TweenService:Create(arrow, TweenInfo.new(0.18), {Rotation = v and 90 or 0}):Play()
-        -- Höhe des Root dynamisch anpassen
         TweenService:Create(root, TweenInfo.new(0.18), {Size = UDim2.new(1,0,0, 44 + target)}):Play()
     end
 
     local function rebuild()
         for _,c in ipairs(panel:GetChildren()) do
-            if c:IsA("TextButton") or c:IsA("Frame") and c.Name=="Item" then c:Destroy() end
+            if c.Name == "DD_Item" then c:Destroy() end
         end
         for _,v in ipairs(values) do
             local item = Instance.new("TextButton")
-            item.Name = "Item"
+            item.Name = "DD_Item"
             item.AutoButtonColor = true
             item.BackgroundColor3 = COLOR_BG
             item.TextColor3 = COLOR_TEXT
@@ -410,21 +410,23 @@ function Component.Dropdown(container, cfg)
             round(item,4)
             item.Parent = panel
 
-            local chk
+            local rightMark
             if multi then
-                chk = Instance.new("Frame")
-                chk.Size = UDim2.new(0,16,0,16)
-                chk.Position = UDim2.new(1,-(CTL_HPAD+16),0,3)
-                chk.BackgroundColor3 = (current[v] and COLOR_TEXT) or COLOR_SIDEBAR
-                chk.BorderSizePixel = 0
-                round(chk,3)
-                chk.Parent = item
+                rightMark = Instance.new("TextLabel")
+                rightMark.BackgroundTransparency = 1
+                rightMark.Text = current[v] and "✓" or ""
+                rightMark.Font = Enum.Font.GothamBold
+                rightMark.TextSize = 14
+                rightMark.TextColor3 = COLOR_TEXT
+                rightMark.Size = UDim2.new(0,18,0,22)
+                rightMark.Position = UDim2.new(1,-(CTL_HPAD+18),0,0)
+                rightMark.Parent = item
             end
 
             item.MouseButton1Click:Connect(function()
                 if multi then
                     current[v] = not current[v]
-                    if chk then chk.BackgroundColor3 = current[v] and COLOR_TEXT or COLOR_SIDEBAR end
+                    if rightMark then rightMark.Text = current[v] and "✓" or "" end
                     renderLabel(); fireChanged()
                 else
                     current = v
@@ -449,7 +451,7 @@ function Component.Dropdown(container, cfg)
         Instance  = root,
         Open      = function() setOpen(true) end,
         Close     = function() setOpen(false) end,
-        SetValues = function(vs) values = vs or {}; rebuild() end,
+        SetValues = function(vs) values = vs or {}; rebuild(); if open then setOpen(true) end end,
         Set       = function(v)
             if multi then
                 current = {}
@@ -471,7 +473,7 @@ function Component.Dropdown(container, cfg)
     }
 end
 
--- =============== Window / Tabs ===============
+-- ================== Window / Tabs ==================
 function VanithUI.CreateWindow(opts)
     opts = opts or {}
     local width  = opts.Width  or BASE_W
@@ -479,13 +481,12 @@ function VanithUI.CreateWindow(opts)
     local hue    = (opts.Hue ~= nil) and opts.Hue or DEFAULT_HUE
     local accent = Color3.fromHSV(hue,1,1)
     local title  = opts.Title or "Vanith | Eternal Nights"
-    local version= opts.Version or "v1.0.2"
+    local version= opts.Version or "v1.0.3"
     local discordURL = opts.DiscordURL
-    local onDiscord   = opts.OnDiscord   or function() end
     local onUnlockFPS = opts.OnUnlockFPS or function() end
 
     local root = Instance.new("ScreenGui")
-    root.Name = "VanithUI_Exact_v7a"
+    root.Name = "VanithUI_Exact_v7b"
     root.ResetOnSpawn = false
     root.IgnoreGuiInset = true
     root.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -494,6 +495,7 @@ function VanithUI.CreateWindow(opts)
     local notify = createNotifier(root, accent)
 
     local main = Instance.new("Frame")
+    main.Name = "MainWindow"
     main.Size = UDim2.new(0,width,0,height)
     main.Position = START_POS
     main.BackgroundColor3 = COLOR_BG
@@ -633,7 +635,6 @@ function VanithUI.CreateWindow(opts)
             list.Padding = UDim.new(0,CTL_GAP)
             list.Parent = scroll
 
-            -- CanvasSize dynamisch (kein Re-Parent!)
             list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                 scroll.CanvasSize = UDim2.new(0,0,0, list.AbsoluteContentSize.Y + INNER_PAD*2)
             end)
@@ -650,10 +651,10 @@ function VanithUI.CreateWindow(opts)
         createPage(name, withPadding)
     end
 
-    -- Main
+    -- Main Tab (fixed Layout)
     addTab("Main", false)
 
-    -- ==== Main Layout exakt ====
+    -- ===== Main-Inhalt (Avatar/Info + FPS/Ping + Changelog) =====
     local changelogLabel
     do
         local pad = 16
@@ -714,12 +715,12 @@ function VanithUI.CreateWindow(opts)
         joinBtn.TextColor3 = accent
         joinBtn.BackgroundColor3 = COLOR_SIDEBAR
         joinBtn.Size = UDim2.new(0, 160, 0, 28)
-        joinBtn.Position = UDim2.new(0, 0, 0, 73) -- 3px höher war schon umgesetzt
+        joinBtn.Position = UDim2.new(0, 0, 0, 70)  -- leicht höher
         round(joinBtn,6)
         joinBtn.Parent = info
         joinBtn.MouseButton1Click:Connect(function()
             if discordURL and setclipboard then pcall(function() setclipboard(discordURL) end) end
-            if typeof(onDiscord)=="function" then onDiscord(discordURL) end
+            notify("Discord", "Invite kopiert", 1.6)
         end)
 
         local right = Instance.new("Frame")
@@ -774,7 +775,7 @@ function VanithUI.CreateWindow(opts)
         changelogLabel.TextXAlignment = Enum.TextXAlignment.Left
         changelogLabel.TextYAlignment = Enum.TextYAlignment.Top
         changelogLabel.TextWrapped = true
-        changelogLabel.Text = "Changelog (UI Skeleton):\n- Frost-style window + tabs\n- Minimize/Close + Drag\n- Notification system (stacking)\n- Dropdown expander (single/multi)"
+        changelogLabel.Text = "Changelog (UI):\n- Frost window + tabs\n- Drag/Minimize/Close\n- Notify stacking\n- Dropdown expander"
         changelogLabel.Position = UDim2.new(0,12,0,10)
         changelogLabel.Size = UDim2.new(1,-24,1,-20)
         changelogLabel.Parent = logCard
@@ -794,16 +795,84 @@ function VanithUI.CreateWindow(opts)
         end)
     end
 
+    -- Minimieren (Mini-Icon)
+    local minimized, miniFrame = false, nil
+    local function makeMini()
+        local m = Instance.new("Frame")
+        m.Name = "MiniIcon"
+        m.Size = UDim2.new(0,50,0,50)
+        m.Position = main.Position
+        m.BackgroundColor3 = COLOR_BG
+        m.BorderSizePixel = 0
+        round(m,4)
+        m.Parent = root
+
+        local icon = Instance.new("TextLabel")
+        icon.Text = "❄️"
+        icon.Font = Enum.Font.GothamBold
+        icon.TextSize = 28
+        icon.TextColor3 = accent
+        icon.BackgroundTransparency = 1
+        icon.Size = UDim2.new(1,0,1,0)
+        icon.TextXAlignment = Enum.TextXAlignment.Center
+        icon.TextYAlignment = Enum.TextYAlignment.Center
+        icon.Parent = m
+
+        -- drag + click restore
+        local dragging, dragInput, dragStart, startPos, moved = false, nil, nil, nil, false
+        m.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true; moved = false
+                dragStart = input.Position; startPos = m.Position
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then dragging = false end
+                end)
+            end
+        end)
+        m.InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local d = input.Position - dragStart
+                if not moved and (math.abs(d.X)>5 or math.abs(d.Y)>5) then moved = true end
+                m.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+            end
+        end)
+        m.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if not moved then
+                    minimized = false
+                    m:Destroy()
+                    main.Visible = true
+                    btnMin.Text = "_"
+                end
+            end
+        end)
+        return m
+    end
+
+    btnMin.MouseButton1Click:Connect(function()
+        if minimized then
+            minimized = false
+            if miniFrame then miniFrame:Destroy() end
+            main.Visible = true
+            btnMin.Text = "_"
+        else
+            minimized = true
+            main.Visible = false
+            miniFrame = makeMini()
+            btnMin.Text = "⬆"
+        end
+    end)
+
     -- Tabs API
     local tabs = {}
     local function makeTabObj(name)
         local scroll = scrolls[name]
         local Tab = {}
-        function Tab:AddLabel(text) return Component.Label(scroll, text, Color3.fromHSV(hue,1,1)) end
-        function Tab:AddButton(text, cb) return Component.Button(scroll, text, Color3.fromHSV(hue,1,1), cb) end
-        function Tab:AddToggle(text, def, cb) return Component.Toggle(scroll, text, Color3.fromHSV(hue,1,1), def, cb) end
-        function Tab:AddSlider(text, mi, ma, de, cb) return Component.Slider(scroll, text, Color3.fromHSV(hue,1,1), mi, ma, de, cb) end
-        function Tab:AddDropdown(config) config = config or {}; config.Accent = Color3.fromHSV(hue,1,1); return Component.Dropdown(scroll, config) end
+        function Tab:AddLabel(text) return Component.Label(scroll, text, accent) end
+        function Tab:AddButton(text, cb) return Component.Button(scroll, text, accent, cb) end
+        function Tab:AddToggle(text, def, cb) return Component.Toggle(scroll, text, accent, def, cb) end
+        function Tab:AddSlider(text, mi, ma, de, cb) return Component.Slider(scroll, text, accent, mi, ma, de, cb) end
+        function Tab:AddDropdown(config) config = config or {}; config.Accent = accent; return Component.Dropdown(scroll, config) end
         function Tab:GetContainer() return scroll end
         function Tab:GetName() return name end
         tabs[name] = Tab; return Tab
@@ -814,13 +883,15 @@ function VanithUI.CreateWindow(opts)
         if pages[name] then return end
         table.insert(order, name)
         createTabButton(name, #order)
-        createPage(name, true) -- mit Padding für Symmetrie
+        createPage(name, true) -- Tabs mit symmetrischem Padding
     end
 
-    addTabPublic("Main") -- (Main ohne Padding oben schon erstellt, bleibt „fixed“)
+    -- Main-Objekt
+    addTabPublic("Main")      -- (Main-Seite existiert; das hier macht sie API-bekannt)
     makeTabObj("Main")
 
     local window = {}
+
     function window:ShowTab(name) if pages[name] then showPage(name) end end
     function window:GetTab(name) return tabs[name] end
     function window:CreateTab(name)
@@ -831,20 +902,28 @@ function VanithUI.CreateWindow(opts)
     end
     function window:GetTabCount() return tabCount() end
 
+    -- Theming/Meta
     function window:SetHue(h)
         h = tonumber(h) or DEFAULT_HUE; h = math.clamp(h,0,1)
-        local acc = Color3.fromHSV(h,1,1)
-        for n,b in pairs(tabButtons) do b.TextColor3 = (n==activeTab) and acc or COLOR_TEXT end
-        titleLbl.TextColor3 = acc
+        accent = Color3.fromHSV(h,1,1)
+        for n,b in pairs(tabButtons) do b.TextColor3 = (n==activeTab) and accent or COLOR_TEXT end
+        titleLbl.TextColor3 = accent
     end
     function window:SetTitle(t) titleLbl.Text = tostring(t or "") end
+    function window:SetDiscordURL(url) discordURL = tostring(url or "") end
     function window:SetChangelog(text) if changelogLabel then changelogLabel.Text = tostring(text or "") end end
     function window:SetChangelogLines(lines) if changelogLabel and typeof(lines)=="table" then changelogLabel.Text = table.concat(lines,"\n") end end
-    function window:Notify(t,m,d) local n = createNotifier(root, Color3.fromHSV(hue,1,1)); n(tostring(t or ""), tostring(m or ""), tonumber(d) or 2) end
+    function window:Notify(t,m,d) local n = createNotifier(root, accent); n(tostring(t or ""), tostring(m or ""), tonumber(d) or 2) end
+    function window:GetRoot() return root end
+    function window:Destroy() root:Destroy() end
 
+    -- Toggle mit M
     UserInputService.InputBegan:Connect(function(i,g)
         if not g and i.KeyCode==Enum.KeyCode.M then root.Enabled = not root.Enabled end
     end)
+
+    -- Standard: Main anzeigen
+    showPage("Main")
 
     return window
 end
