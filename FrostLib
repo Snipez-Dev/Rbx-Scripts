@@ -20,7 +20,7 @@ function Library:CreateWindow(title, subtitle)
 	local windowIndex = #Library.Windows + 1
 
 	local SeizureUI = New("ScreenGui", {
-		Name = "SeizureUI_" .. windowIndex,
+		Name = "VanUI" .. windowIndex,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		ResetOnSpawn = false
 	})
