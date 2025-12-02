@@ -1,4 +1,4 @@
--- VanUI (fixed controls + slider + title-only drag)
+-- VanUI (fixed controls + slider + title-only drag + restored grey toggle background)
 local Library = {}
 Library.Windows = {}
 Library.MainWindow = nil
@@ -311,19 +311,45 @@ function Library:CreateWindow(title)
 					if element.Callback then pcall(element.Callback) end
 				end)
 
-			-- Toggle
+			-- Toggle (restored grey background behind indicator)
 			elseif element.Type == "Toggle" then
 				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = Color3.fromRGB(20,20,20), BorderSizePixel = 0, Size = UDim2.new(1,0,0,44)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.08,0)})
 				New("UIStroke", {Parent = F, Color = Color3.fromRGB(25,25,25), Thickness = 1})
-				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.78,0,1,0), Font = Enum.Font.GothamMedium, Text = element.Text or "", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left})
-				local Indicator = New("Frame", {Parent = F, AnchorPoint = Vector2.new(1,0.5), BackgroundColor3 = element.Value and Color3.fromRGB(230,230,230) or Color3.fromRGB(30,30,30), Position = UDim2.new(0.97,0,0.5,0), Size = UDim2.new(0,18,0,18), BorderSizePixel = 0})
-				New("UICorner", {Parent = Indicator, CornerRadius = UDim.new(0.5,0)})
+				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.75,0,1,0), Font = Enum.Font.GothamMedium, Text = element.Text or "", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left})
+
+				-- Grey rounded background for the toggle indicator (restored)
+				local IndicatorBg = New("Frame", {
+					Parent = F,
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(0.97, 0, 0.5, 0),
+					Size = UDim2.new(0, 28, 0, 28),
+					BackgroundColor3 = Color3.fromRGB(38, 38, 38), -- visible grey background
+					BorderSizePixel = 0
+				})
+				New("UICorner", {Parent = IndicatorBg, CornerRadius = UDim.new(0.5, 0)})
+				New("UIStroke", {Parent = IndicatorBg, Color = Color3.fromRGB(25,25,25), Thickness = 1})
+
+				local Indicator = New("Frame", {
+					Parent = IndicatorBg,
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.new(0.5, 0, 0.5, 0),
+					Size = UDim2.new(0, 16, 0, 16),
+					BackgroundColor3 = element.Value and Color3.fromRGB(230,230,230) or Color3.fromRGB(30,30,30),
+					BorderSizePixel = 0
+				})
+				New("UICorner", {Parent = Indicator, CornerRadius = UDim.new(0.5, 0)})
 				New("UIStroke", {Parent = Indicator, Color = Color3.fromRGB(25,25,25), Thickness = 1})
+
 				local Click = New("TextButton", {Parent = F, BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0), Text = "", AutoButtonColor = false})
 				Click.MouseButton1Click:Connect(function()
 					element.Value = not element.Value
-					TweenService:Create(Indicator, TweenInfo.new(0.18), {BackgroundColor3 = element.Value and Color3.fromRGB(230,230,230) or Color3.fromRGB(30,30,30)}):Play()
+					-- animate the inner indicator color to show state
+					if element.Value then
+						TweenService:Create(Indicator, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(230,230,230)}):Play()
+					else
+						TweenService:Create(Indicator, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(30,30,30)}):Play()
+					end
 					if element.Callback then pcall(element.Callback, element.Value) end
 				end)
 
