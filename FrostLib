@@ -12,6 +12,8 @@ local function New(ClassName, Properties)
 end
 
 local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
 
 function Library:CreateWindow(title, subtitle)
 	local Window = {}
@@ -19,10 +21,17 @@ function Library:CreateWindow(title, subtitle)
 
 	local SeizureUI = New("ScreenGui", {
 		Name = "SeizureUI_" .. windowIndex,
-		Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui"),
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		ResetOnSpawn = false
 	})
+
+	-- try to parent to CoreGui, fallback to PlayerGui if not allowed
+	local ok = pcall(function()
+		SeizureUI.Parent = CoreGui
+	end)
+	if not ok then
+		SeizureUI.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	end
 
 	local Background = New("Frame", {
 		Name = "Background",
