@@ -1,4 +1,4 @@
--- VanUI (fixed controls + slider + title-only drag + restored grey toggle background)
+-- VanUI Library Code (eingebettet)
 local Library = {}
 Library.Windows = {}
 Library.MainWindow = nil
@@ -123,8 +123,8 @@ function Library:CreateWindow(title)
 		return btn
 	end
 
-	local MinBtn = makeControl("▭") -- minimize icon (visible)
-	local CloseBtn = makeControl("✕") -- close icon
+	local MinBtn = makeControl("▭")
+	local CloseBtn = makeControl("✕")
 
 	-- Content containers
 	local TabContainer = New("Frame", {
@@ -157,7 +157,7 @@ function Library:CreateWindow(title)
 	Window._isMinimized = false
 	Window._prevSize = FULL_SIZE
 
-	-- Title-only drag (so slider doesn't cause window move)
+	-- Title-only drag
 	local dragging, dragInput, dragStart, startPos, dragTween
 	TitleLabel.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -243,19 +243,29 @@ function Library:CreateWindow(title)
 		function Tab:AddParagraph(titleText, contentText)
 			local Paragraph = { Type = "Paragraph", Title = titleText, Content = contentText, Visible = true }
 			table.insert(Tab.Elements, Paragraph); Window:RefreshContent()
-			return { Hide = function() Paragraph.Visible = false; Window:RefreshContent() end, Show = function() Paragraph.Visible = true; Window:RefreshContent() end }
+			return { 
+				Hide = function() Paragraph.Visible = false; Window:RefreshContent() end, 
+				Show = function() Paragraph.Visible = true; Window:RefreshContent() end 
+			}
 		end
 
 		function Tab:AddButton(text, callback)
 			local Button = { Type = "Button", Text = text, Callback = callback, Visible = true }
 			table.insert(Tab.Elements, Button); Window:RefreshContent()
-			return { Hide = function() Button.Visible = false; Window:RefreshContent() end, Show = function() Button.Visible = true; Window:RefreshContent() end }
+			return { 
+				Hide = function() Button.Visible = false; Window:RefreshContent() end, 
+				Show = function() Button.Visible = true; Window:RefreshContent() end 
+			}
 		end
 
 		function Tab:AddToggle(text, default, callback)
 			local Toggle = { Type = "Toggle", Text = text, Value = default or false, Callback = callback, Visible = true }
 			table.insert(Tab.Elements, Toggle); Window:RefreshContent()
-			return { Set = function(_, v) Toggle.Value = v; Window:RefreshContent() end, Hide = function() Toggle.Visible = false; Window:RefreshContent() end, Show = function() Toggle.Visible = true; Window:RefreshContent() end }
+			return { 
+				Set = function(_, v) Toggle.Value = v; Window:RefreshContent(); if Toggle.Callback then pcall(Toggle.Callback, Toggle.Value) end end, 
+				Hide = function() Toggle.Visible = false; Window:RefreshContent() end, 
+				Show = function() Toggle.Visible = true; Window:RefreshContent() end 
+			}
 		end
 
 		function Tab:AddSlider(text, min, max, default, callback)
@@ -311,20 +321,19 @@ function Library:CreateWindow(title)
 					if element.Callback then pcall(element.Callback) end
 				end)
 
-			-- Toggle (restored grey background behind indicator)
+			-- Toggle
 			elseif element.Type == "Toggle" then
 				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = Color3.fromRGB(20,20,20), BorderSizePixel = 0, Size = UDim2.new(1,0,0,44)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.08,0)})
 				New("UIStroke", {Parent = F, Color = Color3.fromRGB(25,25,25), Thickness = 1})
 				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.75,0,1,0), Font = Enum.Font.GothamMedium, Text = element.Text or "", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left})
 
-				-- Grey rounded background for the toggle indicator (restored)
 				local IndicatorBg = New("Frame", {
 					Parent = F,
 					AnchorPoint = Vector2.new(1, 0.5),
 					Position = UDim2.new(0.97, 0, 0.5, 0),
 					Size = UDim2.new(0, 28, 0, 28),
-					BackgroundColor3 = Color3.fromRGB(38, 38, 38), -- visible grey background
+					BackgroundColor3 = Color3.fromRGB(38, 38, 38),
 					BorderSizePixel = 0
 				})
 				New("UICorner", {Parent = IndicatorBg, CornerRadius = UDim.new(0.5, 0)})
@@ -344,7 +353,6 @@ function Library:CreateWindow(title)
 				local Click = New("TextButton", {Parent = F, BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0), Text = "", AutoButtonColor = false})
 				Click.MouseButton1Click:Connect(function()
 					element.Value = not element.Value
-					-- animate the inner indicator color to show state
 					if element.Value then
 						TweenService:Create(Indicator, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(230,230,230)}):Play()
 					else
@@ -385,7 +393,6 @@ function Library:CreateWindow(title)
 				end
 				updateVisuals(element.Value)
 
-				-- slider dragging (local variable, doesn't affect window dragging)
 				local draggingSlider = false
 				local function setValueFromPos(x)
 					local absX = x - Track.AbsolutePosition.X
@@ -433,5 +440,3 @@ function Library:CreateWindow(title)
 	Library.MainWindow = Window
 	return Window
 end
-
-return Library
