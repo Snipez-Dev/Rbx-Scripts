@@ -1,4 +1,4 @@
--- VanUI (fixed controls + slider + title-only drag)
+-- VanUI (Tabs restored to original style + toggle restored with grey bg + slider fixed)
 local Library = {}
 Library.Windows = {}
 Library.MainWindow = nil
@@ -30,7 +30,6 @@ local function find_existing_gui()
 end
 
 function Library:CreateWindow(title)
-	-- single instance
 	if Library.MainWindow then return Library.MainWindow end
 
 	local existing = find_existing_gui()
@@ -47,7 +46,6 @@ function Library:CreateWindow(title)
 	if not ok then ScreenGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") end
 	Window._ScreenGui = ScreenGui
 
-	-- sizes (wider)
 	local FULL_SIZE = UDim2.new(0, 760, 0, 420)
 	local MINIMIZED_SIZE = UDim2.new(0, 760, 0, 40)
 
@@ -70,7 +68,7 @@ function Library:CreateWindow(title)
 	task.wait(0.25)
 	TweenService:Create(Stroke, TweenInfo.new(0.25), {Transparency = 0}):Play()
 
-	-- Title (VanUI) - drag only when dragging this label
+	-- Title (VanUI)
 	local TitleLabel = New("TextLabel", {
 		Name = "title",
 		Parent = Background,
@@ -85,7 +83,7 @@ function Library:CreateWindow(title)
 		TextYAlignment = Enum.TextYAlignment.Center
 	})
 
-	-- Controls: anchored top-right using AnchorPoint + UIListLayout (reliable on resize)
+	-- Controls (top-right)
 	local ControlsFrame = New("Frame", {
 		Name = "WindowControls",
 		Parent = Background,
@@ -95,7 +93,7 @@ function Library:CreateWindow(title)
 		AnchorPoint = Vector2.new(1, 0)
 	})
 
-	local controlsLayout = New("UIListLayout", {
+	New("UIListLayout", {
 		Parent = ControlsFrame,
 		FillDirection = Enum.FillDirection.Horizontal,
 		HorizontalAlignment = Enum.HorizontalAlignment.Right,
@@ -104,7 +102,6 @@ function Library:CreateWindow(title)
 		Padding = UDim.new(0, 8)
 	})
 
-	-- button factory for consistent look
 	local function makeControl(symbol)
 		local btn = New("TextButton", {
 			Parent = ControlsFrame,
@@ -123,10 +120,10 @@ function Library:CreateWindow(title)
 		return btn
 	end
 
-	local MinBtn = makeControl("▭") -- minimize icon (visible)
-	local CloseBtn = makeControl("✕") -- close icon
+	local MinBtn = makeControl("▭")
+	local CloseBtn = makeControl("✕")
 
-	-- Content containers
+	-- containers
 	local TabContainer = New("Frame", {
 		Name = "TabContainer",
 		Parent = Background,
@@ -157,7 +154,7 @@ function Library:CreateWindow(title)
 	Window._isMinimized = false
 	Window._prevSize = FULL_SIZE
 
-	-- Title-only drag (so slider doesn't cause window move)
+	-- Title-only drag
 	local dragging, dragInput, dragStart, startPos, dragTween
 	TitleLabel.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -183,7 +180,7 @@ function Library:CreateWindow(title)
 		end
 	end)
 
-	-- Close / Minimize logic
+	-- close / minimize
 	CloseBtn.MouseButton1Click:Connect(function() Window:Destroy() end)
 	MinBtn.MouseButton1Click:Connect(function()
 		if Window._isMinimized then
@@ -200,7 +197,7 @@ function Library:CreateWindow(title)
 		end
 	end)
 
-	-- Tab + element API
+	-- Tab + elements (tabs restored to original style)
 	function Window:CreateTab(name)
 		local Tab = {}
 		local isFirst = #Window.Tabs == 0
@@ -208,10 +205,10 @@ function Library:CreateWindow(title)
 		local TabButton = New("TextButton", {
 			Name = "Tab_" .. name,
 			Parent = TabContainer,
-			BackgroundColor3 = Color3.fromRGB(15,15,15),
+			BackgroundColor3 = Color3.fromRGB(15, 15, 15),
 			BackgroundTransparency = isFirst and 0 or 1,
 			BorderSizePixel = 0,
-			Size = UDim2.new(0.96, 0, 0, 36),
+			Size = UDim2.new(0.982876241, 0, 0, 35),
 			Font = Enum.Font.Gotham,
 			Text = name,
 			TextColor3 = isFirst and Color3.fromRGB(255,255,255) or Color3.fromRGB(150,150,150),
@@ -219,18 +216,44 @@ function Library:CreateWindow(title)
 			TextXAlignment = Enum.TextXAlignment.Left,
 			AutoButtonColor = false
 		})
-		New("UIPadding", {Parent = TabButton, PaddingLeft = UDim.new(0,8)})
-		New("UICorner", {Parent = TabButton, CornerRadius = UDim.new(0.08,0)})
-		New("UIStroke", {Parent = TabButton, Color = Color3.fromRGB(25,25,25), Thickness = 1})
+
+		New("UIPadding", {Parent = TabButton, PaddingLeft = UDim.new(0, 5)})
+		New("UICorner", {Parent = TabButton, CornerRadius = UDim.new(0.1, 0)})
+
+		local TabStroke = New("UIStroke", {
+			Color = Color3.fromRGB(116, 116, 116),
+			Thickness = 1,
+			Transparency = isFirst and 0.80 or 1,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+			Parent = TabButton
+		})
 
 		TabButton.MouseButton1Click:Connect(function()
 			if Window.CurrentTab == Tab then return end
+
 			for _, t in pairs(Window.Tabs) do
-				TweenService:Create(t.Button, TweenInfo.new(0.18), { BackgroundTransparency = 1, TextColor3 = Color3.fromRGB(150,150,150) }):Play()
+				TweenService:Create(t.Button, TweenInfo.new(0.2), {
+					BackgroundTransparency = 1,
+					TextColor3 = Color3.fromRGB(150, 150, 150)
+				}):Play()
+
 				local stroke = t.Button:FindFirstChildOfClass("UIStroke")
-				if stroke then TweenService:Create(stroke, TweenInfo.new(0.18), {Transparency = 1}):Play() end
+				if stroke then
+					TweenService:Create(stroke, TweenInfo.new(0.2), {
+						Transparency = 1
+					}):Play()
+				end
 			end
-			TweenService:Create(TabButton, TweenInfo.new(0.18), { BackgroundTransparency = 0, TextColor3 = Color3.fromRGB(255,255,255) }):Play()
+
+			TweenService:Create(TabButton, TweenInfo.new(0.2), {
+				BackgroundTransparency = 0,
+				TextColor3 = Color3.fromRGB(255, 255, 255)
+			}):Play()
+
+			TweenService:Create(TabStroke, TweenInfo.new(0.2), {
+				Transparency = 0.80
+			}):Play()
+
 			Window.CurrentTab = Tab
 			Window:RefreshContent()
 		end)
@@ -242,26 +265,40 @@ function Library:CreateWindow(title)
 
 		function Tab:AddParagraph(titleText, contentText)
 			local Paragraph = { Type = "Paragraph", Title = titleText, Content = contentText, Visible = true }
-			table.insert(Tab.Elements, Paragraph); Window:RefreshContent()
-			return { Hide = function() Paragraph.Visible = false; Window:RefreshContent() end, Show = function() Paragraph.Visible = true; Window:RefreshContent() end }
+			table.insert(Tab.Elements, Paragraph)
+			Window:RefreshContent()
+			return {
+				Hide = function() Paragraph.Visible = false; Window:RefreshContent() end,
+				Show = function() Paragraph.Visible = true; Window:RefreshContent() end
+			}
 		end
 
 		function Tab:AddButton(text, callback)
 			local Button = { Type = "Button", Text = text, Callback = callback, Visible = true }
-			table.insert(Tab.Elements, Button); Window:RefreshContent()
-			return { Hide = function() Button.Visible = false; Window:RefreshContent() end, Show = function() Button.Visible = true; Window:RefreshContent() end }
+			table.insert(Tab.Elements, Button)
+			Window:RefreshContent()
+			return {
+				Hide = function() Button.Visible = false; Window:RefreshContent() end,
+				Show = function() Button.Visible = true; Window:RefreshContent() end
+			}
 		end
 
 		function Tab:AddToggle(text, default, callback)
 			local Toggle = { Type = "Toggle", Text = text, Value = default or false, Callback = callback, Visible = true }
-			table.insert(Tab.Elements, Toggle); Window:RefreshContent()
-			return { Set = function(_, v) Toggle.Value = v; Window:RefreshContent() end, Hide = function() Toggle.Visible = false; Window:RefreshContent() end, Show = function() Toggle.Visible = true; Window:RefreshContent() end }
+			table.insert(Tab.Elements, Toggle)
+			Window:RefreshContent()
+			return {
+				Set = function(self, value) Toggle.Value = value; Window:RefreshContent() end,
+				Hide = function() Toggle.Visible = false; Window:RefreshContent() end,
+				Show = function() Toggle.Visible = true; Window:RefreshContent() end
+			}
 		end
 
 		function Tab:AddSlider(text, min, max, default, callback)
 			min = min or 0; max = max or 100; default = default == nil and min or default
 			local Slider = { Type = "Slider", Text = text, Min = min, Max = max, Value = math.clamp(default, min, max), Callback = callback, Visible = true }
-			table.insert(Tab.Elements, Slider); Window:RefreshContent()
+			table.insert(Tab.Elements, Slider)
+			Window:RefreshContent()
 			local api = {}
 			api.Set = function(_, v) Slider.Value = math.clamp(v, Slider.Min, Slider.Max); Window:RefreshContent(); if Slider.Callback then pcall(Slider.Callback, Slider.Value) end end
 			api.Get = function() return Slider.Value end
@@ -311,19 +348,45 @@ function Library:CreateWindow(title)
 					if element.Callback then pcall(element.Callback) end
 				end)
 
-			-- Toggle
+			-- Toggle (restored original small indicator + grey bg behind it)
 			elseif element.Type == "Toggle" then
 				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = Color3.fromRGB(20,20,20), BorderSizePixel = 0, Size = UDim2.new(1,0,0,44)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.08,0)})
 				New("UIStroke", {Parent = F, Color = Color3.fromRGB(25,25,25), Thickness = 1})
 				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.78,0,1,0), Font = Enum.Font.GothamMedium, Text = element.Text or "", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left})
-				local Indicator = New("Frame", {Parent = F, AnchorPoint = Vector2.new(1,0.5), BackgroundColor3 = element.Value and Color3.fromRGB(230,230,230) or Color3.fromRGB(30,30,30), Position = UDim2.new(0.97,0,0.5,0), Size = UDim2.new(0,18,0,18), BorderSizePixel = 0})
-				New("UICorner", {Parent = Indicator, CornerRadius = UDim.new(0.5,0)})
+
+				-- restored grey background behind indicator (rounded)
+				local IndicatorBg = New("Frame", {
+					Parent = F,
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(0.97, 0, 0.5, 0),
+					Size = UDim2.new(0, 22, 0, 22),
+					BackgroundColor3 = Color3.fromRGB(38,38,38),
+					BorderSizePixel = 0
+				})
+				New("UICorner", {Parent = IndicatorBg, CornerRadius = UDim.new(0.5,0)})
+				New("UIStroke", {Parent = IndicatorBg, Color = Color3.fromRGB(25,25,25), Thickness = 1})
+
+				-- inner indicator like original small square (but rounder)
+				local Indicator = New("Frame", {
+					Parent = IndicatorBg,
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.new(0.5, 0, 0.5, 0),
+					Size = UDim2.new(0, 14, 0, 14),
+					BackgroundColor3 = element.Value and Color3.fromRGB(230,230,230) or Color3.fromRGB(30,30,30),
+					BorderSizePixel = 0
+				})
+				New("UICorner", {Parent = Indicator, CornerRadius = UDim.new(0.2, 0)})
 				New("UIStroke", {Parent = Indicator, Color = Color3.fromRGB(25,25,25), Thickness = 1})
+
 				local Click = New("TextButton", {Parent = F, BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0), Text = "", AutoButtonColor = false})
 				Click.MouseButton1Click:Connect(function()
 					element.Value = not element.Value
-					TweenService:Create(Indicator, TweenInfo.new(0.18), {BackgroundColor3 = element.Value and Color3.fromRGB(230,230,230) or Color3.fromRGB(30,30,30)}):Play()
+					if element.Value then
+						TweenService:Create(Indicator, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(230,230,230)}):Play()
+					else
+						TweenService:Create(Indicator, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(30,30,30)}):Play()
+					end
 					if element.Callback then pcall(element.Callback, element.Value) end
 				end)
 
@@ -359,7 +422,6 @@ function Library:CreateWindow(title)
 				end
 				updateVisuals(element.Value)
 
-				-- slider dragging (local variable, doesn't affect window dragging)
 				local draggingSlider = false
 				local function setValueFromPos(x)
 					local absX = x - Track.AbsolutePosition.X
