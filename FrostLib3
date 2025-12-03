@@ -1,6 +1,5 @@
--- VanUI (komplett, nur: zwinge Parenting in CoreGui & stelle sicher, dass die Restore-Box erscheint)
--- Hinweis: Ich habe **nur** das Parent-Verhalten auf CoreGui geändert und die Restore-Box-Logik sichergestellt.
--- Alles andere blieb unverändert.
+-- VanUI mit vollständigem Mobile Support
+-- Automatische Skalierung und Touch-Optimierung für mobile Geräte
 
 local Library = {}
 Library.Windows = {}
@@ -48,24 +47,46 @@ local function getViewport()
 	return Vector2.new(1920,1080)
 end
 
--- CreateWindow(title, subtitle, opts)
--- opts: size (UDim2) or width/height numbers, theme (table), force (boolean)
+-- Mobile Detection erweitert
+local function detectMobile()
+	local isTouchEnabled = UserInputService.TouchEnabled
+	local hasKeyboard = UserInputService.KeyboardEnabled
+	local hasMouse = UserInputService.MouseEnabled
+	local vp = getViewport()
+	
+	-- Mobile wenn: Touch enabled UND (kein Keyboard ODER kleine Bildschirmgröße)
+	return isTouchEnabled and (not hasKeyboard or vp.X < 800 or vp.Y < 600)
+end
+
 function Library:CreateWindow(title, subtitle, opts)
 	opts = opts or {}
 	local theme = opts.theme or nil
 
-	-- single instance unless forced
 	if Library.MainWindow and not opts.force then
 		return Library.MainWindow
 	end
 
-	-- optional force destroy
 	if opts.force and Library.MainWindow then
 		pcall(function() Library.MainWindow:Destroy() end)
 	end
 
-	-- size handling
+	-- Mobile Detection
+	local isMobile = detectMobile()
+	local vp = getViewport()
+
+	-- Mobile-spezifische Skalierung
+	local scaleFactor = 1
 	local defaultW, defaultH = 760, 420
+	
+	if isMobile then
+		-- Kleinere UI für mobile Geräte
+		scaleFactor = 0.75
+		if vp.X < 500 then scaleFactor = 0.65 end -- Sehr kleine Bildschirme
+		defaultW = math.floor(vp.X * 0.92)
+		defaultH = math.floor(vp.Y * 0.75)
+	end
+
+	-- Größenberechnung
 	local sizeUDim
 	if opts.size and typeof(opts.size) == "UDim2" then
 		sizeUDim = opts.size
@@ -77,27 +98,22 @@ function Library:CreateWindow(title, subtitle, opts)
 	local absW = sizeUDim.X.Offset
 	local absH = sizeUDim.Y.Offset
 
-	-- ScreenGui parented to CoreGui (DEIN WUNSCH: BLEIB IMMER IN COREGUI)
-	local ScreenGui = New("ScreenGui", { Name = "VanUI", ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn = false })
-	ScreenGui.Parent = CoreGui
-
-	-- mobile support
-	local isMobile = UserInputService.TouchEnabled or (UserInputService.GetPlatform and (UserInputService:GetPlatform() == Enum.Platform.IOS or UserInputService:GetPlatform() == Enum.Platform.Android))
+	-- Clamp für mobile
 	if isMobile then
-		-- make the GUI ignore the top bar inset and scale to a mobile-friendly size
+		absW = math.clamp(absW, 280, math.floor(vp.X * 0.98))
+		absH = math.clamp(absH, 320, math.floor(vp.Y * 0.95))
+	end
+
+	-- ScreenGui parented to CoreGui
+	local ScreenGui = New("ScreenGui", { 
+		Name = "VanUI", 
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, 
+		ResetOnSpawn = false 
+	})
+	ScreenGui.Parent = CoreGui
+	
+	if isMobile then
 		ScreenGui.IgnoreGuiInset = true
-		local vp_m = getViewport()
-		-- if size wasn't explicitly provided, scale to viewport for mobile
-		if not (opts.size or (opts.width and opts.height)) then
-			local mw, mh = math.floor(vp_m.X * 0.9), math.floor(vp_m.Y * 0.8)
-			sizeUDim = UDim2.new(0, mw, 0, mh)
-			absW = sizeUDim.X.Offset
-			absH = sizeUDim.Y.Offset
-		else
-			-- clamp explicit sizes to viewport so they never become off-screen
-			absW = math.clamp(absW, 200, math.floor(vp_m.X * 0.98))
-			absH = math.clamp(absH, 150, math.floor(vp_m.Y * 0.95))
-		end
 	end
 
 	-- Background
@@ -108,33 +124,103 @@ function Library:CreateWindow(title, subtitle, opts)
 		BackgroundColor3 = themeGet(theme, "Background"),
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
-		Position = UDim2.new(0.5, 0, 0.45, 0),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
 		Size = UDim2.new(0, 0, 0, 0),
 		BackgroundTransparency = 1
 	})
 	New("UICorner", {CornerRadius = UDim.new(0.02,0), Parent = Background})
 	local BackgroundStroke = New("UIStroke", {Color = themeGet(theme, "PanelStroke"), Thickness = 1, Transparency = 1, Parent = Background})
 
-	-- open tween
-	TweenService:Create(Background, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = sizeUDim, BackgroundTransparency = 0 }):Play()
+	-- Open animation
+	TweenService:Create(Background, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { 
+		Size = UDim2.new(0, absW, 0, absH), 
+		BackgroundTransparency = 0 
+	}):Play()
 	task.wait(0.22)
 	TweenService:Create(BackgroundStroke, TweenInfo.new(0.22), { Transparency = 0 }):Play()
 
-	-- TopBar / Header
-	local HeaderHeight = 60
-	local TopBar = New("Frame", { Name = "TopBar", Parent = Background, BackgroundTransparency = 1, Position = UDim2.new(0,0,0,0), Size = UDim2.new(1,0,0,HeaderHeight) })
-	local TitleLabel = New("TextLabel", { Name = "title", Parent = TopBar, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0.18,0), Size = UDim2.new(0.5,0,0,28), Font = Enum.Font.GothamMedium, Text = title or "VanUI", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 16, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center })
-	New("TextLabel", { Name = "subtitle", Parent = TopBar, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0.55,0), Size = UDim2.new(0.5,0,0,14), Font = Enum.Font.Gotham, Text = subtitle or "", TextColor3 = Color3.fromRGB(150,150,150), TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left })
+	-- Mobile-angepasste Größen
+	local HeaderHeight = isMobile and 48 or 60
+	local TitleFontSize = isMobile and 13 or 16
+	local SubtitleFontSize = isMobile and 10 or 12
+	local TabButtonFontSize = isMobile and 11 or 14
+	local ElementFontSize = isMobile and 12 or 14
+	local SmallFontSize = isMobile and 10 or 13
 
-	-- Controls (small & lower)
-	local ControlsFrame = New("Frame", { Name = "WindowControls", Parent = TopBar, BackgroundTransparency = 1, Size = UDim2.new(0,74,0,28), Position = UDim2.new(1,-10,0,8), AnchorPoint = Vector2.new(1,0) })
-	New("UIListLayout", { Parent = ControlsFrame, FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,6) })
+	-- TopBar / Header
+	local TopBar = New("Frame", { 
+		Name = "TopBar", 
+		Parent = Background, 
+		BackgroundTransparency = 1, 
+		Position = UDim2.new(0,0,0,0), 
+		Size = UDim2.new(1,0,0,HeaderHeight) 
+	})
+	
+	local titleYPos = isMobile and 0.15 or 0.18
+	local subtitleYPos = isMobile and 0.58 or 0.55
+	
+	local TitleLabel = New("TextLabel", { 
+		Name = "title", 
+		Parent = TopBar, 
+		BackgroundTransparency = 1, 
+		Position = UDim2.new(0.03,0,titleYPos,0), 
+		Size = UDim2.new(0.5,0,0,TitleFontSize + 8), 
+		Font = Enum.Font.GothamMedium, 
+		Text = title or "VanUI", 
+		TextColor3 = Color3.fromRGB(255,255,255), 
+		TextSize = TitleFontSize, 
+		TextXAlignment = Enum.TextXAlignment.Left, 
+		TextYAlignment = Enum.TextYAlignment.Center 
+	})
+	
+	New("TextLabel", { 
+		Name = "subtitle", 
+		Parent = TopBar, 
+		BackgroundTransparency = 1, 
+		Position = UDim2.new(0.03,0,subtitleYPos,0), 
+		Size = UDim2.new(0.5,0,0,SubtitleFontSize + 2), 
+		Font = Enum.Font.Gotham, 
+		Text = subtitle or "", 
+		TextColor3 = Color3.fromRGB(150,150,150), 
+		TextSize = SubtitleFontSize, 
+		TextXAlignment = Enum.TextXAlignment.Left 
+	})
+
+	-- Controls (mobile-optimiert)
+	local btnSizeW, btnSizeH = isMobile and 32 or 28, isMobile and 24 or 20
+	local btnFontSize = isMobile and 16 or 18
+	local controlsWidth = (btnSizeW * 2) + 8
+	
+	local ControlsFrame = New("Frame", { 
+		Name = "WindowControls", 
+		Parent = TopBar, 
+		BackgroundTransparency = 1, 
+		Size = UDim2.new(0, controlsWidth, 0, btnSizeH), 
+		Position = UDim2.new(1,-10,0, isMobile and 6 or 8), 
+		AnchorPoint = Vector2.new(1,0) 
+	})
+	New("UIListLayout", { 
+		Parent = ControlsFrame, 
+		FillDirection = Enum.FillDirection.Horizontal, 
+		HorizontalAlignment = Enum.HorizontalAlignment.Right, 
+		VerticalAlignment = Enum.VerticalAlignment.Center, 
+		SortOrder = Enum.SortOrder.LayoutOrder, 
+		Padding = UDim.new(0, isMobile and 4 : 6) 
+	})
 
 	local function makeControl(symbol)
-		local btnSizeW, btnSizeH = 28, 20
-		local fontSize = 18
-		if isMobile then btnSizeW, btnSizeH, fontSize = 36, 28, 20 end
-		local btn = New("TextButton", { Parent = ControlsFrame, BackgroundColor3 = Background.BackgroundColor3, BorderSizePixel = 0, Size = UDim2.new(0, btnSizeW, 0, btnSizeH), AutoButtonColor = false, Font = Enum.Font.SourceSansBold, Text = symbol, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = fontSize, TextScaled = true })
+		local btn = New("TextButton", { 
+			Parent = ControlsFrame, 
+			BackgroundColor3 = Background.BackgroundColor3, 
+			BorderSizePixel = 0, 
+			Size = UDim2.new(0, btnSizeW, 0, btnSizeH), 
+			AutoButtonColor = false, 
+			Font = Enum.Font.SourceSansBold, 
+			Text = symbol, 
+			TextColor3 = themeGet(theme, "ControlBtnText"), 
+			TextSize = btnFontSize, 
+			TextScaled = true 
+		})
 		New("UICorner", {Parent = btn, CornerRadius = UDim.new(0.08,0)})
 		New("UIStroke", {Parent = btn, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 		return btn
@@ -142,24 +228,65 @@ function Library:CreateWindow(title, subtitle, opts)
 	local MinBtn = makeControl("➖")
 	local CloseBtn = makeControl("❌")
 
-	-- Layout values
-	local TabWidth = isMobile and 140 or 170
-	local TabLeftPadding = 12
-	local ContentLeft = TabLeftPadding + TabWidth + 12
-	local ContentWidth = math.max(220, absW - ContentLeft - 12)
-	local ContentHeight = math.max(120, absH - HeaderHeight - 20)
+	-- Layout-Berechnung (mobile-angepasst)
+	local TabWidth = isMobile and (absW < 400 and 90 or 110) or 170
+	local TabLeftPadding = isMobile and 6 or 12
+	local ContentLeftPadding = isMobile and 6 or 12
+	local ContentLeft = TabLeftPadding + TabWidth + ContentLeftPadding
+	local ContentWidth = math.max(120, absW - ContentLeft - (isMobile and 6 or 12))
+	local ContentHeight = math.max(80, absH - HeaderHeight - (isMobile and 10 or 20))
 
-	local TabContainer = New("Frame", { Name = "TabContainer", Parent = Background, BackgroundTransparency = 1, Position = UDim2.new(0, TabLeftPadding, 0, HeaderHeight), Size = UDim2.new(0, TabWidth, 0, ContentHeight) })
-	New("UIListLayout", {Parent = TabContainer, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,8)})
+	-- Tab Container
+	local TabContainer = New("Frame", { 
+		Name = "TabContainer", 
+		Parent = Background, 
+		BackgroundTransparency = 1, 
+		Position = UDim2.new(0, TabLeftPadding, 0, HeaderHeight), 
+		Size = UDim2.new(0, TabWidth, 0, ContentHeight) 
+	})
+	New("UIListLayout", {
+		Parent = TabContainer, 
+		SortOrder = Enum.SortOrder.LayoutOrder, 
+		Padding = UDim.new(0, isMobile and 5 or 8)
+	})
 
-	local ContentContainer = New("ScrollingFrame", { Name = "ContentContainer", Parent = Background, BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, ContentLeft, 0, HeaderHeight - 2), Size = UDim2.new(0, ContentWidth, 0, ContentHeight + 2), CanvasSize = UDim2.new(0,0,0,0), ScrollBarThickness = 6 })
-	New("UIPadding", {Parent = ContentContainer, PaddingLeft = UDim.new(0,10), PaddingRight = UDim.new(0,10), PaddingTop = UDim.new(0,10)})
-	local contentLayout = New("UIListLayout", {Parent = ContentContainer, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,8)})
+	-- Content Container
+	local ContentContainer = New("ScrollingFrame", { 
+		Name = "ContentContainer", 
+		Parent = Background, 
+		BackgroundTransparency = 1, 
+		BorderSizePixel = 0, 
+		Position = UDim2.new(0, ContentLeft, 0, HeaderHeight - 2), 
+		Size = UDim2.new(0, ContentWidth, 0, ContentHeight + 2), 
+		CanvasSize = UDim2.new(0,0,0,0), 
+		ScrollBarThickness = isMobile and 4 or 6 
+	})
+	
+	local contentPadding = isMobile and 6 or 10
+	New("UIPadding", {
+		Parent = ContentContainer, 
+		PaddingLeft = UDim.new(0,contentPadding), 
+		PaddingRight = UDim.new(0,contentPadding), 
+		PaddingTop = UDim.new(0,contentPadding)
+	})
+	
+	local contentLayout = New("UIListLayout", {
+		Parent = ContentContainer, 
+		SortOrder = Enum.SortOrder.LayoutOrder, 
+		Padding = UDim.new(0, isMobile and 5 or 8)
+	})
 	contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-		ContentContainer.CanvasSize = UDim2.new(0,0,0, contentLayout.AbsoluteContentSize.Y + 20)
+		ContentContainer.CanvasSize = UDim2.new(0,0,0, contentLayout.AbsoluteContentSize.Y + contentPadding * 2)
 	end)
 
-	local ContentBackground = New("Frame", { Parent = Background, BackgroundColor3 = themeGet(theme, "Panel"), BackgroundTransparency = 0.3, BorderSizePixel = 0, Position = UDim2.new(0, ContentLeft, 0, HeaderHeight), Size = UDim2.new(0, ContentWidth, 0, ContentHeight) })
+	local ContentBackground = New("Frame", { 
+		Parent = Background, 
+		BackgroundColor3 = themeGet(theme, "Panel"), 
+		BackgroundTransparency = 0.3, 
+		BorderSizePixel = 0, 
+		Position = UDim2.new(0, ContentLeft, 0, HeaderHeight), 
+		Size = UDim2.new(0, ContentWidth, 0, ContentHeight) 
+	})
 	New("UICorner", {Parent = ContentBackground, CornerRadius = UDim.new(0.01,0)})
 	New("UIStroke", {Parent = ContentBackground, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
@@ -170,11 +297,13 @@ function Library:CreateWindow(title, subtitle, opts)
 	Window._isMinimized = false
 	Window._ScreenGui = ScreenGui
 	Window._restoreGui = nil
+	Window._isMobile = isMobile
 
-	-- Drag main window: only when clicking in TopBar left half
+	-- Drag main window
 	local dragging, dragInput, dragStart, startPos, dragTween
 	TopBar.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		local inputType = input.UserInputType
+		if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
 			local bgPos = Background.AbsolutePosition
 			local bgSize = Background.AbsoluteSize
 			local clickX = input.Position.X
@@ -189,11 +318,16 @@ function Library:CreateWindow(title, subtitle, opts)
 			end
 		end
 	end)
+	
 	TopBar.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then 
+			dragInput = input 
+		end
 	end)
+	
 	UserInputService.InputChanged:Connect(function(input)
-		if input == dragInput and dragging then
+		local inputType = input.UserInputType
+		if input == dragInput and dragging and (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) then
 			local delta = input.Position - dragStart
 			local newPosition = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 			if dragTween then dragTween:Cancel() end
@@ -210,52 +344,84 @@ function Library:CreateWindow(title, subtitle, opts)
 		if Library.MainWindow == Window then Library.MainWindow = nil end
 	end)
 
-	-- Minimize -> create movable restore box; click restore
+	-- Minimize button
 	MinBtn.MouseButton1Click:Connect(function()
 		if Window._isMinimized then
-			-- restore
+			-- Restore
 			if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
 			Window._restoreGui = nil
 			Background.Visible = true
 			Window._isMinimized = false
 		else
-			-- minimize
+			-- Minimize
 			Background.Visible = false
 			Window._isMinimized = true
 
-			-- ensure any previous restore GUI is cleaned up
 			if Window._restoreGui then
 				pcall(function() Window._restoreGui:Destroy() end)
 				Window._restoreGui = nil
 			end
 
-			-- Create RestoreGui parented to CoreGui to ensure it appears
-			local RestoreGui = New("ScreenGui", { Name = "VanUI_Restore", ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn = false })
+			-- Restore Box (mobile-optimiert)
+			local RestoreGui = New("ScreenGui", { 
+				Name = "VanUI_Restore", 
+				ZIndexBehavior = Enum.ZIndexBehavior.Sibling, 
+				ResetOnSpawn = false 
+			})
 			RestoreGui.Parent = CoreGui
 
-			-- placement: centered at top to avoid off-screen bug
-			local vp = getViewport()
-			local boxW, boxH = 180, 40
-			local margin = 18
-			-- center horizontally, clamp so it never goes off-screen
-			local centeredX = (vp.X - boxW) / 2
+			local vp2 = getViewport()
+			local boxW, boxH = isMobile and 140 or 180, isMobile and 32 or 40
+			local margin = isMobile and 8 or 18
+			local centeredX = (vp2.X - boxW) / 2
 			local minX = 8
-			local maxX = math.max(8, vp.X - boxW - 8)
+			local maxX = math.max(8, vp2.X - boxW - 8)
 			local initialX = math.clamp(centeredX, minX, maxX)
 			local initialY = margin
 
-			local Box = New("Frame", { Name = "RestoreBox", Parent = RestoreGui, AnchorPoint = Vector2.new(0,0), Size = UDim2.new(0, boxW, 0, boxH), Position = UDim2.new(0, initialX, 0, initialY), BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0 })
+			local Box = New("Frame", { 
+				Name = "RestoreBox", 
+				Parent = RestoreGui, 
+				AnchorPoint = Vector2.new(0,0), 
+				Size = UDim2.new(0, boxW, 0, boxH), 
+				Position = UDim2.new(0, initialX, 0, initialY), 
+				BackgroundColor3 = themeGet(theme, "Panel"), 
+				BorderSizePixel = 0 
+			})
 			New("UICorner", { Parent = Box, CornerRadius = UDim.new(0.08,0) })
 			New("UIStroke", { Parent = Box, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 
-			local Label = New("TextLabel", { Parent = Box, BackgroundTransparency = 1, Size = UDim2.new(1, -46, 1, 0), Position = UDim2.new(0, 12, 0, 0), Font = Enum.Font.Gotham, Text = title or "VanUI", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center })
+			local labelSize = isMobile and 10 or 14
+			local Label = New("TextLabel", { 
+				Parent = Box, 
+				BackgroundTransparency = 1, 
+				Size = UDim2.new(1, -(boxH + 4), 1, 0), 
+				Position = UDim2.new(0, 8, 0, 0), 
+				Font = Enum.Font.Gotham, 
+				Text = title or "VanUI", 
+				TextColor3 = Color3.fromRGB(255,255,255), 
+				TextSize = labelSize, 
+				TextXAlignment = Enum.TextXAlignment.Left, 
+				TextYAlignment = Enum.TextYAlignment.Center 
+			})
 
-			-- Restore icon as clickable button
-			local RestoreBtn = New("TextButton", { Parent = Box, Size = UDim2.new(0, 34, 0, 34), Position = UDim2.new(1, -40, 0.5, -17), BackgroundColor3 = Background.BackgroundColor3, BorderSizePixel = 0, Text = "▣", Font = Enum.Font.SourceSansBold, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = 18, TextScaled = true, AutoButtonColor = false })
+			local btnSize = isMobile and 26 or 34
+			local RestoreBtn = New("TextButton", { 
+				Parent = Box, 
+				Size = UDim2.new(0, btnSize, 0, btnSize), 
+				Position = UDim2.new(1, -(btnSize + 3), 0.5, -(btnSize/2)), 
+				BackgroundColor3 = Background.BackgroundColor3, 
+				BorderSizePixel = 0, 
+				Text = "▣", 
+				Font = Enum.Font.SourceSansBold, 
+				TextColor3 = themeGet(theme, "ControlBtnText"), 
+				TextSize = isMobile and 14 or 18, 
+				TextScaled = true, 
+				AutoButtonColor = false 
+			})
 			New("UICorner", { Parent = RestoreBtn, CornerRadius = UDim.new(0.08,0) })
 			New("UIStroke", { Parent = RestoreBtn, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 
-			-- Function to restore the window
 			local function restoreWindow()
 				if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
 				Window._restoreGui = nil
@@ -263,22 +429,22 @@ function Library:CreateWindow(title, subtitle, opts)
 				Window._isMinimized = false
 			end
 
-			-- Restore button click
 			RestoreBtn.MouseButton1Click:Connect(restoreWindow)
 
-			-- Dragging logic for the Box
+			-- Dragging für Restore Box
 			local draggingBox = false
 			local dragStartPos = nil
 			local boxStartPos = nil
 			local hasMoved = false
 
 			Box.InputBegan:Connect(function(inp)
-				if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-					-- Check if click is NOT on the restore button
+				local inputType = inp.UserInputType
+				if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
 					local mousePos = inp.Position
 					local btnPos = RestoreBtn.AbsolutePosition
 					local btnSize = RestoreBtn.AbsoluteSize
-					local isOnButton = mousePos.X >= btnPos.X and mousePos.X <= btnPos.X + btnSize.X and mousePos.Y >= btnPos.Y and mousePos.Y <= btnPos.Y + btnSize.Y
+					local isOnButton = mousePos.X >= btnPos.X and mousePos.X <= btnPos.X + btnSize.X and 
+					                   mousePos.Y >= btnPos.Y and mousePos.Y <= btnPos.Y + btnSize.Y
 					
 					if not isOnButton then
 						draggingBox = true
@@ -289,7 +455,6 @@ function Library:CreateWindow(title, subtitle, opts)
 						inp.Changed:Connect(function()
 							if inp.UserInputState == Enum.UserInputState.End then
 								draggingBox = false
-								-- If barely moved, treat as click to restore
 								if not hasMoved then
 									restoreWindow()
 								end
@@ -300,18 +465,18 @@ function Library:CreateWindow(title, subtitle, opts)
 			end)
 
 			UserInputService.InputChanged:Connect(function(inp)
-				if draggingBox and inp.UserInputType == Enum.UserInputType.MouseMovement and dragStartPos and boxStartPos then
+				local inputType = inp.UserInputType
+				if draggingBox and (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) and dragStartPos and boxStartPos then
 					local delta = inp.Position - dragStartPos
-					-- If moved more than 5 pixels, consider it a drag
 					if math.abs(delta.X) > 5 or math.abs(delta.Y) > 5 then
 						hasMoved = true
 					end
 					
 					local newX = boxStartPos.X + delta.X
 					local newY = boxStartPos.Y + delta.Y
-					local vp2 = getViewport()
-					newX = math.clamp(newX, 0, vp2.X - Box.AbsoluteSize.X)
-					newY = math.clamp(newY, 0, vp2.Y - Box.AbsoluteSize.Y)
+					local vp3 = getViewport()
+					newX = math.clamp(newX, 0, vp3.X - Box.AbsoluteSize.X)
+					newY = math.clamp(newY, 0, vp3.Y - Box.AbsoluteSize.Y)
 					Box.Position = UDim2.new(0, newX, 0, newY)
 				end
 			end)
@@ -325,21 +490,22 @@ function Library:CreateWindow(title, subtitle, opts)
 		local Tab = {}
 		local isFirst = #Window.Tabs == 0
 
+		local tabHeight = isMobile and 28 or 35
 		local TabButton = New("TextButton", {
 			Name = "Tab_" .. name,
 			Parent = TabContainer,
 			BackgroundColor3 = themeGet(theme, "Tab"),
 			BackgroundTransparency = isFirst and 0 or 1,
 			BorderSizePixel = 0,
-			Size = UDim2.new(1,0,0,35),
+			Size = UDim2.new(1,0,0,tabHeight),
 			Font = Enum.Font.Gotham,
 			Text = name,
 			TextColor3 = isFirst and Color3.fromRGB(255,255,255) or Color3.fromRGB(150,150,150),
-			TextSize = 14,
+			TextSize = TabButtonFontSize,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			AutoButtonColor = false
 		})
-		New("UIPadding", {Parent = TabButton, PaddingLeft = UDim.new(0,5)})
+		New("UIPadding", {Parent = TabButton, PaddingLeft = UDim.new(0, isMobile and 4 or 5)})
 		New("UICorner", {Parent = TabButton, CornerRadius = UDim.new(0.1,0)})
 		New("UIStroke", {Parent = TabButton, Color = themeGet(theme, "TabStroke"), Thickness = 1, Transparency = isFirst and 0.8 or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
 
@@ -404,7 +570,7 @@ function Library:CreateWindow(title, subtitle, opts)
 		return Tab
 	end
 
-	-- Refresh content
+	-- Refresh content (mobile-optimiert)
 	function Window:RefreshContent()
 		for _, child in pairs(ContentContainer:GetChildren()) do
 			if child:IsA("Frame") then child:Destroy() end
@@ -415,24 +581,56 @@ function Library:CreateWindow(title, subtitle, opts)
 			if not element.Visible then continue end
 
 			if element.Type == "Paragraph" then
-				local P = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,100)})
+				local minHeight = isMobile and 70 or 100
+				local P = New("Frame", {
+					Parent = ContentContainer, 
+					BackgroundColor3 = themeGet(theme, "Panel"), 
+					BorderSizePixel = 0, 
+					Size = UDim2.new(1,0,0,minHeight)
+				})
 				New("UICorner", {Parent = P, CornerRadius = UDim.new(0.05,0)})
 				New("UIStroke", {Parent = P, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
-				New("UIPadding", {Parent = P, PaddingLeft = UDim.new(0,12), PaddingRight = UDim.new(0,12), PaddingTop = UDim.new(0,12), PaddingBottom = UDim.new(0,12)})
-				New("TextLabel", {Parent = P, BackgroundTransparency = 1, Size = UDim2.new(1,0,0,20), Font = Enum.Font.GothamMedium, Text = element.Title or "", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left})
-				New("TextLabel", {Parent = P, BackgroundTransparency = 1, Position = UDim2.new(0,0,0,22), Size = UDim2.new(1,0,1,-22), Font = Enum.Font.Gotham, Text = element.Content or "", TextColor3 = Color3.fromRGB(150,150,150), TextSize = 13, TextWrapped = true})
+				
+				local padding = isMobile and 8 or 12
+				New("UIPadding", {Parent = P, PaddingLeft = UDim.new(0,padding), PaddingRight = UDim.new(0,padding), PaddingTop = UDim.new(0,padding), PaddingBottom = UDim.new(0,padding)})
+				
+				New("TextLabel", {
+					Parent = P, 
+					BackgroundTransparency = 1, 
+					Size = UDim2.new(1,0,0,ElementFontSize + 4), 
+					Font = Enum.Font.GothamMedium, 
+					Text = element.Title or "", 
+					TextColor3 = Color3.fromRGB(255,255,255), 
+					TextSize = ElementFontSize, 
+					TextXAlignment = Enum.TextXAlignment.Left
+				})
+				
+				New("TextLabel", {
+					Parent = P, 
+					BackgroundTransparency = 1, 
+					Position = UDim2.new(0,0,0,ElementFontSize + 6), 
+					Size = UDim2.new(1,0,1,-(ElementFontSize + 6)), 
+					Font = Enum.Font.Gotham, 
+					Text = element.Content or "", 
+					TextColor3 = Color3.fromRGB(150,150,150), 
+					TextSize = SmallFontSize, 
+					TextWrapped = true,
+					TextYAlignment = Enum.TextYAlignment.Top
+				})
+				
 				task.spawn(function()
 					task.wait()
-					local titleSize = TextService:GetTextSize(element.Title or "", 14, Enum.Font.GothamMedium, Vector2.new(P.AbsoluteSize.X - 24, math.huge))
-					local contentSize = TextService:GetTextSize(element.Content or "", 13, Enum.Font.Gotham, Vector2.new(P.AbsoluteSize.X - 24, math.huge))
-					P.Size = UDim2.new(1,0,0, titleSize.Y + contentSize.Y + 32)
+					local titleSize = TextService:GetTextSize(element.Title or "", ElementFontSize, Enum.Font.GothamMedium, Vector2.new(P.AbsoluteSize.X - padding*2, math.huge))
+					local contentSize = TextService:GetTextSize(element.Content or "", SmallFontSize, Enum.Font.Gotham, Vector2.new(P.AbsoluteSize.X - padding*2, math.huge))
+					P.Size = UDim2.new(1,0,0, titleSize.Y + contentSize.Y + padding*2 + 6)
 				end)
 
 			elseif element.Type == "Button" then
-				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,42)})
+				local btnHeight = isMobile and 36 or 42
+				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,btnHeight)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.1,0)})
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
-				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.94,0,1,0), Font = Enum.Font.GothamMedium, Text = element.Text or "", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left})
+				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.94,0,1,0), Font = Enum.Font.GothamMedium, Text = element.Text or "", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
 				local Click = New("TextButton", {Parent = F, BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0), Text = "", AutoButtonColor = false})
 				Click.MouseButton1Click:Connect(function()
 					TweenService:Create(F, TweenInfo.new(0.09), {BackgroundColor3 = Color3.fromRGB(30,30,30)}):Play()
@@ -442,16 +640,20 @@ function Library:CreateWindow(title, subtitle, opts)
 				end)
 
 			elseif element.Type == "Toggle" then
-				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,42)})
+				local toggleHeight = isMobile and 36 or 42
+				local toggleSize = isMobile and 20 or 24
+				local indicatorSize = isMobile and 14 or 16
+				
+				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,toggleHeight)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.1,0)})
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
-				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.75,0,1,0), Font = Enum.Font.GothamMedium, Text = element.Text or "", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left})
+				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.75,0,1,0), Font = Enum.Font.GothamMedium, Text = element.Text or "", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
 
-				local IndicatorBg = New("Frame", { Parent = F, AnchorPoint = Vector2.new(1,0.5), Position = UDim2.new(0.975,0,0.5,0), Size = UDim2.new(0,24,0,24), BackgroundColor3 = themeGet(theme, "ToggleBg"), BorderSizePixel = 0 })
+				local IndicatorBg = New("Frame", { Parent = F, AnchorPoint = Vector2.new(1,0.5), Position = UDim2.new(0.975,0,0.5,0), Size = UDim2.new(0,toggleSize,0,toggleSize), BackgroundColor3 = themeGet(theme, "ToggleBg"), BorderSizePixel = 0 })
 				New("UICorner", {Parent = IndicatorBg, CornerRadius = UDim.new(0.5,0)})
 				New("UIStroke", {Parent = IndicatorBg, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
-				local Indicator = New("Frame", { Parent = IndicatorBg, AnchorPoint = Vector2.new(0.5,0.5), Position = UDim2.new(0.5,0,0.5,0), Size = UDim2.new(0,16,0,16), BackgroundColor3 = element.Value and themeGet(theme, "ToggleOn") or themeGet(theme, "ToggleOff"), BorderSizePixel = 0 })
+				local Indicator = New("Frame", { Parent = IndicatorBg, AnchorPoint = Vector2.new(0.5,0.5), Position = UDim2.new(0.5,0,0.5,0), Size = UDim2.new(0,indicatorSize,0,indicatorSize), BackgroundColor3 = element.Value and themeGet(theme, "ToggleOn") or themeGet(theme, "ToggleOff"), BorderSizePixel = 0 })
 				New("UICorner", {Parent = Indicator, CornerRadius = UDim.new(0.5,0)})
 				New("UIStroke", {Parent = Indicator, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
@@ -463,15 +665,19 @@ function Library:CreateWindow(title, subtitle, opts)
 				end)
 
 			elseif element.Type == "Slider" then
-				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,56)})
+				local sliderHeight = isMobile and 48 or 56
+				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,sliderHeight)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.06,0)})
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
-				New("UIPadding", {Parent = F, PaddingLeft = UDim.new(0,12), PaddingRight = UDim.new(0,12), PaddingTop = UDim.new(0,8), PaddingBottom = UDim.new(0,8)})
+				
+				local padding = isMobile and 8 or 12
+				New("UIPadding", {Parent = F, PaddingLeft = UDim.new(0,padding), PaddingRight = UDim.new(0,padding), PaddingTop = UDim.new(0,padding-2), PaddingBottom = UDim.new(0,padding-2)})
 
-				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0,0,0,0), Size = UDim2.new(0.55,0,0.55,0), Font = Enum.Font.GothamMedium, Text = element.Text or "Slider", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left})
-				local ValueLabel = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.55,0,0,0), Size = UDim2.new(0.45,0,0.55,0), Font = Enum.Font.Gotham, Text = tostring(math.floor(element.Value*100)/100), TextColor3 = Color3.fromRGB(150,150,150), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right})
+				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0,0,0,0), Size = UDim2.new(0.55,0,0.45,0), Font = Enum.Font.GothamMedium, Text = element.Text or "Slider", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
+				local ValueLabel = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.55,0,0,0), Size = UDim2.new(0.45,0,0.45,0), Font = Enum.Font.Gotham, Text = tostring(math.floor(element.Value*100)/100), TextColor3 = Color3.fromRGB(150,150,150), TextSize = SmallFontSize, TextXAlignment = Enum.TextXAlignment.Right})
 
-				local TrackContainer = New("Frame", {Parent = F, BackgroundTransparency = 1, Size = UDim2.new(1,0,0,18), Position = UDim2.new(0,0,1,-18)})
+				local trackHeight = isMobile and 14 or 18
+				local TrackContainer = New("Frame", {Parent = F, BackgroundTransparency = 1, Size = UDim2.new(1,0,0,trackHeight), Position = UDim2.new(0,0,1,-trackHeight)})
 				local Track = New("Frame", {Parent = TrackContainer, BackgroundColor3 = Color3.fromRGB(35,35,35), Size = UDim2.new(1,0,1,0), BorderSizePixel = 0})
 				New("UICorner", {Parent = Track, CornerRadius = UDim.new(0.5,0)})
 				New("UIStroke", {Parent = Track, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
@@ -479,7 +685,8 @@ function Library:CreateWindow(title, subtitle, opts)
 				local Fill = New("Frame", {Parent = Track, BackgroundColor3 = themeGet(theme, "Fill"), Size = UDim2.new(0,0,1,0), BorderSizePixel = 0})
 				New("UICorner", {Parent = Fill, CornerRadius = UDim.new(0.5,0)})
 
-				local Knob = New("Frame", {Parent = Track, BackgroundColor3 = themeGet(theme, "ToggleOn"), Size = UDim2.new(0,18,0,18), AnchorPoint = Vector2.new(0,0.5), Position = UDim2.new(0,0,0.5,0), BorderSizePixel = 0})
+				local knobSize = isMobile and 14 or 18
+				local Knob = New("Frame", {Parent = Track, BackgroundColor3 = themeGet(theme, "ToggleOn"), Size = UDim2.new(0,knobSize,0,knobSize), AnchorPoint = Vector2.new(0,0.5), Position = UDim2.new(0,0,0.5,0), BorderSizePixel = 0})
 				New("UICorner", {Parent = Knob, CornerRadius = UDim.new(0.5,0)})
 				New("UIStroke", {Parent = Knob, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
@@ -488,12 +695,12 @@ function Library:CreateWindow(title, subtitle, opts)
 					if element.Max ~= element.Min then pct = (val - element.Min) / (element.Max - element.Min) end
 					pct = math.clamp(pct, 0, 1)
 					Fill.Size = UDim2.new(pct,0,1,0)
-					Knob.Position = UDim2.new(math.clamp(pct,0,1), -9, 0.5, 0)
+					Knob.Position = UDim2.new(math.clamp(pct,0,1), -knobSize/2, 0.5, 0)
 					ValueLabel.Text = tostring(math.floor(val * 100) / 100)
 				end
 				updateVisuals(element.Value)
 
-				-- slider dragging (local)
+				-- Slider dragging (Touch-Support)
 				do
 					local draggingSlider = false
 					local function setValueFromPos(x)
@@ -507,22 +714,33 @@ function Library:CreateWindow(title, subtitle, opts)
 					end
 
 					Track.InputBegan:Connect(function(inp)
-						if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+						local inputType = inp.UserInputType
+						if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
 							draggingSlider = true
 							setValueFromPos(inp.Position.X)
 						end
 					end)
 					Track.InputEnded:Connect(function(inp)
-						if inp.UserInputType == Enum.UserInputType.MouseButton1 then draggingSlider = false end
+						local inputType = inp.UserInputType
+						if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then 
+							draggingSlider = false 
+						end
 					end)
 					Knob.InputBegan:Connect(function(inp)
-						if inp.UserInputType == Enum.UserInputType.MouseButton1 then draggingSlider = true end
+						local inputType = inp.UserInputType
+						if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then 
+							draggingSlider = true 
+						end
 					end)
 					Knob.InputEnded:Connect(function(inp)
-						if inp.UserInputType == Enum.UserInputType.MouseButton1 then draggingSlider = false end
+						local inputType = inp.UserInputType
+						if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then 
+							draggingSlider = false 
+						end
 					end)
 					UserInputService.InputChanged:Connect(function(inp)
-						if inp.UserInputType == Enum.UserInputType.MouseMovement and draggingSlider then
+						local inputType = inp.UserInputType
+						if (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) and draggingSlider then
 							setValueFromPos(inp.Position.X)
 						end
 					end)
@@ -531,7 +749,6 @@ function Library:CreateWindow(title, subtitle, opts)
 		end
 	end
 
-	-- Destroy method
 	function Window:Destroy()
 		if Window._ScreenGui then pcall(function() Window._ScreenGui:Destroy() end) end
 		if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
