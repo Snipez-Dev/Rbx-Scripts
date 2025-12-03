@@ -300,6 +300,7 @@ function Library:CreateWindow(title, subtitle, opts)
 	Window._ScreenGui = ScreenGui
 	Window._restoreGui = nil
 	Window._isMobile = isMobile
+	Window._restorePosition = Window._restorePosition or nil -- stored restore box position
 
 	-- Drag main window
 	local dragging, dragInput, dragStart, startPos, dragTween
@@ -364,7 +365,7 @@ function Library:CreateWindow(title, subtitle, opts)
 				Window._restoreGui = nil
 			end
 
-			-- Restore Box (mobile-optimiert)
+			-- Restore Box (mobile-optimiert) with position persistence
 			local RestoreGui = New("ScreenGui", { 
 				Name = "VanUI_Restore", 
 				ZIndexBehavior = Enum.ZIndexBehavior.Sibling, 
@@ -376,11 +377,17 @@ function Library:CreateWindow(title, subtitle, opts)
 			local boxW = isMobile and 140 or 180
 			local boxH = isMobile and 32 or 40
 			local margin = isMobile and 8 or 18
-			local centeredX = (vp2.X - boxW) / 2
 			local minX = 8
 			local maxX = math.max(8, vp2.X - boxW - 8)
-			local initialX = math.clamp(centeredX, minX, maxX)
-			local initialY = margin
+			local centeredX = (vp2.X - boxW) / 2
+			local initialX, initialY
+			if Window._restorePosition then
+				initialX = math.clamp(Window._restorePosition.X, minX, maxX)
+				initialY = math.clamp(Window._restorePosition.Y, margin, vp2.Y - boxH - margin)
+			else
+				initialX = math.clamp(centeredX, minX, maxX)
+				initialY = margin
+			end
 
 			local Box = New("Frame", { 
 				Name = "RestoreBox", 
@@ -460,6 +467,11 @@ function Library:CreateWindow(title, subtitle, opts)
 								draggingBox = false
 								if not hasMoved then
 									restoreWindow()
+								else
+									-- save the new restore box position so it persists across minimize cycles
+									pcall(function()
+										Window._restorePosition = { X = Box.Position.X.Offset, Y = Box.Position.Y.Offset }
+									end)
 								end
 							end
 						end)
@@ -713,10 +725,15 @@ function Library:CreateWindow(title, subtitle, opts)
 				end
 				updateVisuals(element.Value)
 
-				-- Slider dragging (Touch-Support)
+				-- Slider dragging (Touch-Support) - improved for mobile
 				do
 					local draggingSlider = false
-					local function setValueFromPos(x)
+					local currentInput = nil
+					local changedConn, endedConn, touchConn
+
+					local function setValueFromPos(pos)
+						local x = pos
+						if type(pos) == "table" and pos.X then x = pos.X end
 						local absX = x - Track.AbsolutePosition.X
 						local width = Track.AbsoluteSize.X
 						local pct = math.clamp(absX / math.max(width,1), 0, 1)
@@ -726,35 +743,65 @@ function Library:CreateWindow(title, subtitle, opts)
 						if element.Callback then pcall(element.Callback, element.Value) end
 					end
 
+					local function startDrag(inp)
+						draggingSlider = true
+						currentInput = inp
+						if inp.Position then setValueFromPos(inp.Position) end
+						if changedConn then changedConn:Disconnect(); changedConn = nil end
+						if endedConn then endedConn:Disconnect(); endedConn = nil end
+						changedConn = UserInputService.InputChanged:Connect(function(i)
+							if not draggingSlider then return end
+							if i == currentInput or i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseMovement then
+								if i.Position then setValueFromPos(i.Position) end
+							end
+						end)
+						endedConn = UserInputService.InputEnded:Connect(function(i)
+							if i == currentInput then
+								draggingSlider = false
+								currentInput = nil
+								if changedConn then changedConn:Disconnect(); changedConn = nil end
+								if endedConn then endedConn:Disconnect(); endedConn = nil end
+							end
+						end)
+						-- TouchMoved fallback (may not exist on all clients)
+						pcall(function()
+							if touchConn then touchConn:Disconnect(); touchConn = nil end
+							touchConn = UserInputService.TouchMoved:Connect(function(touch)
+								if draggingSlider then setValueFromPos(touch.Position) end
+							end)
+						end)
+					end
+
+					local function stopDrag()
+						draggingSlider = false
+						currentInput = nil
+						if changedConn then changedConn:Disconnect(); changedConn = nil end
+						if endedConn then endedConn:Disconnect(); endedConn = nil end
+						if touchConn then touchConn:Disconnect(); touchConn = nil end
+					end
+
 					Track.InputBegan:Connect(function(inp)
-						local inputType = inp.UserInputType
-						if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
-							draggingSlider = true
-							setValueFromPos(inp.Position.X)
+						local t = inp.UserInputType
+						if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
+							startDrag(inp)
 						end
 					end)
 					Track.InputEnded:Connect(function(inp)
-						local inputType = inp.UserInputType
-						if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then 
-							draggingSlider = false 
+						local t = inp.UserInputType
+						if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
+							stopDrag()
 						end
 					end)
 					Knob.InputBegan:Connect(function(inp)
-						local inputType = inp.UserInputType
-						if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then 
-							draggingSlider = true 
+						local t = inp.UserInputType
+						if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
+							startDrag(inp)
 						end
 					end)
 					Knob.InputEnded:Connect(function(inp)
-						local inputType = inp.UserInputType
-						if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then 
-							draggingSlider = false 
-						end
-					end)
-					UserInputService.InputChanged:Connect(function(inp)
-						local inputType = inp.UserInputType
-						if (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) and draggingSlider then
-							setValueFromPos(inp.Position.X)
+						local t = inp.UserInputType
+						if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
+							stopDrag()
 						end
 					end)
 				end
