@@ -725,27 +725,56 @@ function Library:CreateWindow(title, subtitle, opts)
 				end
 				updateVisuals(element.Value)
 
-				-- Slider dragging (Touch + Mouse) - simplified and reliable
+				-- Helper: safely extract X coordinate from various position types
+				local function getNumericX(pos)
+					if not pos then return nil end
+					local ok, t = pcall(function() return typeof(pos) end)
+					if ok and t then
+						if t == "Vector2" or t == "Vector3" then return pos.X end
+						if t == "UDim2" then
+							-- UDim2.X can be a table-like value; prefer Offset
+							if pos.X and pos.X.Offset then return pos.X.Offset end
+							return pos.X and pos.X.Scale or nil
+						end
+					end
+					if type(pos) == "table" and pos.X then return pos.X end
+					if type(pos) == "number" then return pos end
+					local ok2, ppos = pcall(function() return pos.Position end)
+					if ok2 and ppos then
+						local ok3, t2 = pcall(function() return typeof(ppos) end)
+						if ok3 and (t2 == "Vector2" or t2 == "Vector3") then return ppos.X end
+						if type(ppos) == "table" and ppos.X then return ppos.X end
+					end
+					return nil
+				end
+
+				local function setValueFromPos(pos)
+					local x = getNumericX(pos)
+					if not x then return end
+					local absX = x - Track.AbsolutePosition.X
+					local width = Track.AbsoluteSize.X
+					local pct = math.clamp(absX / math.max(width,1), 0, 1)
+					local newVal = element.Min + (element.Max - element.Min) * pct
+					element.Value = newVal
+					updateVisuals(element.Value)
+					if element.Callback then pcall(element.Callback, element.Value) end
+				end
+
+				-- Slider dragging (Touch + Mouse) - reliable implementation
 				do
 					local draggingSlider = false
-					local function setValueFromPosX(x)
-						if not x then return end
-						if type(x) == "table" and x.X then x = x.X end
-						if type(x) ~= "number" then return end
-						local absX = x - Track.AbsolutePosition.X
-						local width = Track.AbsoluteSize.X
-						local pct = math.clamp(absX / math.max(width,1), 0, 1)
-						local newVal = element.Min + (element.Max - element.Min) * pct
-						element.Value = newVal
-						updateVisuals(element.Value)
-						if element.Callback then pcall(element.Callback, element.Value) end
+					local function beginDragFromInput(inp)
+						draggingSlider = true
+						local pos = nil
+						local ok, p = pcall(function() return inp.Position end)
+						if ok and p then pos = p else pos = inp end
+						setValueFromPos(pos)
 					end
 
 					Track.InputBegan:Connect(function(inp)
 						local t = inp.UserInputType
 						if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
-							draggingSlider = true
-							setValueFromPosX(inp.Position)
+							beginDragFromInput(inp)
 						end
 					end)
 
@@ -759,7 +788,7 @@ function Library:CreateWindow(title, subtitle, opts)
 					Knob.InputBegan:Connect(function(inp)
 						local t = inp.UserInputType
 						if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
-							draggingSlider = true
+							beginDragFromInput(inp)
 						end
 					end)
 
@@ -774,7 +803,7 @@ function Library:CreateWindow(title, subtitle, opts)
 						if not draggingSlider then return end
 						local t = input.UserInputType
 						if (t == Enum.UserInputType.MouseMovement or t == Enum.UserInputType.Touch) and input.Position then
-							setValueFromPosX(input.Position)
+							setValueFromPos(input.Position)
 						end
 					end)
 				end
