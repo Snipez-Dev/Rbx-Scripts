@@ -522,17 +522,20 @@ local ValueLabel = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Pos
 	end
 end
 
+
 -- Destroy method
-function Window:Destroy()
-	if Window._ScreenGui then pcall(function() Window._ScreenGui:Destroy() end) end
-	if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
-	for i, w in pairs(Library.Windows) do
-		if w == Window then table.remove(Library.Windows, i); break end
+	function Window:Destroy()
+		if Window._ScreenGui then pcall(function() Window._ScreenGui:Destroy() end) end
+		if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
+		for i, w in pairs(Library.Windows) do
+			if w == Window then table.remove(Library.Windows, i); break end
+		end
+		if Library.MainWindow == Window then Library.MainWindow = nil end
 	end
-	if Library.MainWindow == Window then Library.MainWindow = nil end
+
+	table.insert(Library.Windows, Window)
+	Library.MainWindow = Window
+	return Window
 end
 
-table.insert(Library.Windows, Window)
-Library.MainWindow = Window
-return Window
 return Library
