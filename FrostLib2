@@ -224,66 +224,69 @@ function Library:CreateWindow(title, subtitle, opts)
 
 			local Label = New("TextLabel", { Parent = Box, BackgroundTransparency = 1, Size = UDim2.new(1, -46, 1, 0), Position = UDim2.new(0, 12, 0, 0), Font = Enum.Font.Gotham, Text = title or "VanUI", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center })
 
-			-- Restore icon
-			local RestoreIcon = New("TextLabel", { Parent = Box, Size = UDim2.new(0, 34, 0, 34), Position = UDim2.new(1, -40, 0.5, -17), BackgroundColor3 = Background.BackgroundColor3, BorderSizePixel = 0, Text = "▣", Font = Enum.Font.SourceSansBold, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = 18, TextScaled = true })
-			New("UICorner", { Parent = RestoreIcon, CornerRadius = UDim.new(0.08,0) })
-			New("UIStroke", { Parent = RestoreIcon, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
+			-- Restore icon as clickable button
+			local RestoreBtn = New("TextButton", { Parent = Box, Size = UDim2.new(0, 34, 0, 34), Position = UDim2.new(1, -40, 0.5, -17), BackgroundColor3 = Background.BackgroundColor3, BorderSizePixel = 0, Text = "▣", Font = Enum.Font.SourceSansBold, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = 18, TextScaled = true, AutoButtonColor = false })
+			New("UICorner", { Parent = RestoreBtn, CornerRadius = UDim.new(0.08,0) })
+			New("UIStroke", { Parent = RestoreBtn, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 
-			-- Overlay used for dragging and click detection
-			local Overlay = New("TextButton", { Parent = Box, BackgroundTransparency = 1, Size = UDim2.new(1, -46, 1, 0), Position = UDim2.new(0, 0, 0, 0), Text = "", AutoButtonColor = false })
-			-- ensure AbsoluteSize ready
-			RunService.Heartbeat:Wait()
+			-- Function to restore the window
+			local function restoreWindow()
+				if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
+				Window._restoreGui = nil
+				Background.Visible = true
+				Window._isMinimized = false
+			end
 
-			-- dragging logic for Box with click detection
+			-- Restore button click
+			RestoreBtn.MouseButton1Click:Connect(restoreWindow)
+
+			-- Dragging logic for the Box
 			local draggingBox = false
 			local dragStartPos = nil
 			local boxStartPos = nil
-			local currentInput = nil
+			local hasMoved = false
 
-			Overlay.InputBegan:Connect(function(inp)
+			Box.InputBegan:Connect(function(inp)
 				if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-					draggingBox = true
-					dragStartPos = inp.Position
-					boxStartPos = Vector2.new(Box.Position.X.Offset, Box.Position.Y.Offset)
-					currentInput = inp
-					inp.Changed:Connect(function()
-						if inp.UserInputState == Enum.UserInputState.End then
-							-- on mouse release decide if it was a click (small movement) or drag
-							draggingBox = false
-							local releasePos = inp.Position
-							local delta = releasePos - dragStartPos
-							if math.abs(delta.X) < 6 and math.abs(delta.Y) < 6 then
-								-- treat as click -> restore UI
-								if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
-								Window._restoreGui = nil
-								Background.Visible = true
-								Window._isMinimized = false
+					-- Check if click is NOT on the restore button
+					local mousePos = inp.Position
+					local btnPos = RestoreBtn.AbsolutePosition
+					local btnSize = RestoreBtn.AbsoluteSize
+					local isOnButton = mousePos.X >= btnPos.X and mousePos.X <= btnPos.X + btnSize.X and mousePos.Y >= btnPos.Y and mousePos.Y <= btnPos.Y + btnSize.Y
+					
+					if not isOnButton then
+						draggingBox = true
+						hasMoved = false
+						dragStartPos = inp.Position
+						boxStartPos = Vector2.new(Box.Position.X.Offset, Box.Position.Y.Offset)
+						
+						inp.Changed:Connect(function()
+							if inp.UserInputState == Enum.UserInputState.End then
+								draggingBox = false
+								-- If barely moved, treat as click to restore
+								if not hasMoved then
+									restoreWindow()
+								end
 							end
-							currentInput = nil
-						end
-					end)
+						end)
+					end
 				end
 			end)
 
 			UserInputService.InputChanged:Connect(function(inp)
-				if draggingBox and inp.UserInputType == Enum.UserInputType.MouseMovement and inp == currentInput and dragStartPos and boxStartPos then
+				if draggingBox and inp.UserInputType == Enum.UserInputType.MouseMovement and dragStartPos and boxStartPos then
 					local delta = inp.Position - dragStartPos
+					-- If moved more than 5 pixels, consider it a drag
+					if math.abs(delta.X) > 5 or math.abs(delta.Y) > 5 then
+						hasMoved = true
+					end
+					
 					local newX = boxStartPos.X + delta.X
 					local newY = boxStartPos.Y + delta.Y
 					local vp2 = getViewport()
 					newX = math.clamp(newX, 0, vp2.X - Box.AbsoluteSize.X)
 					newY = math.clamp(newY, 0, vp2.Y - Box.AbsoluteSize.Y)
 					Box.Position = UDim2.new(0, newX, 0, newY)
-				end
-			end)
-
-			-- RestoreIcon click also restores
-			RestoreIcon.InputBegan:Connect(function(inp)
-				if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-					if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
-					Window._restoreGui = nil
-					Background.Visible = true
-					Window._isMinimized = false
 				end
 			end)
 
