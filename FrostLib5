@@ -1,9 +1,4 @@
--- VanUI (komplette Library, mit Fixes:
---  - Tab-Buttons nicht mehr überlappend / richtige Layout-Berechnung
---  - Close & Minimize (Minimize versteckt UI komplett und zeigt Restore-Box)
---  - Slider bewegt UI nicht (Title-only drag)
---  - Toggle graue Hintergrundfläche + originaler Stil
---  - Größe & Theme optional beim Erstellen; Standardwerte verwendet wenn nichts angegeben)
+
 local Library = {}
 Library.Windows = {}
 Library.MainWindow = nil
