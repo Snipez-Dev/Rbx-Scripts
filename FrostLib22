@@ -535,5 +535,4 @@ end
 table.insert(Library.Windows, Window)
 Library.MainWindow = Window
 return Window
-end
 return Library
