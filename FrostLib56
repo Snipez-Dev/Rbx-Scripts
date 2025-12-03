@@ -381,13 +381,18 @@ function Library:CreateWindow(title, subtitle, opts)
 			local maxX = math.max(8, vp2.X - boxW - 8)
 			local centeredX = (vp2.X - boxW) / 2
 			local initialX, initialY
-			if Window._restorePosition then
-				initialX = math.clamp(Window._restorePosition.X, minX, maxX)
-				initialY = math.clamp(Window._restorePosition.Y, margin, vp2.Y - boxH - margin)
-			else
-				initialX = math.clamp(centeredX, minX, maxX)
-				initialY = margin
-			end
+		-- wenn wir vorher eine gespeicherte Position haben, verwende sie (Absolute Pixel)
+if Window._restorePosition and Window._restorePosition.X and Window._restorePosition.Y then
+    local savedX = Window._restorePosition.X
+    local savedY = Window._restorePosition.Y
+    -- clamppe in die Bildschirmgrenzen (auf box size achten)
+    initialX = math.clamp(savedX, minX, maxX)
+    initialY = math.clamp(savedY, margin, vp2.Y - boxH - margin)
+else
+    initialX = math.clamp(centeredX, minX, maxX)
+    initialY = margin
+end
+
 
 			local Box = New("Frame", { 
 				Name = "RestoreBox", 
