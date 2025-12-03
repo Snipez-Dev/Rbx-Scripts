@@ -187,7 +187,8 @@ function Library:CreateWindow(title, subtitle, opts)
 	})
 
 	-- Controls (mobile-optimiert)
-	local btnSizeW, btnSizeH = isMobile and 32 or 28, isMobile and 24 or 20
+	local btnSizeW = isMobile and 32 or 28
+	local btnSizeH = isMobile and 24 or 20
 	local btnFontSize = isMobile and 16 or 18
 	local controlsWidth = (btnSizeW * 2) + 8
 	
@@ -205,7 +206,7 @@ function Library:CreateWindow(title, subtitle, opts)
 		HorizontalAlignment = Enum.HorizontalAlignment.Right, 
 		VerticalAlignment = Enum.VerticalAlignment.Center, 
 		SortOrder = Enum.SortOrder.LayoutOrder, 
-		Padding = UDim.new(0, isMobile and 4 : 6) 
+		Padding = UDim.new(0, isMobile and 4 or 6) 
 	})
 
 	local function makeControl(symbol)
@@ -371,7 +372,8 @@ function Library:CreateWindow(title, subtitle, opts)
 			RestoreGui.Parent = CoreGui
 
 			local vp2 = getViewport()
-			local boxW, boxH = isMobile and 140 or 180, isMobile and 32 or 40
+			local boxW = isMobile and 140 or 180
+			local boxH = isMobile and 32 or 40
 			local margin = isMobile and 8 or 18
 			local centeredX = (vp2.X - boxW) / 2
 			local minX = 8
@@ -442,9 +444,9 @@ function Library:CreateWindow(title, subtitle, opts)
 				if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
 					local mousePos = inp.Position
 					local btnPos = RestoreBtn.AbsolutePosition
-					local btnSize = RestoreBtn.AbsoluteSize
-					local isOnButton = mousePos.X >= btnPos.X and mousePos.X <= btnPos.X + btnSize.X and 
-					                   mousePos.Y >= btnPos.Y and mousePos.Y <= btnPos.Y + btnSize.Y
+					local btnSizeVec = RestoreBtn.AbsoluteSize
+					local isOnButton = mousePos.X >= btnPos.X and mousePos.X <= btnPos.X + btnSizeVec.X and 
+					                   mousePos.Y >= btnPos.Y and mousePos.Y <= btnPos.Y + btnSizeVec.Y
 					
 					if not isOnButton then
 						draggingBox = true
@@ -530,7 +532,8 @@ function Library:CreateWindow(title, subtitle, opts)
 
 		function Tab:AddParagraph(titleText, contentText)
 			local Paragraph = { Type = "Paragraph", Title = titleText, Content = contentText, Visible = true }
-			table.insert(Tab.Elements, Paragraph); Window:RefreshContent()
+			table.insert(Tab.Elements, Paragraph)
+			Window:RefreshContent()
 			return {
 				Hide = function() Paragraph.Visible = false; Window:RefreshContent() end,
 				Show = function() Paragraph.Visible = true; Window:RefreshContent() end
@@ -539,7 +542,8 @@ function Library:CreateWindow(title, subtitle, opts)
 
 		function Tab:AddButton(text, callback)
 			local Button = { Type = "Button", Text = text, Callback = callback, Visible = true }
-			table.insert(Tab.Elements, Button); Window:RefreshContent()
+			table.insert(Tab.Elements, Button)
+			Window:RefreshContent()
 			return {
 				Hide = function() Button.Visible = false; Window:RefreshContent() end,
 				Show = function() Button.Visible = true; Window:RefreshContent() end
@@ -548,7 +552,8 @@ function Library:CreateWindow(title, subtitle, opts)
 
 		function Tab:AddToggle(text, default, callback)
 			local Toggle = { Type = "Toggle", Text = text, Value = default or false, Callback = callback, Visible = true }
-			table.insert(Tab.Elements, Toggle); Window:RefreshContent()
+			table.insert(Tab.Elements, Toggle)
+			Window:RefreshContent()
 			return {
 				Set = function(self, value) Toggle.Value = value; Window:RefreshContent() end,
 				Hide = function() Toggle.Visible = false; Window:RefreshContent() end,
@@ -557,11 +562,18 @@ function Library:CreateWindow(title, subtitle, opts)
 		end
 
 		function Tab:AddSlider(text, min, max, default, callback)
-			min = min or 0; max = max or 100; default = default == nil and min or default
+			min = min or 0
+			max = max or 100
+			default = default == nil and min or default
 			local Slider = { Type = "Slider", Text = text, Min = min, Max = max, Value = math.clamp(default, min, max), Callback = callback, Visible = true }
-			table.insert(Tab.Elements, Slider); Window:RefreshContent()
+			table.insert(Tab.Elements, Slider)
+			Window:RefreshContent()
 			return {
-				Set = function(self, value) Slider.Value = math.clamp(value, Slider.Min, Slider.Max); Window:RefreshContent(); if Slider.Callback then pcall(Slider.Callback, Slider.Value) end end,
+				Set = function(self, value) 
+					Slider.Value = math.clamp(value, Slider.Min, Slider.Max)
+					Window:RefreshContent()
+					if Slider.Callback then pcall(Slider.Callback, Slider.Value) end 
+				end,
 				Hide = function() Slider.Visible = false; Window:RefreshContent() end,
 				Show = function() Slider.Visible = true; Window:RefreshContent() end
 			}
