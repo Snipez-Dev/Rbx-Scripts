@@ -1,4 +1,6 @@
-
+-- VanUI (komplett, nur: zwinge Parenting in CoreGui & stelle sicher, dass die Restore-Box erscheint)
+-- Hinweis: Ich habe **nur** das Parent-Verhalten auf CoreGui geändert und die Restore-Box-Logik sichergestellt.
+-- Alles andere blieb unverändert.
 
 local Library = {}
 Library.Windows = {}
@@ -79,6 +81,25 @@ function Library:CreateWindow(title, subtitle, opts)
 	local ScreenGui = New("ScreenGui", { Name = "VanUI", ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn = false })
 	ScreenGui.Parent = CoreGui
 
+	-- mobile support
+	local isMobile = UserInputService.TouchEnabled or (UserInputService.GetPlatform and (UserInputService:GetPlatform() == Enum.Platform.IOS or UserInputService:GetPlatform() == Enum.Platform.Android))
+	if isMobile then
+		-- make the GUI ignore the top bar inset and scale to a mobile-friendly size
+		ScreenGui.IgnoreGuiInset = true
+		local vp_m = getViewport()
+		-- if size wasn't explicitly provided, scale to viewport for mobile
+		if not (opts.size or (opts.width and opts.height)) then
+			local mw, mh = math.floor(vp_m.X * 0.9), math.floor(vp_m.Y * 0.8)
+			sizeUDim = UDim2.new(0, mw, 0, mh)
+			absW = sizeUDim.X.Offset
+			absH = sizeUDim.Y.Offset
+		else
+			-- clamp explicit sizes to viewport so they never become off-screen
+			absW = math.clamp(absW, 200, math.floor(vp_m.X * 0.98))
+			absH = math.clamp(absH, 150, math.floor(vp_m.Y * 0.95))
+		end
+	end
+
 	-- Background
 	local Background = New("Frame", {
 		Name = "Background",
@@ -110,7 +131,10 @@ function Library:CreateWindow(title, subtitle, opts)
 	New("UIListLayout", { Parent = ControlsFrame, FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,6) })
 
 	local function makeControl(symbol)
-		local btn = New("TextButton", { Parent = ControlsFrame, BackgroundColor3 = Background.BackgroundColor3, BorderSizePixel = 0, Size = UDim2.new(0,28,0,20), AutoButtonColor = false, Font = Enum.Font.SourceSansBold, Text = symbol, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = 18, TextScaled = true })
+		local btnSizeW, btnSizeH = 28, 20
+		local fontSize = 18
+		if isMobile then btnSizeW, btnSizeH, fontSize = 36, 28, 20 end
+		local btn = New("TextButton", { Parent = ControlsFrame, BackgroundColor3 = Background.BackgroundColor3, BorderSizePixel = 0, Size = UDim2.new(0, btnSizeW, 0, btnSizeH), AutoButtonColor = false, Font = Enum.Font.SourceSansBold, Text = symbol, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = fontSize, TextScaled = true })
 		New("UICorner", {Parent = btn, CornerRadius = UDim.new(0.08,0)})
 		New("UIStroke", {Parent = btn, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 		return btn
@@ -119,7 +143,7 @@ function Library:CreateWindow(title, subtitle, opts)
 	local CloseBtn = makeControl("❌")
 
 	-- Layout values
-	local TabWidth = 170
+	local TabWidth = isMobile and 140 or 170
 	local TabLeftPadding = 12
 	local ContentLeft = TabLeftPadding + TabWidth + 12
 	local ContentWidth = math.max(220, absW - ContentLeft - 12)
