@@ -1,4 +1,9 @@
--- VanUI (final: tabs restored, toggle bg restored, slider fixed, close/minimize restored, size override)
+-- VanUI (komplette Library, mit Fixes:
+--  - Tab-Buttons nicht mehr überlappend / richtige Layout-Berechnung
+--  - Close & Minimize (Minimize versteckt UI komplett und zeigt Restore-Box)
+--  - Slider bewegt UI nicht (Title-only drag)
+--  - Toggle graue Hintergrundfläche + originaler Stil
+--  - Größe & Theme optional beim Erstellen; Standardwerte verwendet wenn nichts angegeben)
 local Library = {}
 Library.Windows = {}
 Library.MainWindow = nil
@@ -48,28 +53,43 @@ local function find_existing_gui()
 end
 
 -- CreateWindow(title, subtitle, opts)
--- opts (optional) fields:
---   size -> UDim2 (preferred)
+-- opts (optional):
+--   size -> UDim2
 --   width -> number (px)
 --   height -> number (px)
---   theme -> table (override DEFAULT_THEME keys)
---   force -> boolean (if true, will destroy existing UI and create new)
+--   theme -> table (override keys from DEFAULT_THEME)
+--   force -> boolean (destroy existing UI and create new)
 function Library:CreateWindow(title, subtitle, opts)
 	opts = opts or {}
 	local theme = opts.theme or nil
 
-	-- single instance behavior
+	-- single instance behaviour
 	if Library.MainWindow and not opts.force then
 		return Library.MainWindow
 	end
 
-	-- destroy existing gui named VanUI if force requested
+	-- optionally destroy existing VanUI if force
 	if opts.force then
 		local existing, _ = find_existing_gui()
 		if existing then pcall(function() existing:Destroy() end) end
 	end
 
-	local windowIndex = #Library.Windows + 1
+	-- compute size (allow opts.size UDim2 or width/height numbers)
+	local defaultW, defaultH = 760, 420
+	local sizeUDim = nil
+	if opts.size and typeof(opts.size) == "UDim2" then
+		sizeUDim = opts.size
+	elseif opts.width and opts.height then
+		sizeUDim = UDim2.new(0, opts.width, 0, opts.height)
+	else
+		sizeUDim = UDim2.new(0, defaultW, 0, defaultH)
+	end
+
+	-- compute absolute offsets for layout math (fallback to defaults if not provided)
+	local absW = sizeUDim and sizeUDim.X.Offset or defaultW
+	local absH = sizeUDim and sizeUDim.Y.Offset or defaultH
+
+	-- create main ScreenGui
 	local ScreenGui = New("ScreenGui", {
 		Name = "VanUI",
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
@@ -77,10 +97,6 @@ function Library:CreateWindow(title, subtitle, opts)
 	})
 	local ok = pcall(function() ScreenGui.Parent = CoreGui end)
 	if not ok then ScreenGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") end
-
-	-- compute size
-	local defaultSize = UDim2.new(0, 760, 0, 420) -- wider default
-	local size = opts.size or (opts.width and opts.height and UDim2.new(0, opts.width, 0, opts.height)) or defaultSize
 
 	local Background = New("Frame", {
 		Name = "Background",
@@ -96,11 +112,12 @@ function Library:CreateWindow(title, subtitle, opts)
 	New("UICorner", {CornerRadius = UDim.new(0.02, 0), Parent = Background})
 	local BackgroundStroke = New("UIStroke", {Color = themeGet(theme, "PanelStroke"), Thickness = 1, Transparency = 1, Parent = Background})
 
-	TweenService:Create(Background, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = size, BackgroundTransparency = 0 }):Play()
-	task.wait(0.25)
+	-- animate open
+	TweenService:Create(Background, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = sizeUDim, BackgroundTransparency = 0 }):Play()
+	task.wait(0.22)
 	TweenService:Create(BackgroundStroke, TweenInfo.new(0.22), { Transparency = 0 }):Play()
 
-	-- Title label (drag only on title)
+	-- Title and subtitle
 	local TitleLabel = New("TextLabel", {
 		Name = "title",
 		Parent = Background,
@@ -128,14 +145,14 @@ function Library:CreateWindow(title, subtitle, opts)
 		TextXAlignment = Enum.TextXAlignment.Left
 	})
 
-	-- Controls (top-right): close & minimize (background same as window; icons grey)
+	-- Controls (top-right)
 	local ControlsFrame = New("Frame", {
 		Name = "WindowControls",
 		Parent = Background,
 		BackgroundTransparency = 1,
 		Size = UDim2.new(0, 92, 0, 30),
 		Position = UDim2.new(1, -12, 0, 6),
-		AnchorPoint = Vector2.new(1,0)
+		AnchorPoint = Vector2.new(1, 0)
 	})
 	New("UIListLayout", {
 		Parent = ControlsFrame,
@@ -145,7 +162,6 @@ function Library:CreateWindow(title, subtitle, opts)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, 8)
 	})
-
 	local function makeControl(symbol)
 		local btn = New("TextButton", {
 			Parent = ControlsFrame,
@@ -163,27 +179,35 @@ function Library:CreateWindow(title, subtitle, opts)
 		New("UIStroke", {Parent = btn, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 		return btn
 	end
-
 	local MinBtn = makeControl("▭")
 	local CloseBtn = makeControl("✕")
 
-	-- containers: tabs + content
+	-- Layout calculations (tab width & header height)
+	local TabWidth = 170
+	local HeaderHeight = 60 -- space for title/subtitle/controls
+	local TabLeftPadding = 12
+	local ContentLeft = TabLeftPadding + TabWidth + 12
+	local ContentWidth = math.max(200, absW - ContentLeft - 12)
+	local ContentHeight = math.max(120, absH - HeaderHeight - 20)
+
+	-- Tab container (fixed width)
 	local TabContainer = New("Frame", {
 		Name = "TabContainer",
 		Parent = Background,
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0.03, 0, 0.14, 0),
-		Size = UDim2.new(0, 170, 0, size.Y.Offset - math.floor(size.Y.Offset*0.14))
+		Position = UDim2.new(0, TabLeftPadding, 0, HeaderHeight),
+		Size = UDim2.new(0, TabWidth, 0, ContentHeight)
 	})
 	New("UIListLayout", {Parent = TabContainer, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8)})
 
+	-- Content container (scrolling)
 	local ContentContainer = New("ScrollingFrame", {
 		Name = "ContentContainer",
 		Parent = Background,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Position = UDim2.new(0.25, 0, 0.116, 0),
-		Size = UDim2.new(0, size.X.Offset -  (size.X.Offset * 0.25), 0, size.Y.Offset - math.floor(size.Y.Offset*0.116)),
+		Position = UDim2.new(0, ContentLeft, 0, HeaderHeight - 2),
+		Size = UDim2.new(0, ContentWidth, 0, ContentHeight + 2),
 		CanvasSize = UDim2.new(0,0,0,0),
 		ScrollBarThickness = 6
 	})
@@ -193,27 +217,28 @@ function Library:CreateWindow(title, subtitle, opts)
 		ContentContainer.CanvasSize = UDim2.new(0,0,0, contentLayout.AbsoluteContentSize.Y + 20)
 	end)
 
-	-- content background panel (visual)
+	-- content visual background (panel)
 	local ContentBackground = New("Frame", {
 		Parent = Background,
 		BackgroundColor3 = themeGet(theme, "Panel"),
 		BackgroundTransparency = 0.3,
 		BorderSizePixel = 0,
-		Position = UDim2.new(0.237, 0, 0.115, 0),
-		Size = UDim2.new(0, size.X.Offset - math.floor(size.X.Offset*0.237), 0, size.Y.Offset - math.floor(size.Y.Offset*0.115))
+		Position = UDim2.new(0, TabLeftPadding + TabWidth + 12, 0, HeaderHeight),
+		Size = UDim2.new(0, ContentWidth, 0, ContentHeight)
 	})
 	New("UICorner", {Parent = ContentBackground, CornerRadius = UDim.new(0.01, 0)})
 	New("UIStroke", {Parent = ContentBackground, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
-	-- state
+	-- Window state
 	local Window = {}
 	Window.Tabs = {}
 	Window.CurrentTab = nil
 	Window._isMinimized = false
-	Window._prevSize = size
+	Window._prevVisible = true
 	Window._ScreenGui = ScreenGui
+	Window._restoreGui = nil
 
-	-- Title-only dragging (prevents slider dragging UI)
+	-- Title-only dragging so slider doesn't move UI
 	local dragging, dragInput, dragStart, startPos, dragTween
 	TitleLabel.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -239,30 +264,89 @@ function Library:CreateWindow(title, subtitle, opts)
 		end
 	end)
 
-	-- Close & Minimize
+	-- Close button -> destroy whole UI
 	CloseBtn.MouseButton1Click:Connect(function()
 		if Window._ScreenGui then pcall(function() Window._ScreenGui:Destroy() end) end
+		if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
 		for i, w in pairs(Library.Windows) do if w == Window then table.remove(Library.Windows, i); break end end
 		if Library.MainWindow == Window then Library.MainWindow = nil end
 	end)
 
+	-- Minimize -> hide UI fully and create restore box
 	MinBtn.MouseButton1Click:Connect(function()
 		if Window._isMinimized then
+			-- already minimized: restore
+			if Window._restoreGui then
+				pcall(function() Window._restoreGui:Destroy() end)
+				Window._restoreGui = nil
+			end
+			Background.Visible = true
 			Window._isMinimized = false
-			TabContainer.Visible = true
-			ContentContainer.Visible = true
-			TweenService:Create(Background, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Window._prevSize }):Play()
 		else
+			-- minimize: hide main ScreenGui (Background) and show small restore box
+			Background.Visible = false
 			Window._isMinimized = true
-			Window._prevSize = Background.Size
-			TabContainer.Visible = false
-			ContentContainer.Visible = false
-			local minSize = UDim2.new(0, Window._prevSize.X.Offset, 0, 40)
-			TweenService:Create(Background, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = minSize }):Play()
+
+			-- create restore box GUI
+			local RestoreGui = New("ScreenGui", { Name = "VanUI_Restore", ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn = false })
+			local ok2 = pcall(function() RestoreGui.Parent = CoreGui end)
+			if not ok2 then RestoreGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") end
+
+			local Box = New("Frame", {
+				Name = "RestoreBox",
+				Parent = RestoreGui,
+				AnchorPoint = Vector2.new(1, 1),
+				Size = UDim2.new(0, 160, 0, 38),
+				Position = UDim2.new(1, -18, 1, -18),
+				BackgroundColor3 = themeGet(theme, "Panel"),
+				BorderSizePixel = 0
+			})
+			New("UICorner", { Parent = Box, CornerRadius = UDim.new(0.08, 0) })
+			New("UIStroke", { Parent = Box, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
+
+			local Label = New("TextLabel", {
+				Parent = Box,
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, -12, 1, 0),
+				Position = UDim2.new(0, 12, 0, 0),
+				Font = Enum.Font.Gotham,
+				Text = title or "VanUI",
+				TextColor3 = Color3.fromRGB(255,255,255),
+				TextSize = 14,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextYAlignment = Enum.TextYAlignment.Center
+			})
+
+			local RestoreBtn = New("TextButton", {
+				Parent = Box,
+				Size = UDim2.new(0, 34, 0, 34),
+				Position = UDim2.new(1, -40, 0.5, -17),
+				BackgroundColor3 = Background.BackgroundColor3,
+				BorderSizePixel = 0,
+				Font = Enum.Font.SourceSansBold,
+				Text = "▣",
+				TextColor3 = themeGet(theme, "ControlBtnText"),
+				TextSize = 18,
+				AutoButtonColor = false
+			})
+			New("UICorner", { Parent = RestoreBtn, CornerRadius = UDim.new(0.08, 0) })
+			New("UIStroke", { Parent = RestoreBtn, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
+
+			RestoreBtn.MouseButton1Click:Connect(function()
+				-- restore main UI
+				if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
+				Window._restoreGui = nil
+				Background.Visible = true
+				Window._isMinimized = false
+				-- destroy restore GUI
+				if RestoreGui then pcall(function() RestoreGui:Destroy() end) end
+			end)
+
+			Window._restoreGui = RestoreGui
 		end
 	end)
 
-	-- Tab API (style restored like original)
+	-- Tab API
 	function Window:CreateTab(name)
 		local Tab = {}
 		local isFirst = #Window.Tabs == 0
@@ -273,7 +357,7 @@ function Library:CreateWindow(title, subtitle, opts)
 			BackgroundColor3 = themeGet(theme, "Tab"),
 			BackgroundTransparency = isFirst and 0 or 1,
 			BorderSizePixel = 0,
-			Size = UDim2.new(0.982876241, 0, 0, 35),
+			Size = UDim2.new(1, 0, 0, 35),
 			Font = Enum.Font.Gotham,
 			Text = name,
 			TextColor3 = isFirst and Color3.fromRGB(255,255,255) or Color3.fromRGB(150,150,150),
@@ -345,7 +429,7 @@ function Library:CreateWindow(title, subtitle, opts)
 		return Tab
 	end
 
-	-- Refresh content: creates Frames for each element (respects theme)
+	-- Refresh content: create UI for each element (uses theme defaults if not provided)
 	function Window:RefreshContent()
 		for _, child in pairs(ContentContainer:GetChildren()) do
 			if child:IsA("Frame") then child:Destroy() end
@@ -388,6 +472,7 @@ function Library:CreateWindow(title, subtitle, opts)
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.75,0,1,0), Font = Enum.Font.GothamMedium, Text = element.Text or "", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left})
 
+				-- grey background behind indicator
 				local IndicatorBg = New("Frame", {Parent = F, AnchorPoint = Vector2.new(1,0.5), Position = UDim2.new(0.975,0,0.5,0), Size = UDim2.new(0,24,0,24), BackgroundColor3 = themeGet(theme, "ToggleBg"), BorderSizePixel = 0})
 				New("UICorner", {Parent = IndicatorBg, CornerRadius = UDim.new(0.5,0)})
 				New("UIStroke", {Parent = IndicatorBg, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
@@ -434,7 +519,7 @@ function Library:CreateWindow(title, subtitle, opts)
 				end
 				updateVisuals(element.Value)
 
-				-- slider dragging (local only, doesn't affect window dragging)
+				-- slider dragging (local only) - doesn't impact window drag
 				local draggingSlider = false
 				local function setValueFromPos(x)
 					local absX = x - Track.AbsolutePosition.X
@@ -470,9 +555,10 @@ function Library:CreateWindow(title, subtitle, opts)
 		end
 	end
 
-	-- Destroy method on window object
+	-- Destroy method set on Window
 	function Window:Destroy()
 		if Window._ScreenGui then pcall(function() Window._ScreenGui:Destroy() end) end
+		if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
 		for i, w in pairs(Library.Windows) do
 			if w == Window then table.remove(Library.Windows, i); break end
 		end
