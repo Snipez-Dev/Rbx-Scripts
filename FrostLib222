@@ -211,12 +211,16 @@ function Library:CreateWindow(title, subtitle, opts)
 			local RestoreGui = New("ScreenGui", { Name = "VanUI_Restore", ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn = false })
 			RestoreGui.Parent = CoreGui
 
-			-- default placement bottom-right
+			-- placement: centered at top to avoid off-screen bug
 			local vp = getViewport()
 			local boxW, boxH = 180, 40
 			local margin = 18
-			local initialX = math.max(8, vp.X - boxW - margin)
-			local initialY = math.max(8, vp.Y - boxH - margin)
+			-- center horizontally, clamp so it never goes off-screen
+			local centeredX = (vp.X - boxW) / 2
+			local minX = 8
+			local maxX = math.max(8, vp.X - boxW - 8)
+			local initialX = math.clamp(centeredX, minX, maxX)
+			local initialY = margin
 
 			local Box = New("Frame", { Name = "RestoreBox", Parent = RestoreGui, AnchorPoint = Vector2.new(0,0), Size = UDim2.new(0, boxW, 0, boxH), Position = UDim2.new(0, initialX, 0, initialY), BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0 })
 			New("UICorner", { Parent = Box, CornerRadius = UDim.new(0.08,0) })
