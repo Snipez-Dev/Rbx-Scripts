@@ -725,15 +725,13 @@ function Library:CreateWindow(title, subtitle, opts)
 				end
 				updateVisuals(element.Value)
 
-				-- Slider dragging (Touch-Support) - improved for mobile
+				-- Slider dragging (Touch + Mouse) - simplified and reliable
 				do
 					local draggingSlider = false
-					local currentInput = nil
-					local changedConn, endedConn, touchConn
-
-					local function setValueFromPos(pos)
-						local x = pos
-						if type(pos) == "table" and pos.X then x = pos.X end
+					local function setValueFromPosX(x)
+						if not x then return end
+						if type(x) == "table" and x.X then x = x.X end
+						if type(x) ~= "number" then return end
 						local absX = x - Track.AbsolutePosition.X
 						local width = Track.AbsoluteSize.X
 						local pct = math.clamp(absX / math.max(width,1), 0, 1)
@@ -743,65 +741,40 @@ function Library:CreateWindow(title, subtitle, opts)
 						if element.Callback then pcall(element.Callback, element.Value) end
 					end
 
-					local function startDrag(inp)
-						draggingSlider = true
-						currentInput = inp
-						if inp.Position then setValueFromPos(inp.Position) end
-						if changedConn then changedConn:Disconnect(); changedConn = nil end
-						if endedConn then endedConn:Disconnect(); endedConn = nil end
-						changedConn = UserInputService.InputChanged:Connect(function(i)
-							if not draggingSlider then return end
-							if i == currentInput or i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseMovement then
-								if i.Position then setValueFromPos(i.Position) end
-							end
-						end)
-						endedConn = UserInputService.InputEnded:Connect(function(i)
-							if i == currentInput then
-								draggingSlider = false
-								currentInput = nil
-								if changedConn then changedConn:Disconnect(); changedConn = nil end
-								if endedConn then endedConn:Disconnect(); endedConn = nil end
-							end
-						end)
-						-- TouchMoved fallback (may not exist on all clients)
-						pcall(function()
-							if touchConn then touchConn:Disconnect(); touchConn = nil end
-							touchConn = UserInputService.TouchMoved:Connect(function(touch)
-								if draggingSlider then setValueFromPos(touch.Position) end
-							end)
-						end)
-					end
-
-					local function stopDrag()
-						draggingSlider = false
-						currentInput = nil
-						if changedConn then changedConn:Disconnect(); changedConn = nil end
-						if endedConn then endedConn:Disconnect(); endedConn = nil end
-						if touchConn then touchConn:Disconnect(); touchConn = nil end
-					end
-
 					Track.InputBegan:Connect(function(inp)
 						local t = inp.UserInputType
 						if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
-							startDrag(inp)
+							draggingSlider = true
+							setValueFromPosX(inp.Position)
 						end
 					end)
+
 					Track.InputEnded:Connect(function(inp)
 						local t = inp.UserInputType
 						if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
-							stopDrag()
+							draggingSlider = false
 						end
 					end)
+
 					Knob.InputBegan:Connect(function(inp)
 						local t = inp.UserInputType
 						if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
-							startDrag(inp)
+							draggingSlider = true
 						end
 					end)
+
 					Knob.InputEnded:Connect(function(inp)
 						local t = inp.UserInputType
 						if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
-							stopDrag()
+							draggingSlider = false
+						end
+					end)
+
+					UserInputService.InputChanged:Connect(function(input)
+						if not draggingSlider then return end
+						local t = input.UserInputType
+						if (t == Enum.UserInputType.MouseMovement or t == Enum.UserInputType.Touch) and input.Position then
+							setValueFromPosX(input.Position)
 						end
 					end)
 				end
