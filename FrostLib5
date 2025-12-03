@@ -1,4 +1,10 @@
--- VanUI (komplette Library) — Fix für movable Restore-Box + Klick->Restore
+-- VanUI (komplett, gefixt)
+-- Fixes:
+--  • Restore-Box wird jetzt zuverlässig erstellt (wird ins PlayerGui parented)
+--  • Restore-Box ist verschiebbar und Klick darauf stellt UI wieder her
+--  • Robustere Drag-/Click-Erkennung für die Box
+--  • Keine weiteren unnötigen Änderungen an API/Features
+
 local Library = {}
 Library.Windows = {}
 Library.MainWindow = nil
@@ -7,7 +13,6 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local TextService = game:GetService("TextService")
-local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 
 local function New(ClassName, Properties)
@@ -38,16 +43,6 @@ local function themeGet(theme, key)
 	return DEFAULT_THEME[key]
 end
 
-local function find_existing_gui()
-	for _, container in ipairs({CoreGui, Players.LocalPlayer and Players.LocalPlayer:FindFirstChild("PlayerGui")}) do
-		if container then
-			local g = container:FindFirstChild("VanUI")
-			if g then return g, container end
-		end
-	end
-	return nil, nil
-end
-
 local function getViewport()
 	if workspace and workspace.CurrentCamera then
 		return workspace.CurrentCamera.ViewportSize
@@ -56,20 +51,19 @@ local function getViewport()
 end
 
 -- CreateWindow(title, subtitle, opts)
--- opts: size (UDim2) or width/height numbers, theme table, force boolean
+-- opts: size (UDim2) or width/height numbers, theme (table), force (boolean)
 function Library:CreateWindow(title, subtitle, opts)
 	opts = opts or {}
 	local theme = opts.theme or nil
 
-	-- single instance unless force
+	-- single instance unless forced
 	if Library.MainWindow and not opts.force then
 		return Library.MainWindow
 	end
 
 	-- optional force destroy
-	if opts.force then
-		local existing, _ = find_existing_gui()
-		if existing then pcall(function() existing:Destroy() end) end
+	if opts.force and Library.MainWindow then
+		pcall(function() Library.MainWindow:Destroy() end)
 	end
 
 	-- size handling
@@ -85,10 +79,10 @@ function Library:CreateWindow(title, subtitle, opts)
 	local absW = sizeUDim.X.Offset
 	local absH = sizeUDim.Y.Offset
 
-	-- ScreenGui
+	-- ScreenGui parented to PlayerGui to ensure visibility (fixes missing restore box)
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local ScreenGui = New("ScreenGui", { Name = "VanUI", ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn = false })
-	local okParent = pcall(function() ScreenGui.Parent = CoreGui end)
-	if not okParent then ScreenGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") end
+	ScreenGui.Parent = playerGui
 
 	-- Background
 	local Background = New("Frame", {
@@ -165,7 +159,6 @@ function Library:CreateWindow(title, subtitle, opts)
 			local bgPos = Background.AbsolutePosition
 			local bgSize = Background.AbsoluteSize
 			local clickX = input.Position.X
-			-- allow drag only if clicked within left half of window (relative to background)
 			if clickX <= bgPos.X + (bgSize.X * 0.5) then
 				dragging = true
 				dragStart = input.Position
@@ -201,26 +194,32 @@ function Library:CreateWindow(title, subtitle, opts)
 	-- Minimize -> create movable restore box; click restore
 	MinBtn.MouseButton1Click:Connect(function()
 		if Window._isMinimized then
-			-- already minimized -> restore
+			-- restore
 			if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
 			Window._restoreGui = nil
 			Background.Visible = true
 			Window._isMinimized = false
 		else
-			-- minimize: hide main UI and create movable clickable box
+			-- minimize
 			Background.Visible = false
 			Window._isMinimized = true
 
-			local RestoreGui = New("ScreenGui", { Name = "VanUI_Restore", ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn = false })
-			local ok2 = pcall(function() RestoreGui.Parent = CoreGui end)
-			if not ok2 then RestoreGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") end
+			-- ensure any previous restore GUI is cleaned up
+			if Window._restoreGui then
+				pcall(function() Window._restoreGui:Destroy() end)
+				Window._restoreGui = nil
+			end
 
-			-- default placement bottom-right with margin
+			-- Create RestoreGui parented to PlayerGui to ensure visibility
+			local RestoreGui = New("ScreenGui", { Name = "VanUI_Restore", ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn = false })
+			RestoreGui.Parent = playerGui
+
+			-- default placement bottom-right
 			local vp = getViewport()
 			local boxW, boxH = 180, 40
 			local margin = 18
-			local initialX = vp.X - boxW - margin
-			local initialY = vp.Y - boxH - margin
+			local initialX = math.max(8, vp.X - boxW - margin)
+			local initialY = math.max(8, vp.Y - boxH - margin)
 
 			local Box = New("Frame", { Name = "RestoreBox", Parent = RestoreGui, AnchorPoint = Vector2.new(0,0), Size = UDim2.new(0, boxW, 0, boxH), Position = UDim2.new(0, initialX, 0, initialY), BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0 })
 			New("UICorner", { Parent = Box, CornerRadius = UDim.new(0.08,0) })
@@ -228,62 +227,60 @@ function Library:CreateWindow(title, subtitle, opts)
 
 			local Label = New("TextLabel", { Parent = Box, BackgroundTransparency = 1, Size = UDim2.new(1, -46, 1, 0), Position = UDim2.new(0, 12, 0, 0), Font = Enum.Font.Gotham, Text = title or "VanUI", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center })
 
-			-- transparent button overlay which we use both for click-restore and dragging
-			local Overlay = New("TextButton", { Parent = Box, BackgroundTransparency = 1, Size = UDim2.new(1, -46, 1, 0), Position = UDim2.new(0, 0, 0, 0), Text = "", AutoButtonColor = false })
-			-- small restore icon/button (purely visual, clicking overlay will also restore)
+			-- Restore icon
 			local RestoreIcon = New("TextLabel", { Parent = Box, Size = UDim2.new(0, 34, 0, 34), Position = UDim2.new(1, -40, 0.5, -17), BackgroundColor3 = Background.BackgroundColor3, BorderSizePixel = 0, Text = "▣", Font = Enum.Font.SourceSansBold, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = 18, TextScaled = true })
 			New("UICorner", { Parent = RestoreIcon, CornerRadius = UDim.new(0.08,0) })
 			New("UIStroke", { Parent = RestoreIcon, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 
-			-- ensure AbsoluteSize available
+			-- Overlay used for dragging and click detection
+			local Overlay = New("TextButton", { Parent = Box, BackgroundTransparency = 1, Size = UDim2.new(1, -46, 1, 0), Position = UDim2.new(0, 0, 0, 0), Text = "", AutoButtonColor = false })
+			-- ensure AbsoluteSize ready
 			RunService.Heartbeat:Wait()
 
-			-- dragging variables
+			-- dragging logic for Box with click detection
 			local draggingBox = false
-			local dragStartPos, boxStartPos
-			local totalMove = Vector2.new(0,0)
+			local dragStartPos = nil
+			local boxStartPos = nil
+			local currentInput = nil
 
 			Overlay.InputBegan:Connect(function(inp)
 				if inp.UserInputType == Enum.UserInputType.MouseButton1 then
 					draggingBox = true
 					dragStartPos = inp.Position
 					boxStartPos = Vector2.new(Box.Position.X.Offset, Box.Position.Y.Offset)
-					totalMove = Vector2.new(0,0)
-					-- listen for end
+					currentInput = inp
 					inp.Changed:Connect(function()
 						if inp.UserInputState == Enum.UserInputState.End then
-							-- if movement was tiny => treat as click (restore)
+							-- on mouse release decide if it was a click (small movement) or drag
 							draggingBox = false
-							if (math.abs(totalMove.X) < 6 and math.abs(totalMove.Y) < 6) then
-								-- restore UI
+							local releasePos = inp.Position
+							local delta = releasePos - dragStartPos
+							if math.abs(delta.X) < 6 and math.abs(delta.Y) < 6 then
+								-- treat as click -> restore UI
 								if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
 								Window._restoreGui = nil
 								Background.Visible = true
 								Window._isMinimized = false
 							end
+							currentInput = nil
 						end
 					end)
 				end
 			end)
 
 			UserInputService.InputChanged:Connect(function(inp)
-				if draggingBox and inp.UserInputType == Enum.UserInputType.MouseMovement then
+				if draggingBox and inp.UserInputType == Enum.UserInputType.MouseMovement and inp == currentInput and dragStartPos and boxStartPos then
 					local delta = inp.Position - dragStartPos
-					totalMove = totalMove + Vector2.new(delta.X, delta.Y)
-					dragStartPos = inp.Position
 					local newX = boxStartPos.X + delta.X
 					local newY = boxStartPos.Y + delta.Y
-					-- clamp to viewport
 					local vp2 = getViewport()
 					newX = math.clamp(newX, 0, vp2.X - Box.AbsoluteSize.X)
 					newY = math.clamp(newY, 0, vp2.Y - Box.AbsoluteSize.Y)
 					Box.Position = UDim2.new(0, newX, 0, newY)
-					-- update boxStartPos so subsequent deltas accumulate correctly
-					boxStartPos = Vector2.new(newX, newY)
 				end
 			end)
 
-			-- also allow clicking the RestoreIcon itself to restore
+			-- RestoreIcon click also restores
 			RestoreIcon.InputBegan:Connect(function(inp)
 				if inp.UserInputType == Enum.UserInputType.MouseButton1 then
 					if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
