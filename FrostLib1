@@ -74,16 +74,17 @@ function Library:CreateWindow(title, subtitle, opts)
 	local isMobile = detectMobile()
 	local vp = getViewport()
 
-	-- Mobile-spezifische Skalierung
+	-- Mobile-spezifische Skalierung (ANPASSUNG: kleinere Default-Größen für Mobile)
 	local scaleFactor = 1
 	local defaultW, defaultH = 760, 420
 	
 	if isMobile then
-		-- Kleinere UI für mobile Geräte
-		scaleFactor = 0.75
-		if vp.X < 500 then scaleFactor = 0.65 end -- Sehr kleine Bildschirme
-		defaultW = math.floor(vp.X * 0.92)
-		defaultH = math.floor(vp.Y * 0.75)
+		-- Noch kleinere UI für mobile Geräte (angepasst)
+		scaleFactor = 0.65
+		if vp.X < 500 then scaleFactor = 0.55 end -- Sehr kleine Bildschirme
+		-- Diese Werte wurden verringert, um die UI auf mobilen Geräten kompakter zu machen
+		defaultW = math.floor(vp.X * 0.82) -- vorher: vp.X * 0.92
+		defaultH = math.floor(vp.Y * 0.62) -- vorher: vp.Y * 0.75
 	end
 
 	-- Größenberechnung
@@ -446,7 +447,7 @@ function Library:CreateWindow(title, subtitle, opts)
 					local btnPos = RestoreBtn.AbsolutePosition
 					local btnSizeVec = RestoreBtn.AbsoluteSize
 					local isOnButton = mousePos.X >= btnPos.X and mousePos.X <= btnPos.X + btnSizeVec.X and 
-					                   mousePos.Y >= btnPos.Y and mousePos.Y <= btnPos.Y + btnSizeVec.Y
+								mousePos.Y >= btnPos.Y and mousePos.Y <= btnPos.Y + btnSizeVec.Y
 					
 					if not isOnButton then
 						draggingBox = true
