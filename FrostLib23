@@ -208,19 +208,38 @@ function Library:CreateWindow(title, subtitle, opts)
 			end
 
 			-- Create RestoreGui parented to CoreGui to ensure it appears
-			local RestoreGui = New("ScreenGui", { Name = "VanUI_Restore", ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn = false })
-			RestoreGui.Parent = CoreGui
+		-- Create RestoreGui parented to CoreGui to ensure it appears
+local RestoreGui = New("ScreenGui", { 
+    Name = "VanUI_Restore", 
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling, 
+    ResetOnSpawn = false,
+    DisplayOrder = 999  -- Stelle sicher, dass es über anderen GUIs liegt
+})
+RestoreGui.Parent = CoreGui
 
-			-- default placement bottom-right
-			local vp = getViewport()
-			local boxW, boxH = 180, 40
-			local margin = 18
-			local initialX = math.max(8, vp.X - boxW - margin)
-			local initialY = math.max(8, vp.Y - boxH - margin)
+-- default placement bottom-right with safer positioning
+local vp = getViewport()
+local boxW, boxH = 180, 40
+local margin = 20
 
-			local Box = New("Frame", { Name = "RestoreBox", Parent = RestoreGui, AnchorPoint = Vector2.new(0,0), Size = UDim2.new(0, boxW, 0, boxH), Position = UDim2.new(0, initialX, 0, initialY), BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0 })
-			New("UICorner", { Parent = Box, CornerRadius = UDim.new(0.08,0) })
-			New("UIStroke", { Parent = Box, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
+-- Sicherere Positionierung - immer im sichtbaren Bereich
+local initialX = vp.X - boxW - margin
+local initialY = vp.Y - boxH - margin
+
+-- Fallback falls Viewport zu klein ist
+if initialX < 10 then initialX = 10 end
+if initialY < 10 then initialY = 10 end
+
+local Box = New("Frame", { 
+    Name = "RestoreBox", 
+    Parent = RestoreGui, 
+    AnchorPoint = Vector2.new(0,0), 
+    Size = UDim2.new(0, boxW, 0, boxH), 
+    Position = UDim2.new(0, initialX, 0, initialY), 
+    BackgroundColor3 = themeGet(theme, "Panel"), 
+    BorderSizePixel = 0,
+    ZIndex = 1000  -- Hoher ZIndex
+})
 
 			local Label = New("TextLabel", { Parent = Box, BackgroundTransparency = 1, Size = UDim2.new(1, -46, 1, 0), Position = UDim2.new(0, 12, 0, 0), Font = Enum.Font.Gotham, Text = title or "VanUI", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center })
 
