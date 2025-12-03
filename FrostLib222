@@ -1,6 +1,4 @@
--- VanUI (komplett, nur: zwinge Parenting in CoreGui & stelle sicher, dass die Restore-Box erscheint)
--- Hinweis: Ich habe **nur** das Parent-Verhalten auf CoreGui geändert und die Restore-Box-Logik sichergestellt.
--- Alles andere blieb unverändert.
+
 
 local Library = {}
 Library.Windows = {}
