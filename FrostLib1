@@ -1,4 +1,9 @@
-
+-- VanUI (komplett) — Änderungen:
+--  • Toggle ist wieder der normale (runde) Indikator
+--  • Die Restore-Box (wenn minimiert) ist jetzt beweglich (du kannst sie per DragHandle ziehen)
+--  • Dragging der Haupt-UI bleibt auf linke Hälfte der TopBar beschränkt
+--  • Kleinere Restore-/Close-Buttons bleiben erhalten
+--  • Größe/Theme-Fallbacks wie vorher
 
 local Library = {}
 Library.Windows = {}
@@ -9,6 +14,7 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local TextService = game:GetService("TextService")
 local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
 
 local function New(ClassName, Properties)
 	local Object = Instance.new(ClassName)
@@ -49,22 +55,22 @@ local function find_existing_gui()
 end
 
 -- CreateWindow(title, subtitle, opts)
--- opts:
+-- opts fields:
 --   size -> UDim2
---   width -> number (px)
---   height -> number (px)
+--   width -> number
+--   height -> number
 --   theme -> table
 --   force -> boolean
 function Library:CreateWindow(title, subtitle, opts)
 	opts = opts or {}
 	local theme = opts.theme or nil
 
-	-- single instance behaviour
+	-- single-instance behavior
 	if Library.MainWindow and not opts.force then
 		return Library.MainWindow
 	end
 
-	-- optional forced destroy of existing VanUI
+	-- optionally destroy existing
 	if opts.force then
 		local existing, _ = find_existing_gui()
 		if existing then pcall(function() existing:Destroy() end) end
@@ -112,7 +118,7 @@ function Library:CreateWindow(title, subtitle, opts)
 	task.wait(0.22)
 	TweenService:Create(BackgroundStroke, TweenInfo.new(0.22), { Transparency = 0 }):Play()
 
-	-- header/title area (we'll use TopBar to restrict dragging region)
+	-- header/topbar
 	local HeaderHeight = 60
 	local TopBar = New("Frame", {
 		Name = "TopBar",
@@ -149,7 +155,7 @@ function Library:CreateWindow(title, subtitle, opts)
 		TextXAlignment = Enum.TextXAlignment.Left
 	})
 
-	-- Controls (top-right): smaller & slightly lower
+	-- controls (smaller & slightly lower)
 	local ControlsFrame = New("Frame", {
 		Name = "WindowControls",
 		Parent = TopBar,
@@ -172,7 +178,7 @@ function Library:CreateWindow(title, subtitle, opts)
 			Parent = ControlsFrame,
 			BackgroundColor3 = Background.BackgroundColor3,
 			BorderSizePixel = 0,
-			Size = UDim2.new(0, 28, 0, 20), -- kleiner
+			Size = UDim2.new(0, 28, 0, 20),
 			AutoButtonColor = false,
 			Font = Enum.Font.SourceSansBold,
 			Text = symbol,
@@ -188,7 +194,7 @@ function Library:CreateWindow(title, subtitle, opts)
 	local MinBtn = makeControl("▭")
 	local CloseBtn = makeControl("✕")
 
-	-- Tab/Content layout calculations
+	-- layout sizes
 	local TabWidth = 170
 	local TabLeftPadding = 12
 	local ContentLeft = TabLeftPadding + TabWidth + 12
@@ -220,7 +226,7 @@ function Library:CreateWindow(title, subtitle, opts)
 		ContentContainer.CanvasSize = UDim2.new(0,0,0, contentLayout.AbsoluteContentSize.Y + 20)
 	end)
 
-	-- content visual background
+	-- visual content background
 	local ContentBackground = New("Frame", {
 		Parent = Background,
 		BackgroundColor3 = themeGet(theme, "Panel"),
@@ -232,7 +238,7 @@ function Library:CreateWindow(title, subtitle, opts)
 	New("UICorner", {Parent = ContentBackground, CornerRadius = UDim.new(0.01, 0)})
 	New("UIStroke", {Parent = ContentBackground, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
-	-- Window state object
+	-- Window object
 	local Window = {}
 	Window.Tabs = {}
 	Window.CurrentTab = nil
@@ -240,11 +246,10 @@ function Library:CreateWindow(title, subtitle, opts)
 	Window._ScreenGui = ScreenGui
 	Window._restoreGui = nil
 
-	-- Dragging logic: only when clicking on TopBar AND within left half of the window
+	-- dragging: only when clicking on TopBar AND in left half of window
 	local dragging, dragInput, dragStart, startPos, dragTween
 	TopBar.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			-- check if clicked in left half of Background
 			local bgPos = Background.AbsolutePosition
 			local bgSize = Background.AbsoluteSize
 			local clickX = input.Position.X
@@ -272,7 +277,7 @@ function Library:CreateWindow(title, subtitle, opts)
 		end
 	end)
 
-	-- Close button behavior
+	-- Close behavior
 	CloseBtn.MouseButton1Click:Connect(function()
 		if Window._ScreenGui then pcall(function() Window._ScreenGui:Destroy() end) end
 		if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
@@ -280,10 +285,20 @@ function Library:CreateWindow(title, subtitle, opts)
 		if Library.MainWindow == Window then Library.MainWindow = nil end
 	end)
 
-	-- Minimize behavior: hide main UI and create restore box
+	-- helper to get viewport size
+	local function getViewport()
+		local cam = workspace and workspace.CurrentCamera
+		if cam then
+			return cam.ViewportSize
+		end
+		-- fallback
+		return Vector2.new(1920, 1080)
+	end
+
+	-- Minimize behavior: hide main UI and create a movable restore box
 	MinBtn.MouseButton1Click:Connect(function()
 		if Window._isMinimized then
-			-- restore if already minimized
+			-- already minimized: restore
 			if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
 			Window._restoreGui = nil
 			Background.Visible = true
@@ -297,12 +312,17 @@ function Library:CreateWindow(title, subtitle, opts)
 			local ok2 = pcall(function() RestoreGui.Parent = CoreGui end)
 			if not ok2 then RestoreGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") end
 
+			local vp = getViewport()
+			local boxW, boxH = 160, 38
+			local initX = math.max(8, vp.X - boxW - 18)
+			local initY = math.max(8, vp.Y - boxH - 18)
+
 			local Box = New("Frame", {
 				Name = "RestoreBox",
 				Parent = RestoreGui,
-				AnchorPoint = Vector2.new(1, 1),
-				Size = UDim2.new(0, 160, 0, 38),
-				Position = UDim2.new(1, -18, 1, -18),
+				AnchorPoint = Vector2.new(0, 0),
+				Size = UDim2.new(0, boxW, 0, boxH),
+				Position = UDim2.new(0, initX, 0, initY),
 				BackgroundColor3 = themeGet(theme, "Panel"),
 				BorderSizePixel = 0
 			})
@@ -312,7 +332,7 @@ function Library:CreateWindow(title, subtitle, opts)
 			local Label = New("TextLabel", {
 				Parent = Box,
 				BackgroundTransparency = 1,
-				Size = UDim2.new(1, -12, 1, 0),
+				Size = UDim2.new(1, -46, 1, 0),
 				Position = UDim2.new(0, 12, 0, 0),
 				Font = Enum.Font.Gotham,
 				Text = title or "VanUI",
@@ -337,6 +357,44 @@ function Library:CreateWindow(title, subtitle, opts)
 			New("UICorner", { Parent = RestoreBtn, CornerRadius = UDim.new(0.08, 0) })
 			New("UIStroke", { Parent = RestoreBtn, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 
+			-- DragHandle: covers most of the box except the restore button area => dragging the box
+			local DragHandle = New("TextButton", {
+				Parent = Box,
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, -46, 1, 0),
+				Position = UDim2.new(0, 0, 0, 0),
+				Text = "",
+				AutoButtonColor = false
+			})
+
+			-- dragging logic for the restore box
+			local boxDragging = false
+			local dragStartPos, boxStartPos
+			DragHandle.InputBegan:Connect(function(inp)
+				if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+					boxDragging = true
+					dragStartPos = inp.Position
+					boxStartPos = Box.Position
+					-- ensure absolute size ready
+					RunService.Heartbeat:Wait()
+					inp.Changed:Connect(function()
+						if inp.UserInputState == Enum.UserInputState.End then boxDragging = false end
+					end)
+				end
+			end)
+			UserInputService.InputChanged:Connect(function(inp)
+				if boxDragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
+					local delta = inp.Position - dragStartPos
+					local newX = boxStartPos.X.Offset + delta.X
+					local newY = boxStartPos.Y.Offset + delta.Y
+					local vp2 = getViewport()
+					newX = math.clamp(newX, 0, vp2.X - Box.AbsoluteSize.X)
+					newY = math.clamp(newY, 0, vp2.Y - Box.AbsoluteSize.Y)
+					Box.Position = UDim2.new(0, newX, 0, newY)
+				end
+			end)
+
+			-- RestoreBtn click
 			RestoreBtn.MouseButton1Click:Connect(function()
 				if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
 				Window._restoreGui = nil
@@ -349,7 +407,7 @@ function Library:CreateWindow(title, subtitle, opts)
 		end
 	end)
 
-	-- Tab API
+	-- Tab API (restored style)
 	function Window:CreateTab(name)
 		local Tab = {}
 		local isFirst = #Window.Tabs == 0
@@ -432,7 +490,7 @@ function Library:CreateWindow(title, subtitle, opts)
 		return Tab
 	end
 
-	-- RefreshContent: builds UI for current tab (uses theme defaults if not provided)
+	-- RefreshContent: build UI for elements
 	function Window:RefreshContent()
 		for _, child in pairs(ContentContainer:GetChildren()) do
 			if child:IsA("Frame") then child:Destroy() end
@@ -471,110 +529,41 @@ function Library:CreateWindow(title, subtitle, opts)
 					if element.Callback then pcall(element.Callback) end
 				end)
 
-			-- Toggle (draggable square)
+			-- Toggle (normal round indicator)
 			elseif element.Type == "Toggle" then
 				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,42)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.1,0)})
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
-				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.68,0,1,0), Font = Enum.Font.GothamMedium, Text = element.Text or "", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left})
+				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.75,0,1,0), Font = Enum.Font.GothamMedium, Text = element.Text or "", TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left})
 
-				-- create a wider indicator track so the square can move
+				-- restored grey rounded background behind indicator (small circle inside)
 				local IndicatorBg = New("Frame", {
 					Parent = F,
-					AnchorPoint = Vector2.new(1,0.5),
+					AnchorPoint = Vector2.new(1, 0.5),
 					Position = UDim2.new(0.975, 0, 0.5, 0),
-					Size = UDim2.new(0, 48, 0, 24),
+					Size = UDim2.new(0, 24, 0, 24),
 					BackgroundColor3 = themeGet(theme, "ToggleBg"),
 					BorderSizePixel = 0
 				})
 				New("UICorner", {Parent = IndicatorBg, CornerRadius = UDim.new(0.5,0)})
 				New("UIStroke", {Parent = IndicatorBg, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
-				-- track inside IndicatorBg (transparent, just for absolute positions)
-				local Track = New("Frame", {
+				local Indicator = New("Frame", {
 					Parent = IndicatorBg,
-					BackgroundTransparency = 1,
-					Size = UDim2.new(1, -8, 1, 0),
-					Position = UDim2.new(0, 4, 0, 0)
-				})
-				New("UICorner", {Parent = Track, CornerRadius = UDim.new(0.5,0)})
-
-				-- draggable square knob
-				local KnobSize = 18
-				local Knob = New("Frame", {
-					Parent = Track,
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.new(0.5, 0, 0.5, 0),
+					Size = UDim2.new(0, 16, 0, 16),
 					BackgroundColor3 = element.Value and themeGet(theme, "ToggleOn") or themeGet(theme, "ToggleOff"),
-					Size = UDim2.new(0, KnobSize, 0, KnobSize),
-					AnchorPoint = Vector2.new(0, 0.5),
-					Position = UDim2.new(element.Value and 1 or 0, - (KnobSize/2), 0.5, 0),
 					BorderSizePixel = 0
 				})
-				New("UICorner", {Parent = Knob, CornerRadius = UDim.new(0.12,0)})
-				New("UIStroke", {Parent = Knob, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
+				New("UICorner", {Parent = Indicator, CornerRadius = UDim.new(0.5,0)})
+				New("UIStroke", {Parent = Indicator, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
-				-- helper to update knob position & color based on value (0..1)
-				local function setKnobByPct(pct, callCallback)
-					pct = math.clamp(pct, 0, 1)
-					local trackAbs = Track.AbsoluteSize.X
-					-- compute knob X in UDim2 terms
-					local x = pct
-					Knob.Position = UDim2.new(x, - (KnobSize/2), 0.5, 0)
-					Knob.BackgroundColor3 = (pct >= 0.5) and themeGet(theme, "ToggleOn") or themeGet(theme, "ToggleOff")
-					element.Value = (pct >= 0.5)
-					if callCallback and element.Callback then pcall(element.Callback, element.Value) end
-				end
-
-				-- initialize knob according to element.Value
-				setKnobByPct(element.Value and 1 or 0, false)
-
-				-- dragging logic for knob (local per-toggle)
-				local draggingKnob = false
-				local function knobSetFromAbsX(absX, callCallback)
-					local trackPos = Track.AbsolutePosition.X
-					local trackW = math.max(1, Track.AbsoluteSize.X)
-					local localX = absX - trackPos
-					local pct = math.clamp(localX / trackW, 0, 1)
-					setKnobByPct(pct, callCallback)
-				end
-
-				Knob.InputBegan:Connect(function(inp)
-					if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-						draggingKnob = true
-					end
-				end)
-				Knob.InputEnded:Connect(function(inp)
-					if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-						draggingKnob = false
-						-- snap to closest (left or right) and call callback
-						local finalPct = (Knob.Position.X.Scale >= 0.5) and 1 or 0
-						setKnobByPct(finalPct, true)
-					end
-				end)
-				-- allow clicking on track to move knob
-				Track.InputBegan:Connect(function(inp)
-					if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-						knobSetFromAbsX(inp.Position.X, true)
-						draggingKnob = true
-					end
-				end)
-				Track.InputEnded:Connect(function(inp)
-					if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-						draggingKnob = false
-						local finalPct = (Knob.Position.X.Scale >= 0.5) and 1 or 0
-						setKnobByPct(finalPct, true)
-					end
-				end)
-				UserInputService.InputChanged:Connect(function(inp)
-					if inp.UserInputType == Enum.UserInputType.MouseMovement and draggingKnob then
-						knobSetFromAbsX(inp.Position.X, false)
-					end
-				end)
-
-				-- clicking entire frame toggles as well
 				local Click = New("TextButton", {Parent = F, BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0), Text = "", AutoButtonColor = false})
 				Click.MouseButton1Click:Connect(function()
-					local newVal = not element.Value
-					setKnobByPct(newVal and 1 or 0, true)
+					element.Value = not element.Value
+					TweenService:Create(Indicator, TweenInfo.new(0.18), { BackgroundColor3 = element.Value and themeGet(theme, "ToggleOn") or themeGet(theme, "ToggleOff") }):Play()
+					if element.Callback then pcall(element.Callback, element.Value) end
 				end)
 
 			-- Slider
@@ -609,7 +598,7 @@ function Library:CreateWindow(title, subtitle, opts)
 				end
 				updateVisuals(element.Value)
 
-				-- slider dragging
+				-- slider dragging (local)
 				do
 					local draggingSlider = false
 					local function setValueFromPos(x)
@@ -647,7 +636,7 @@ function Library:CreateWindow(title, subtitle, opts)
 		end
 	end
 
-	-- Destroy method
+	-- destroy
 	function Window:Destroy()
 		if Window._ScreenGui then pcall(function() Window._ScreenGui:Destroy() end) end
 		if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
