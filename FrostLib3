@@ -1,5 +1,4 @@
-
-
+-- VanUI (modified) - fixes: Dropdown overlay, Colorpicker sizing, Keybind support for mouse/gamepad
 local Library = {}
 Library.Windows = {}
 Library.MainWindow = nil
@@ -667,7 +666,8 @@ function Library:CreateWindow(title, subtitle, opts)
 				Selected = default,
 				Callback = callback,
 				Visible = true,
-				_Expanded = false
+				_Expanded = false,
+				_OptionsOverlay = nil -- store overlay ref
 			}
 			table.insert(Tab.Elements, Dropdown)
 			Window:RefreshContent()
@@ -700,7 +700,8 @@ function Library:CreateWindow(title, subtitle, opts)
 				Selected = set,
 				Callback = callback,
 				Visible = true,
-				_Expanded = false
+				_Expanded = false,
+				_OptionsOverlay = nil
 			}
 			table.insert(Tab.Elements, Multi)
 			Window:RefreshContent()
@@ -727,33 +728,41 @@ function Library:CreateWindow(title, subtitle, opts)
 			}
 		end
 
+		-- Keybind: now supports Keyboard, Mouse buttons, Gamepad input
 		function Tab:AddKeybind(text, defaultKey, mode, callback)
 			if type(mode) == "function" and callback == nil then
 				callback = mode
 				mode = nil
 			end
-			local parsedKey = nil
+			-- BindKey will be stored as a table: { kind = "KeyCode"|"Mouse"|"Gamepad"|"Touch", value = EnumValue or string }
+			local bindKey = nil
 			if typeof(defaultKey) == "EnumItem" then
-				parsedKey = defaultKey
+				-- assume Enum.KeyCode or Enum.UserInputType
+				if defaultKey.EnumType and tostring(defaultKey.EnumType) == "KeyCode" then
+					bindKey = { kind = "KeyCode", value = defaultKey }
+				else
+					-- fallback to KeyCode default if ambiguous
+					bindKey = { kind = "KeyCode", value = Enum.KeyCode.F }
+				end
 			elseif type(defaultKey) == "string" then
 				local k = Enum.KeyCode[defaultKey]
-				if k then parsedKey = k
+				if k then bindKey = { kind = "KeyCode", value = k }
 				else
 					local upper = tostring(defaultKey):upper()
 					local k2 = Enum.KeyCode[upper]
-					if k2 then parsedKey = k2 end
+					if k2 then bindKey = { kind = "KeyCode", value = k2 } end
 				end
 			elseif type(defaultKey) == "number" then
-				-- no reliable numeric mapping; fallback below
+				-- ignore numeric
 			end
-			if not parsedKey then parsedKey = Enum.KeyCode.F end
+			if not bindKey then bindKey = { kind = "KeyCode", value = Enum.KeyCode.F } end
 
 			mode = (mode == "Hold" and "Hold") or "Toggle"
 
 			local Keybind = {
 				Type = "Keybind",
 				Text = text,
-				BindKey = parsedKey,
+				BindKey = bindKey,
 				Mode = mode,
 				Value = false,
 				Callback = callback,
@@ -766,7 +775,13 @@ function Library:CreateWindow(title, subtitle, opts)
 			Window:RefreshContent()
 			return {
 				Set = function(self, keyEnum)
-					if typeof(keyEnum) == "EnumItem" then Keybind.BindKey = keyEnum; Window:RefreshContent() end
+					if typeof(keyEnum) == "EnumItem" then
+						Keybind.BindKey = { kind = "KeyCode", value = keyEnum }
+						Window:RefreshContent()
+					elseif type(keyEnum) == "table" and keyEnum.kind and keyEnum.value then
+						Keybind.BindKey = keyEnum
+						Window:RefreshContent()
+					end
 				end,
 				SetMode = function(self, m) Keybind.Mode = (m == "Hold" and "Hold") or "Toggle"; Window:RefreshContent() end,
 				Get = function() return Keybind.BindKey, Keybind.Mode, Keybind.Value end,
@@ -810,10 +825,43 @@ function Library:CreateWindow(title, subtitle, opts)
 		return Tab
 	end
 
+	-- helper to convert bind table to display string
+	local function bindToString(bindTable)
+		if not bindTable then return "Unbound" end
+		if bindTable.kind == "KeyCode" and typeof(bindTable.value) == "EnumItem" then
+			return tostring(bindTable.value.Name or tostring(bindTable.value))
+		elseif bindTable.kind == "Mouse" then
+			-- convert Enum.UserInputType to readable
+			local name = tostring(bindTable.value):gsub("Enum.UserInputType.","")
+			return name
+		elseif bindTable.kind == "Gamepad" then
+			if typeof(bindTable.value) == "EnumItem" then
+				return tostring(bindTable.value.Name or tostring(bindTable.value))
+			end
+			return tostring(bindTable.value)
+		elseif bindTable.kind == "Touch" then
+			return "Touch"
+		else
+			return tostring(bindTable.value or "Unbound")
+		end
+	end
+
 	function Window:RefreshContent()
+		-- remove old frames
 		for _, child in pairs(ContentContainer:GetChildren()) do
 			if child:IsA("Frame") then child:Destroy() end
 		end
+		-- Also ensure any overlay options from previous elements are destroyed (prevent leaks)
+		for _, t in pairs(Window.Tabs) do
+			for _, el in pairs(t.Elements) do
+				if (el.Type == "Dropdown" or el.Type == "MultiDropdown") and el._OptionsOverlay then
+					pcall(function() el._OptionsOverlay:Destroy() end)
+					el._OptionsOverlay = nil
+					el._Expanded = false
+				end
+			end
+		end
+
 		if not Window.CurrentTab then return end
 
 		for _, element in pairs(Window.CurrentTab.Elements) do
@@ -1023,28 +1071,28 @@ function Library:CreateWindow(title, subtitle, opts)
 				-- Single dropdown with pill-style selected display and highlighted selected option when expanded
 				local baseHeight = isMobile and 44 or 48
 				local optionHeight = isMobile and 30 or 34
-				local visibleOptions = math.clamp(#element.Options, 0, 8)
+				local maxVisibleOptions = 8
 				local collapsedHeight = baseHeight
-				local expandedHeight = baseHeight + (visibleOptions * optionHeight)
 
-				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0, element._Expanded and expandedHeight or collapsedHeight)})
+				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0, element._Expanded and (baseHeight + (math.clamp(#element.Options,0,maxVisibleOptions) * optionHeight)) or collapsedHeight)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.06,0)})
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
 				-- Top: label + selected pill container
 				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,6), Size = UDim2.new(0.4,0,0,ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "Dropdown", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
 				local PillContainer = New("Frame", { Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 12), Size = UDim2.new(0.94,0,0, baseHeight - (ElementFontSize + 18))})
-				-- inside PillContainer we place a UIListLayout horizontal and display the selected option as a pill
 				local pillLayout = New("UIListLayout", { Parent = PillContainer, FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Left, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,6) })
 				pillLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() end)
 
 				local function renderSelectedPill()
-					-- clear old
 					for _,c in pairs(PillContainer:GetChildren()) do
 						if c:IsA("Frame") and c.Name == "SelectedPill" then c:Destroy() end
 					end
 					local selText = tostring(element.Options[element.Selected] or "")
-					local pill = New("Frame", { Parent = PillContainer, Name = "SelectedPill", BackgroundColor3 = lightenColor(themeGet(theme,"Tab"), 0.08), Size = UDim2.new(0, math.clamp(TextService:GetTextSize(selText, SmallFontSize, Enum.Font.Gotham, Vector2.new(800, math.huge)).X + 18, 60, PillContainer.AbsoluteSize.X), 0, PillContainer.AbsoluteSize.Y), BorderSizePixel = 0 })
+					local maxW = PillContainer.AbsoluteSize.X
+					if maxW < 60 then maxW = 60 end
+					local desiredW = math.clamp(TextService:GetTextSize(selText, SmallFontSize, Enum.Font.Gotham, Vector2.new(800, math.huge)).X + 18, 60, maxW)
+					local pill = New("Frame", { Parent = PillContainer, Name = "SelectedPill", BackgroundColor3 = lightenColor(themeGet(theme,"Tab"), 0.08), Size = UDim2.new(0, desiredW, 0, PillContainer.AbsoluteSize.Y), BorderSizePixel = 0 })
 					New("UICorner", { Parent = pill, CornerRadius = UDim.new(0.5, 0) })
 					New("UIStroke", { Parent = pill, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 					New("TextLabel", { Parent = pill, BackgroundTransparency = 1, Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = selText, TextXAlignment = Enum.TextXAlignment.Left, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(230,230,230) })
@@ -1054,58 +1102,150 @@ function Library:CreateWindow(title, subtitle, opts)
 
 				local Arrow = New("TextButton", { Parent = F, BackgroundTransparency = 1, Size = UDim2.new(0,28,0,28), Position = UDim2.new(1,-34,0,6), Text = element._Expanded and "▴" or "▾", Font = Enum.Font.SourceSansBold, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = isMobile and 14 or 16, AutoButtonColor = false })
 
-				local OptionsFrame = nil
-
+				-- Options overlay will be created on expand to avoid clipping and to overlay contents
 				local function collapse()
 					element._Expanded = false
 					Arrow.Text = "▾"
-					F.Size = UDim2.new(1,0,0,collapsedHeight)
-					if OptionsFrame then OptionsFrame:Destroy(); OptionsFrame = nil end
+					if element._OptionsOverlay then
+						pcall(function() element._OptionsOverlay:Destroy() end)
+						element._OptionsOverlay = nil
+					end
+					-- shrink F
+					F.Size = UDim2.new(1,0,0, collapsedHeight)
 				end
 
 				local function expand()
 					element._Expanded = true
 					Arrow.Text = "▴"
-					OptionsFrame = New("Frame", { Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0,0,0, baseHeight), Size = UDim2.new(1,0,0, visibleOptions * optionHeight) })
-					local optsLayout = New("UIListLayout", { Parent = OptionsFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,2) })
+
+					-- ensure F AbsolutePosition/Size are ready
+					task.wait(0)
+
+					local absPos = F.AbsolutePosition
+					local absSize = F.AbsoluteSize
+					local viewport = getViewport()
+					local spaceBelow = viewport.Y - (absPos.Y + absSize.Y)
+					local spaceAbove = absPos.Y
+
+					local desiredMaxHeight = math.clamp(#element.Options * optionHeight, optionHeight, optionHeight * maxVisibleOptions)
+					local openDown = true
+					local finalHeight = desiredMaxHeight
+					if spaceBelow < optionHeight and spaceAbove >= optionHeight then
+						openDown = false
+						finalHeight = math.min(desiredMaxHeight, spaceAbove - 8)
+					else
+						finalHeight = math.min(desiredMaxHeight, spaceBelow - 8)
+					end
+					-- if even finalHeight <= 0, fallback to small height
+					if finalHeight <= 0 then finalHeight = math.min(desiredMaxHeight, optionHeight * 2) end
+
+					-- create overlay frame on top-level ScreenGui so it won't be clipped by ContentContainer
+					local overlay = New("Frame", {
+						Name = "DropdownOptionsOverlay",
+						Parent = ScreenGui,
+						BackgroundTransparency = 1,
+						Size = UDim2.new(0, absSize.X, 0, finalHeight),
+						Position = UDim2.new(0, absPos.X, 0, openDown and (absPos.Y + absSize.Y) or (absPos.Y - finalHeight)),
+						BorderSizePixel = 0,
+					})
+					-- store overlay to destroy later
+					element._OptionsOverlay = overlay
+
+					-- create scroll frame inside overlay
+					local scroll = New("ScrollingFrame", {
+						Parent = overlay,
+						BackgroundColor3 = themeGet(theme,"Panel"),
+						BorderSizePixel = 0,
+						Size = UDim2.new(1,0,1,0),
+						CanvasSize = UDim2.new(0,0,0,0),
+						ScrollBarThickness = 6,
+						ClipsDescendants = true
+					})
+					New("UICorner", {Parent = scroll, CornerRadius = UDim.new(0.06,0)})
+					New("UIStroke", {Parent = scroll, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
+
+					local list = New("Frame", {Parent = scroll, BackgroundTransparency = 1, Size = UDim2.new(1,0,0,0)})
+					local optsLayout = New("UIListLayout", { Parent = list, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,2) })
+					optsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+						local h = optsLayout.AbsoluteContentSize.Y
+						list.Size = UDim2.new(1,0,0,h)
+						scroll.CanvasSize = UDim2.new(0,0,0,h)
+					end)
+
 					for i, opt in ipairs(element.Options) do
 						local isSelected = (i == element.Selected)
 						local bgColor = isSelected and lightenColor(themeGet(theme,"Tab"), 0.18) or themeGet(theme,"Tab")
 						local textColor = isSelected and Color3.fromRGB(20,20,20) or Color3.fromRGB(200,200,200)
-						local btn = New("TextButton", { Parent = OptionsFrame, BackgroundColor3 = bgColor, Size = UDim2.new(1,0,0,optionHeight), Text = "", AutoButtonColor = false })
+						local btn = New("TextButton", { Parent = list, BackgroundColor3 = bgColor, Size = UDim2.new(1,0,0,optionHeight), Text = "", AutoButtonColor = false })
 						New("UICorner", { Parent = btn, CornerRadius = UDim.new(0.06,0) })
 						New("UIStroke", { Parent = btn, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 						local lbl = New("TextLabel", { Parent = btn, BackgroundTransparency = 1, Size = UDim2.new(1,-14,1,0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = opt, TextSize = SmallFontSize, TextColor3 = textColor, TextXAlignment = Enum.TextXAlignment.Left })
 						if isSelected then
-							-- add small check or highlight marker
 							local check = New("TextLabel", { Parent = btn, BackgroundTransparency = 1, Size = UDim2.new(0,24,0,optionHeight), Position = UDim2.new(1,-28,0,0), Font = Enum.Font.SourceSansBold, Text = "✓", TextSize = SmallFontSize + 4, TextColor3 = Color3.fromRGB(20,20,20) })
 						end
 						btn.MouseButton1Click:Connect(function()
 							element.Selected = i
 							if element.Callback then pcall(element.Callback, element.Selected, element.Options[element.Selected]) end
 							renderSelectedPill()
-							collapse()
+							if element._OptionsOverlay then pcall(function() element._OptionsOverlay:Destroy() end) end
+							element._OptionsOverlay = nil
+							element._Expanded = false
 						end)
 					end
-					F.Size = UDim2.new(1,0,0, expandedHeight)
+
+					-- ensure overlay is removed when clicking elsewhere or when window destroyed
+					local function cleanupOverlay()
+						if element._OptionsOverlay then
+							pcall(function() element._OptionsOverlay:Destroy() end)
+							element._OptionsOverlay = nil
+						end
+						element._Expanded = false
+					end
+
+					-- if user clicks outside overlay -> close
+					local outsideConn
+					outsideConn = UserInputService.InputBegan:Connect(function(inp, gp)
+						if gp then return end
+						if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+							local mousePos = inp.Position
+							local op = overlay.AbsolutePosition
+							local osz = overlay.AbsoluteSize
+							local inside = mousePos.X >= op.X and mousePos.X <= op.X + osz.X and mousePos.Y >= op.Y and mousePos.Y <= op.Y + osz.Y
+							if not inside then
+								cleanupOverlay()
+								if outsideConn then outsideConn:Disconnect(); outsideConn = nil end
+							end
+						end
+					end)
+
+					-- Finally set F height to show as expanded visually (but actual options are in overlay)
+					F.Size = UDim2.new(1,0,0, baseHeight)
 				end
 
 				Arrow.MouseButton1Click:Connect(function()
-					if element._Expanded then collapse() else expand() end
+					if element._Expanded then
+						-- collapse and destroy overlay
+						if element._OptionsOverlay then pcall(function() element._OptionsOverlay:Destroy() end) end
+						element._OptionsOverlay = nil
+						element._Expanded = false
+						F.Size = UDim2.new(1,0,0, collapsedHeight)
+						Arrow.Text = "▾"
+					else
+						expand()
+					end
 				end)
 
 				-- when PillContainer absolute size changes (resize), re-render pill to fit width
 				PillContainer:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() renderSelectedPill() end)
 
 			elseif element.Type == "MultiDropdown" then
-				-- MultiDropdown with horizontal pill area; expanded options highlight selected ones
+				-- MultiDropdown with horizontal pill area; expanded options highlight selected ones (overlay like Dropdown)
 				local baseHeight = isMobile and 44 or 48
 				local optionHeight = isMobile and 30 or 34
-				local visibleOptions = math.clamp(#element.Options, 0, 8)
+				local maxVisibleOptions = 8
 				local collapsedHeight = baseHeight
-				local expandedHeight = baseHeight + (visibleOptions * optionHeight)
 
-				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0, element._Expanded and expandedHeight or collapsedHeight)})
+				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0, element._Expanded and (baseHeight + (math.clamp(#element.Options,0,maxVisibleOptions) * optionHeight)) or collapsedHeight)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.06,0)})
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
@@ -1119,7 +1259,10 @@ function Library:CreateWindow(title, subtitle, opts)
 					end
 					for idx,_ in pairs(element.Selected) do
 						local text = tostring(element.Options[idx] or "")
-						local pill = New("Frame", { Parent = PillContainer, Name = "MultiPill", BackgroundColor3 = lightenColor(themeGet(theme,"Tab"), 0.08), Size = UDim2.new(0, math.clamp(TextService:GetTextSize(text, SmallFontSize, Enum.Font.Gotham, Vector2.new(800, math.huge)).X + 22, 60, PillContainer.AbsoluteSize.X), 0, PillContainer.AbsoluteSize.Y), BorderSizePixel = 0 })
+						local maxW = PillContainer.AbsoluteSize.X
+						if maxW < 60 then maxW = 60 end
+						local desiredW = math.clamp(TextService:GetTextSize(text, SmallFontSize, Enum.Font.Gotham, Vector2.new(800, math.huge)).X + 22, 60, maxW)
+						local pill = New("Frame", { Parent = PillContainer, Name = "MultiPill", BackgroundColor3 = lightenColor(themeGet(theme,"Tab"), 0.08), Size = UDim2.new(0, desiredW, 0, PillContainer.AbsoluteSize.Y), BorderSizePixel = 0 })
 						New("UICorner", { Parent = pill, CornerRadius = UDim.new(0.5, 0) })
 						New("UIStroke", { Parent = pill, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 						local lbl = New("TextLabel", { Parent = pill, BackgroundTransparency = 1, Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = text, TextXAlignment = Enum.TextXAlignment.Left, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(230,230,230) })
@@ -1129,25 +1272,70 @@ function Library:CreateWindow(title, subtitle, opts)
 
 				local Arrow = New("TextButton", { Parent = F, BackgroundTransparency = 1, Size = UDim2.new(0,28,0,28), Position = UDim2.new(1,-34,0,6), Text = element._Expanded and "▴" or "▾", Font = Enum.Font.SourceSansBold, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = isMobile and 14 or 16, AutoButtonColor = false })
 
-				local OptionsFrame = nil
-
 				local function collapse()
 					element._Expanded = false
 					Arrow.Text = "▾"
+					if element._OptionsOverlay then pcall(function() element._OptionsOverlay:Destroy() end); element._OptionsOverlay = nil end
 					F.Size = UDim2.new(1,0,0,collapsedHeight)
-					if OptionsFrame then OptionsFrame:Destroy(); OptionsFrame = nil end
 				end
 
 				local function expand()
 					element._Expanded = true
 					Arrow.Text = "▴"
-					OptionsFrame = New("Frame", { Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0,0,0, baseHeight), Size = UDim2.new(1,0,0, visibleOptions * optionHeight) })
-					local optsLayout = New("UIListLayout", { Parent = OptionsFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,2) })
+					task.wait(0)
+
+					local absPos = F.AbsolutePosition
+					local absSize = F.AbsoluteSize
+					local viewport = getViewport()
+					local spaceBelow = viewport.Y - (absPos.Y + absSize.Y)
+					local spaceAbove = absPos.Y
+
+					local desiredMaxHeight = math.clamp(#element.Options * optionHeight, optionHeight, optionHeight * maxVisibleOptions)
+					local openDown = true
+					local finalHeight = desiredMaxHeight
+					if spaceBelow < optionHeight and spaceAbove >= optionHeight then
+						openDown = false
+						finalHeight = math.min(desiredMaxHeight, spaceAbove - 8)
+					else
+						finalHeight = math.min(desiredMaxHeight, spaceBelow - 8)
+					end
+					if finalHeight <= 0 then finalHeight = math.min(desiredMaxHeight, optionHeight * 2) end
+
+					local overlay = New("Frame", {
+						Name = "MultiDropdownOptionsOverlay",
+						Parent = ScreenGui,
+						BackgroundTransparency = 1,
+						Size = UDim2.new(0, absSize.X, 0, finalHeight),
+						Position = UDim2.new(0, absPos.X, 0, openDown and (absPos.Y + absSize.Y) or (absPos.Y - finalHeight)),
+						BorderSizePixel = 0,
+					})
+					element._OptionsOverlay = overlay
+
+					local scroll = New("ScrollingFrame", {
+						Parent = overlay,
+						BackgroundColor3 = themeGet(theme,"Panel"),
+						BorderSizePixel = 0,
+						Size = UDim2.new(1,0,1,0),
+						CanvasSize = UDim2.new(0,0,0,0),
+						ScrollBarThickness = 6,
+						ClipsDescendants = true
+					})
+					New("UICorner", {Parent = scroll, CornerRadius = UDim.new(0.06,0)})
+					New("UIStroke", {Parent = scroll, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
+
+					local list = New("Frame", {Parent = scroll, BackgroundTransparency = 1, Size = UDim2.new(1,0,0,0)})
+					local optsLayout = New("UIListLayout", { Parent = list, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,2) })
+					optsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+						local h = optsLayout.AbsoluteContentSize.Y
+						list.Size = UDim2.new(1,0,0,h)
+						scroll.CanvasSize = UDim2.new(0,0,0,h)
+					end)
+
 					for i, opt in ipairs(element.Options) do
 						local isSelected = element.Selected[i]
 						local bgColor = isSelected and lightenColor(themeGet(theme,"Tab"), 0.18) or themeGet(theme,"Tab")
 						local textColor = isSelected and Color3.fromRGB(20,20,20) or Color3.fromRGB(200,200,200)
-						local btn = New("TextButton", { Parent = OptionsFrame, BackgroundColor3 = bgColor, Size = UDim2.new(1,0,0,optionHeight), Text = "", AutoButtonColor = false })
+						local btn = New("TextButton", { Parent = list, BackgroundColor3 = bgColor, Size = UDim2.new(1,0,0,optionHeight), Text = "", AutoButtonColor = false })
 						New("UICorner", { Parent = btn, CornerRadius = UDim.new(0.06,0) })
 						New("UIStroke", { Parent = btn, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 						local lbl = New("TextLabel", { Parent = btn, BackgroundTransparency = 1, Size = UDim2.new(1,-14,1,0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = opt, TextSize = SmallFontSize, TextColor3 = textColor, TextXAlignment = Enum.TextXAlignment.Left })
@@ -1166,11 +1354,34 @@ function Library:CreateWindow(title, subtitle, opts)
 							end
 						end)
 					end
-					F.Size = UDim2.new(1,0,0, expandedHeight)
+
+					-- close on outside click
+					local outsideConn
+					outsideConn = UserInputService.InputBegan:Connect(function(inp, gp)
+						if gp then return end
+						if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+							local mousePos = inp.Position
+							local op = overlay.AbsolutePosition
+							local osz = overlay.AbsoluteSize
+							local inside = mousePos.X >= op.X and mousePos.X <= op.X + osz.X and mousePos.Y >= op.Y and mousePos.Y <= op.Y + osz.Y
+							if not inside then
+								if element._OptionsOverlay then pcall(function() element._OptionsOverlay:Destroy() end); element._OptionsOverlay = nil end
+								element._Expanded = false
+								if outsideConn then outsideConn:Disconnect(); outsideConn = nil end
+							end
+						end
+					end)
 				end
 
 				Arrow.MouseButton1Click:Connect(function()
-					if element._Expanded then collapse() else expand() end
+					if element._Expanded then
+						if element._OptionsOverlay then pcall(function() element._OptionsOverlay:Destroy() end); element._OptionsOverlay = nil end
+						element._Expanded = false
+						F.Size = UDim2.new(1,0,0, collapsedHeight)
+						Arrow.Text = "▾"
+					else
+						expand()
+					end
 				end)
 
 				PillContainer:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() renderMultiPills() end)
@@ -1183,14 +1394,22 @@ function Library:CreateWindow(title, subtitle, opts)
 
 				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.55,0,0,ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "Keybind", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
 				local ModeLabel = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 8), Size = UDim2.new(0.55,0,0,SmallFontSize + 4), Font = Enum.Font.Gotham, Text = "("..element.Mode..")", TextColor3 = Color3.fromRGB(150,150,150), TextSize = SmallFontSize, TextXAlignment = Enum.TextXAlignment.Left})
+				-- dynamic BindBtn width based on text
+				local function createBindBtnText()
+					return bindToString(element.BindKey)
+				end
+				local bindText = createBindBtnText()
+				local baseBtnWidth = 120
+				local measured = TextService:GetTextSize(bindText, isMobile and 12 or 14, Enum.Font.Gotham, Vector2.new(300, math.huge)).X + 28
+				local finalWidth = math.clamp(math.floor(measured), 80, 200)
 				local BindBtn = New("TextButton", {
 					Parent = F,
-					Size = UDim2.new(0, 120, 0, bindHeight - 6),
-					Position = UDim2.new(1, -126, 0, 3),
+					Size = UDim2.new(0, finalWidth, 0, bindHeight - 6),
+					Position = UDim2.new(1, -(finalWidth + 6), 0, 3),
 					BackgroundColor3 = Background.BackgroundColor3,
 					AutoButtonColor = false,
 					Font = Enum.Font.Gotham,
-					Text = tostring(element.BindKey.Name or tostring(element.BindKey)),
+					Text = bindText,
 					TextSize = isMobile and 12 or 14,
 					TextColor3 = themeGet(theme, "ControlBtnText")
 				})
@@ -1199,27 +1418,60 @@ function Library:CreateWindow(title, subtitle, opts)
 
 				local ListenIndicator = New("TextLabel", { Parent = BindBtn, BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0), Position = UDim2.new(0,0,0,0), Text = "", Font = Enum.Font.Gotham, TextSize = isMobile and 12 or 14, TextColor3 = Color3.fromRGB(200,200,200) })
 
+				-- helper to update the BindBtn text and size
+				local function updateBindBtnVisual()
+					local txt = bindToString(element.BindKey)
+					BindBtn.Text = txt
+					local measured = TextService:GetTextSize(txt, isMobile and 12 or 14, Enum.Font.Gotham, Vector2.new(300, math.huge)).X + 28
+					local w = math.clamp(math.floor(measured), 80, 220)
+					BindBtn.Size = UDim2.new(0, w, 0, bindHeight - 6)
+					BindBtn.Position = UDim2.new(1, -(w + 6), 0, 3)
+				end
+
 				local listeningConn = nil
 				local function startListening()
 					element._Listening = true
 					BindBtn.Text = "Press Key..."
 					ListenIndicator.Text = ""
+					-- connect to InputBegan to capture ANY relevant input
 					listeningConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 						if gameProcessed then return end
-						if input.UserInputType == Enum.UserInputType.Keyboard then
-							element.BindKey = input.KeyCode
-							element._Listening = false
-							if listeningConn then listeningConn:Disconnect(); listeningConn = nil end
-							BindBtn.Text = tostring(element.BindKey.Name or tostring(element.BindKey))
-							Window:RefreshContent()
+						-- Keyboard
+						if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode then
+							element.BindKey = { kind = "KeyCode", value = input.KeyCode }
+						-- Mouse buttons
+						elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.MouseButton3 then
+							element.BindKey = { kind = "Mouse", value = input.UserInputType }
+						-- Gamepad input (Gamepad button arrives as KeyCode)
+						elseif input.UserInputType == Enum.UserInputType.Gamepad1 or input.UserInputType == Enum.UserInputType.Gamepad2 or input.UserInputType == Enum.UserInputType.Gamepad3 or input.UserInputType == Enum.UserInputType.Gamepad4 then
+							-- some gamepad events provide KeyCode like Enum.KeyCode.ButtonA, so prefer KeyCode
+							if input.KeyCode and typeof(input.KeyCode) == "EnumItem" then
+								element.BindKey = { kind = "Gamepad", value = input.KeyCode }
+							else
+								element.BindKey = { kind = "Gamepad", value = input.UserInputType }
+							end
+						-- Touch
+						elseif input.UserInputType == Enum.UserInputType.Touch then
+							element.BindKey = { kind = "Touch", value = "Touch" }
+						else
+							-- fallback: if KeyCode exists
+							if input.KeyCode and typeof(input.KeyCode) == "EnumItem" then
+								element.BindKey = { kind = "KeyCode", value = input.KeyCode }
+							end
 						end
+
+						element._Listening = false
+						if listeningConn then listeningConn:Disconnect(); listeningConn = nil end
+						updateBindBtnVisual()
+						if element.Callback then pcall(element.Callback, element.BindKey) end
+						Window:RefreshContent()
 					end)
 				end
 
 				local function stopListening()
 					element._Listening = false
 					if listeningConn then listeningConn:Disconnect(); listeningConn = nil end
-					BindBtn.Text = tostring(element.BindKey.Name or tostring(element.BindKey))
+					updateBindBtnVisual()
 				end
 
 				BindBtn.MouseButton1Click:Connect(function()
@@ -1230,10 +1482,13 @@ function Library:CreateWindow(title, subtitle, opts)
 					end
 				end)
 
+				-- initial visual update
+				updateBindBtnVisual()
+
 			elseif element.Type == "Colorpicker" then
 				-- full small Google-like color picker: SV box + hue slider + hex input + preview
-				local h = isMobile and 140 or 160
-				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,h + 12)})
+				local baseH = isMobile and 140 or 160
+				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,baseH + 12)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.06,0)})
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
@@ -1241,18 +1496,14 @@ function Library:CreateWindow(title, subtitle, opts)
 				New("UIPadding", {Parent = F, PaddingLeft = UDim.new(0,padding), PaddingTop = UDim.new(0,padding)})
 
 				-- title
-				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0,0,0,0), Size = UDim2.new(1, - (h + 20), 0, ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "Color", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
+				local titleLabel = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0,0,0,0), Size = UDim2.new(1, - (baseH + 20), 0, ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "Color", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
 
-				-- SV box (square)
-				local svSize = h
-				local SV = New("Frame", { Parent = F, BackgroundColor3 = Color3.new(1,1,1), Size = UDim2.new(0, svSize, 0, svSize), Position = UDim2.new(0,0,0, ElementFontSize + 8) })
+				-- dynamic sizing: compute available width and adapt SV size so it never overflows
+				local SV = New("Frame", { Parent = F, BackgroundColor3 = Color3.new(1,1,1), Size = UDim2.new(0, baseH, 0, baseH), Position = UDim2.new(0,0,0, ElementFontSize + 8) })
 				New("UICorner", { Parent = SV, CornerRadius = UDim.new(0.02, 0) })
-				-- overlays for hue and saturation/value
 				local SVColor = New("Frame", { Parent = SV, BackgroundColor3 = HSVToRGB(element.HSV.h, 1, 1), Size = UDim2.new(1,1,1,1), BorderSizePixel = 0 })
 				New("UICorner", { Parent = SVColor, CornerRadius = UDim.new(0.02, 0) })
 				local SVOverlay = New("ImageLabel", { Parent = SV, BackgroundTransparency = 1, Image = "rbxassetid://4155801250", ImageColor3 = Color3.new(1,1,1), Size = UDim2.new(1,1,1,1), ScaleType = Enum.ScaleType.Stretch })
-				-- SVOverlay uses a white->transparent gradient image; using built-in image id common trick (if unavailable, it's harmless)
-				-- Crosshair indicator
 				local Cross = New("Frame", { Parent = SV, Size = UDim2.new(0, 12, 0, 12), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Color3.new(0,0,0) })
 				New("UICorner", { Parent = Cross, CornerRadius = UDim.new(1, 0) })
 				local CrossInner = New("Frame", { Parent = Cross, Size = UDim2.new(1,1,1,1), BackgroundColor3 = Color3.new(1,1,1) })
@@ -1260,24 +1511,35 @@ function Library:CreateWindow(title, subtitle, opts)
 
 				-- Hue slider
 				local hueW = 28
-				local Hue = New("Frame", { Parent = F, Size = UDim2.new(0, hueW, 0, svSize), Position = UDim2.new(0, svSize + 12, 0, ElementFontSize + 8), BackgroundColor3 = Color3.new(1,0,0) })
+				local Hue = New("Frame", { Parent = F, Size = UDim2.new(0, hueW, 0, baseH), Position = UDim2.new(0, baseH + 12, 0, ElementFontSize + 8), BackgroundColor3 = Color3.new(1,0,0) })
 				New("UICorner", { Parent = Hue, CornerRadius = UDim.new(0.02, 0) })
-				-- gradient stripe: we'll approximate by cycling background using Image (if available)
 				local hueImg = New("ImageLabel", { Parent = Hue, BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0), Image = "rbxassetid://4318288741", ImageColor3 = Color3.new(1,1,1), ScaleType = Enum.ScaleType.Stretch })
-
-				-- Hue indicator
 				local HueIndicator = New("Frame", { Parent = Hue, Size = UDim2.new(1,0,0,6), AnchorPoint = Vector2.new(0,0.5), Position = UDim2.new(0,0, element.HSV.h / 360, 0), BackgroundColor3 = Color3.new(1,1,1) })
 				New("UICorner", { Parent = HueIndicator, CornerRadius = UDim.new(0.02, 0) })
 
-				-- Right side: preview + hex input
-				local rightX = svSize + 12 + hueW + 12
-				local Preview = New("Frame", { Parent = F, Size = UDim2.new(0, 60, 0, 60), Position = UDim2.new(0, rightX, 0, ElementFontSize + 8), BackgroundColor3 = element.Color })
+				-- Right side: preview + hex input (we keep this in a right column with limited width)
+				local rightColumnWidth = 140
+				local Preview = New("Frame", { Parent = F, Size = UDim2.new(0, 60, 0, 60), Position = UDim2.new(0, baseH + 12 + hueW + 12, 0, ElementFontSize + 8), BackgroundColor3 = element.Color })
 				New("UICorner", { Parent = Preview, CornerRadius = UDim.new(0.04, 0) })
 				New("UIStroke", { Parent = Preview, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
-
-				local HexBox = New("TextBox", { Parent = F, Size = UDim2.new(0, 120, 0, 28), Position = UDim2.new(0, rightX, 0, ElementFontSize + 8 + 68), BackgroundColor3 = themeGet(theme, "Tab"), Text = string.format("#%02X%02X%02X", math.floor(element.Color.r*255), math.floor(element.Color.g*255), math.floor(element.Color.b*255)), ClearTextOnFocus = false, TextColor3 = Color3.fromRGB(240,240,240), Font = Enum.Font.Gotham, TextSize = SmallFontSize, PlaceholderText = "#RRGGBB" })
+				local HexBox = New("TextBox", { Parent = F, Size = UDim2.new(0, 120, 0, 28), Position = UDim2.new(0, baseH + 12 + hueW + 12, 0, ElementFontSize + 8 + 68), BackgroundColor3 = themeGet(theme, "Tab"), Text = string.format("#%02X%02X%02X", math.floor(element.Color.r*255), math.floor(element.Color.g*255), math.floor(element.Color.b*255)), ClearTextOnFocus = false, TextColor3 = Color3.fromRGB(240,240,240), Font = Enum.Font.Gotham, TextSize = SmallFontSize, PlaceholderText = "#RRGGBB" })
 				New("UICorner", { Parent = HexBox, CornerRadius = UDim.new(0.04, 0) })
 				New("UIStroke", { Parent = HexBox, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
+
+				-- function to recompute SV and right column positions/sizes on resize
+				local function resizeColorpicker()
+					local totalW = F.AbsoluteSize.X - padding*2
+					if totalW <= 0 then return end
+					local desiredRight = rightColumnWidth
+					local availableForSV = math.max(80, totalW - desiredRight - (hueW + 24))
+					local svSize = math.min(baseH, availableForSV)
+					-- set sizes/positions
+					SV.Size = UDim2.new(0, svSize, 0, svSize)
+					Hue.Position = UDim2.new(0, svSize + 12, 0, ElementFontSize + 8)
+					Hue.Size = UDim2.new(0, hueW, 0, svSize)
+					Preview.Position = UDim2.new(0, svSize + 12 + hueW + 12, 0, ElementFontSize + 8)
+					HexBox.Position = UDim2.new(0, svSize + 12 + hueW + 12, 0, ElementFontSize + 8 + 68)
+				end
 
 				-- helper: set HSV & update UI elements
 				local function updatePickerFromHSV()
@@ -1286,13 +1548,17 @@ function Library:CreateWindow(title, subtitle, opts)
 					SVColor.BackgroundColor3 = HSVToRGB(element.HSV.h, 1, 1)
 					Preview.BackgroundColor3 = newC
 					HexBox.Text = string.format("#%02X%02X%02X", math.floor(newC.r*255), math.floor(newC.g*255), math.floor(newC.b*255))
-					-- position crosshair
-					local svPosX = element.HSV.s * SV.AbsoluteSize.X
-					local svPosY = (1 - element.HSV.v) * SV.AbsoluteSize.Y
-					Cross.Position = UDim2.new(0, svPosX, 0, svPosY)
+					-- position crosshair (guard against Zero sizes)
+					if SV.AbsoluteSize.X > 0 and SV.AbsoluteSize.Y > 0 then
+						local svPosX = element.HSV.s * SV.AbsoluteSize.X
+						local svPosY = (1 - element.HSV.v) * SV.AbsoluteSize.Y
+						Cross.Position = UDim2.new(0, svPosX, 0, svPosY)
+					end
 					-- hue indicator
-					local hueY = (element.HSV.h / 360) * Hue.AbsoluteSize.Y
-					HueIndicator.Position = UDim2.new(0, 0, 0, math.clamp(hueY, 0, Hue.AbsoluteSize.Y))
+					if Hue.AbsoluteSize.Y > 0 then
+						local hueY = (element.HSV.h / 360) * Hue.AbsoluteSize.Y
+						HueIndicator.Position = UDim2.new(0, 0, 0, math.clamp(hueY, 0, Hue.AbsoluteSize.Y))
+					end
 					if element.Callback then pcall(element.Callback, element.Color) end
 				end
 
@@ -1360,7 +1626,6 @@ function Library:CreateWindow(title, subtitle, opts)
 				-- hex input handling
 				HexBox.FocusLost:Connect(function(enter)
 					local txt = tostring(HexBox.Text or "")
-					-- accept #RRGGBB or RRGGBB
 					txt = txt:gsub("#","")
 					if #txt == 6 then
 						local r = tonumber("0x"..txt:sub(1,2))
@@ -1374,28 +1639,53 @@ function Library:CreateWindow(title, subtitle, opts)
 							updatePickerFromHSV()
 						end
 					else
-						-- restore current hex
 						HexBox.Text = string.format("#%02X%02X%02X", math.floor(element.Color.r*255), math.floor(element.Color.g*255), math.floor(element.Color.b*255))
 					end
 				end)
 
 				-- initialize visuals
-				task.spawn(function() task.wait(0.03); updatePickerFromHSV() end)
+				task.spawn(function() task.wait(0.03); resizeColorpicker(); updatePickerFromHSV() end)
 
-				-- on resize, reposition cross/hue
+				-- on resize, reposition cross/hue and recompute sizes
+				F:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() resizeColorpicker(); updatePickerFromHSV() end)
 				SV:GetPropertyChangedSignal("AbsoluteSize"):Connect(updatePickerFromHSV)
 				Hue:GetPropertyChangedSignal("AbsoluteSize"):Connect(updatePickerFromHSV)
 			end
 		end
 	end
 
-	-- Global Keybind Handling (robust)
+	-- Global Keybind Handling (robust for KeyCode, Mouse, Gamepad)
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
-		if input.UserInputType == Enum.UserInputType.Keyboard then
-			for _, kb in pairs(Window._Keybinds) do
-				local el = kb.element
-				if el and el.BindKey and input.KeyCode == el.BindKey then
+		for _, kb in pairs(Window._Keybinds) do
+			local el = kb.element
+			if not el or not el.BindKey then continue end
+			local bk = el.BindKey
+			-- Keyboard
+			if bk.kind == "KeyCode" and input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == bk.value then
+				if el.Mode == "Toggle" then
+					el.Value = not el.Value
+					if el.Callback then pcall(el.Callback, el.Value) end
+					Window:RefreshContent()
+				elseif el.Mode == "Hold" then
+					el.Value = true
+					if el.Callback then pcall(el.Callback, true) end
+					Window:RefreshContent()
+				end
+			-- Mouse
+			elseif bk.kind == "Mouse" and (input.UserInputType == bk.value) then
+				if el.Mode == "Toggle" then
+					el.Value = not el.Value
+					if el.Callback then pcall(el.Callback, el.Value) end
+					Window:RefreshContent()
+				elseif el.Mode == "Hold" then
+					el.Value = true
+					if el.Callback then pcall(el.Callback, true) end
+					Window:RefreshContent()
+				end
+			-- Gamepad (value may be KeyCode)
+			elseif bk.kind == "Gamepad" then
+				if input.KeyCode and bk.value and input.KeyCode == bk.value then
 					if el.Mode == "Toggle" then
 						el.Value = not el.Value
 						if el.Callback then pcall(el.Callback, el.Value) end
@@ -1406,22 +1696,45 @@ function Library:CreateWindow(title, subtitle, opts)
 						Window:RefreshContent()
 					end
 				end
+			-- Touch support: treat Touch as momentary 'Hold' activation
+			elseif bk.kind == "Touch" and input.UserInputType == Enum.UserInputType.Touch then
+				if el.Mode == "Toggle" then
+					el.Value = not el.Value
+					if el.Callback then pcall(el.Callback, el.Value) end
+					Window:RefreshContent()
+				elseif el.Mode == "Hold" then
+					el.Value = true
+					if el.Callback then pcall(el.Callback, true) end
+					Window:RefreshContent()
+				end
 			end
 		end
 	end)
 
 	UserInputService.InputEnded:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
-		if input.UserInputType == Enum.UserInputType.Keyboard then
-			for _, kb in pairs(Window._Keybinds) do
-				local el = kb.element
-				if el and el.BindKey and input.KeyCode == el.BindKey then
-					if el.Mode == "Hold" then
-						el.Value = false
-						if el.Callback then pcall(el.Callback, false) end
-						Window:RefreshContent()
-					end
-				end
+		for _, kb in pairs(Window._Keybinds) do
+			local el = kb.element
+			if not el or not el.BindKey then continue end
+			local bk = el.BindKey
+			-- Only handle Hold mode for ending
+			if el.Mode ~= "Hold" then continue end
+			if bk.kind == "KeyCode" and input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == bk.value then
+				el.Value = false
+				if el.Callback then pcall(el.Callback, false) end
+				Window:RefreshContent()
+			elseif bk.kind == "Mouse" and input.UserInputType == bk.value then
+				el.Value = false
+				if el.Callback then pcall(el.Callback, false) end
+				Window:RefreshContent()
+			elseif bk.kind == "Gamepad" and input.KeyCode and bk.value and input.KeyCode == bk.value then
+				el.Value = false
+				if el.Callback then pcall(el.Callback, false) end
+				Window:RefreshContent()
+			elseif bk.kind == "Touch" and input.UserInputType == Enum.UserInputType.Touch then
+				el.Value = false
+				if el.Callback then pcall(el.Callback, false) end
+				Window:RefreshContent()
 			end
 		end
 	end)
