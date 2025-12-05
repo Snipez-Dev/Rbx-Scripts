@@ -1,5 +1,6 @@
--- VanUI mit vollständigem Mobile Support
--- Automatische Skalierung und Touch-Optimierung für mobile Geräte
+-- VanUI mit vollständigem Mobile Support + Custom Dropdowns & Keybinds
+-- (gesamter Code: Original erhalten, neue Elemente: Dropdown + Keybind/Hotkey hinzugefügt)
+-- Hinweis: Dieser gesamte Code ersetzt die vorherige Datei - volle Datei unten.
 
 local Library = {}
 Library.Windows = {}
@@ -302,6 +303,9 @@ function Library:CreateWindow(title, subtitle, opts)
 	Window._isMobile = isMobile
 	Window._restorePosition = Window._restorePosition or nil -- stored restore box position
 
+	-- Keybind handling store
+	Window._Keybinds = Window._Keybinds or {} -- list of {element = element, tab = tab}
+
 	-- Drag main window
 	local dragging, dragInput, dragStart, startPos, dragTween
 	TopBar.InputBegan:Connect(function(input)
@@ -597,6 +601,80 @@ end
 			}
 		end
 
+		-- NEW: AddDropdown
+		-- options: array of strings
+		-- defaultIndex: number (1-based)
+		-- callback: function(selectedIndex, selectedText)
+		function Tab:AddDropdown(text, options, defaultIndex, callback)
+			local default = math.clamp(defaultIndex or 1, 1, #options)
+			local Dropdown = {
+				Type = "Dropdown",
+				Text = text,
+				Options = options or {},
+				Selected = default,
+				Callback = callback,
+				Visible = true,
+				_Expanded = false
+			}
+			table.insert(Tab.Elements, Dropdown)
+			Window:RefreshContent()
+			return {
+				Set = function(self, index)
+					Dropdown.Selected = math.clamp(index or 1, 1, #Dropdown.Options)
+					Window:RefreshContent()
+					if Dropdown.Callback then pcall(Dropdown.Callback, Dropdown.Selected, Dropdown.Options[Dropdown.Selected]) end
+				end,
+				Get = function() return Dropdown.Selected, Dropdown.Options[Dropdown.Selected] end,
+				Hide = function() Dropdown.Visible = false; Window:RefreshContent() end,
+				Show = function() Dropdown.Visible = true; Window:RefreshContent() end
+			}
+		end
+
+		-- NEW: AddKeybind (Custom Hotkey)
+		-- defaultKey: Enum.KeyCode or string name (e.g. "F")
+		-- mode: "Toggle" or "Hold" (default "Toggle")
+		-- callback: function(state) called when key activates (true/false)
+		function Tab:AddKeybind(text, defaultKey, mode, callback)
+			local parsedKey = nil
+			if typeof(defaultKey) == "EnumItem" then
+				parsedKey = defaultKey
+			elseif type(defaultKey) == "string" then
+				-- try to parse into Enum.KeyCode
+				local key = Enum.KeyCode[defaultKey]
+				if key then parsedKey = key end
+			end
+
+			-- fallback
+			if not parsedKey then parsedKey = Enum.KeyCode.F end
+
+			mode = (mode == "Hold" and "Hold") or "Toggle"
+
+			local Keybind = {
+				Type = "Keybind",
+				Text = text,
+				BindKey = parsedKey,
+				Mode = mode,
+				Value = false,
+				Callback = callback,
+				Visible = true,
+				_Listening = false
+			}
+			table.insert(Tab.Elements, Keybind)
+			-- register in window keybind list
+			table.insert(Window._Keybinds, { element = Keybind, tab = Tab })
+
+			Window:RefreshContent()
+			return {
+				Set = function(self, keyEnum)
+					if typeof(keyEnum) == "EnumItem" then Keybind.BindKey = keyEnum; Window:RefreshContent() end
+				end,
+				SetMode = function(self, m) Keybind.Mode = (m == "Hold" and "Hold") or "Toggle"; Window:RefreshContent() end,
+				Get = function() return Keybind.BindKey, Keybind.Mode, Keybind.Value end,
+				Hide = function() Keybind.Visible = false; Window:RefreshContent() end,
+				Show = function() Keybind.Visible = true; Window:RefreshContent() end
+			}
+		end
+
 		return Tab
 	end
 
@@ -812,9 +890,166 @@ end
 						end
 					end)
 				end
+			elseif element.Type == "Dropdown" then
+				-- Dropdown implementation
+				local baseHeight = isMobile and 40 or 44
+				local optionHeight = isMobile and 30 or 34
+				local visibleOptions = math.clamp(#element.Options, 0, 6)
+				local collapsedHeight = baseHeight
+				local expandedHeight = baseHeight + (visibleOptions * optionHeight)
+
+				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0, element._Expanded and expandedHeight or collapsedHeight)})
+				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.06,0)})
+				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
+
+				-- label + current selection line
+				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.6,0,0,0, ElementFontSize + 4), Font = Enum.Font.GothamMedium, Text = element.Text or "Dropdown", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
+				local SelectedLabel = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 6), Size = UDim2.new(0.94,0,0, ElementFontSize + 4), Font = Enum.Font.Gotham, Text = (element.Options[element.Selected] or ""), TextColor3 = Color3.fromRGB(150,150,150), TextSize = SmallFontSize, TextXAlignment = Enum.TextXAlignment.Left})
+				local Arrow = New("TextButton", { Parent = F, BackgroundTransparency = 1, Size = UDim2.new(0,32,0,32), Position = UDim2.new(1,-36,0,6), Text = element._Expanded and "▴" or "▾", Font = Enum.Font.SourceSansBold, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = isMobile and 16 or 18, AutoButtonColor = false })
+				
+				-- Options frame (created on expand)
+				local OptionsFrame = nil
+
+				local function collapse()
+					element._Expanded = false
+					Arrow.Text = "▾"
+					-- shrink frame
+					F.Size = UDim2.new(1,0,0,collapsedHeight)
+					-- destroy options
+					if OptionsFrame then OptionsFrame:Destroy(); OptionsFrame = nil end
+				end
+
+				local function expand()
+					element._Expanded = true
+					Arrow.Text = "▴"
+					-- create options container
+					OptionsFrame = New("Frame", { Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0,0,0, baseHeight), Size = UDim2.new(1,0,0, visibleOptions * optionHeight) })
+					local optsLayout = New("UIListLayout", { Parent = OptionsFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,2) })
+					for i, opt in ipairs(element.Options) do
+						local btn = New("TextButton", { Parent = OptionsFrame, BackgroundColor3 = themeGet(theme, "Tab"), Size = UDim2.new(1,0,0,optionHeight), Text = opt, Font = Enum.Font.Gotham, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(200,200,200), AutoButtonColor = false })
+						New("UICorner", { Parent = btn, CornerRadius = UDim.new(0.06,0) })
+						New("UIStroke", { Parent = btn, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
+						btn.MouseButton1Click:Connect(function()
+							element.Selected = i
+							if element.Callback then pcall(element.Callback, element.Selected, element.Options[element.Selected]) end
+							SelectedLabel.Text = element.Options[element.Selected]
+							collapse()
+						end)
+					end
+					-- enlarge frame
+					F.Size = UDim2.new(1,0,0, expandedHeight)
+				end
+
+				Arrow.MouseButton1Click:Connect(function()
+					if element._Expanded then collapse() else expand() end
+				end)
+
+				-- clicking the selection label also toggles
+				SelectedLabel.InputBegan:Connect(function(inp)
+					if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+						if element._Expanded then collapse() else expand() end
+					end
+				end)
+
+			elseif element.Type == "Keybind" then
+				-- Keybind UI
+				local bindHeight = isMobile and 40 or 46
+				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,bindHeight)})
+				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.08,0)})
+				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
+
+				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.55,0,0,ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "Keybind", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
+				local ModeLabel = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 8), Size = UDim2.new(0.55,0,0,SmallFontSize + 4), Font = Enum.Font.Gotham, Text = "("..element.Mode..")", TextColor3 = Color3.fromRGB(150,150,150), TextSize = SmallFontSize, TextXAlignment = Enum.TextXAlignment.Left})
+				local BindBtn = New("TextButton", {
+					Parent = F,
+					Size = UDim2.new(0, 120, 0, bindHeight - 6),
+					Position = UDim2.new(1, -126, 0, 3),
+					BackgroundColor3 = Background.BackgroundColor3,
+					AutoButtonColor = false,
+					Font = Enum.Font.Gotham,
+					Text = tostring(element.BindKey.Name or tostring(element.BindKey)),
+					TextSize = isMobile and 12 or 14,
+					TextColor3 = themeGet(theme, "ControlBtnText")
+				})
+				New("UICorner", {Parent = BindBtn, CornerRadius = UDim.new(0.06,0)})
+				New("UIStroke", {Parent = BindBtn, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
+
+				local ListenIndicator = New("TextLabel", { Parent = BindBtn, BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0), Position = UDim2.new(0,0,0,0), Text = "", Font = Enum.Font.Gotham, TextSize = isMobile and 12 or 14, TextColor3 = Color3.fromRGB(200,200,200) })
+
+				-- start/stop listening for new key
+				local listeningConn = nil
+				local function startListening()
+					element._Listening = true
+					BindBtn.Text = "Press Key..."
+					ListenIndicator.Text = ""
+					-- capture next keyboard input
+					listeningConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+						if gameProcessed then return end
+						if input.UserInputType == Enum.UserInputType.Keyboard then
+							element.BindKey = input.KeyCode
+							element._Listening = false
+							if listeningConn then listeningConn:Disconnect(); listeningConn = nil end
+							BindBtn.Text = tostring(element.BindKey.Name or tostring(element.BindKey))
+							Window:RefreshContent()
+						end
+					end)
+				end
+
+				local function stopListening()
+					element._Listening = false
+					if listeningConn then listeningConn:Disconnect(); listeningConn = nil end
+					BindBtn.Text = tostring(element.BindKey.Name or tostring(element.BindKey))
+				end
+
+				BindBtn.MouseButton1Click:Connect(function()
+					if element._Listening then
+						stopListening()
+					else
+						startListening()
+					end
+				end)
+
 			end
 		end
 	end
+
+	-- Global input handling for keybinds
+	UserInputService.InputBegan:Connect(function(input, gameProcessed)
+		if gameProcessed then return end
+		if input.UserInputType == Enum.UserInputType.Keyboard then
+			for _, kb in pairs(Window._Keybinds) do
+				local el = kb.element
+				if el and el.BindKey and input.KeyCode == el.BindKey then
+					if el.Mode == "Toggle" then
+						el.Value = not el.Value
+						if el.Callback then pcall(el.Callback, el.Value) end
+						Window:RefreshContent()
+					elseif el.Mode == "Hold" then
+						-- mark true on begin
+						el.Value = true
+						if el.Callback then pcall(el.Callback, true) end
+						Window:RefreshContent()
+					end
+				end
+			end
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input, gameProcessed)
+		if gameProcessed then return end
+		if input.UserInputType == Enum.UserInputType.Keyboard then
+			for _, kb in pairs(Window._Keybinds) do
+				local el = kb.element
+				if el and el.BindKey and input.KeyCode == el.BindKey then
+					if el.Mode == "Hold" then
+						el.Value = false
+						if el.Callback then pcall(el.Callback, false) end
+						Window:RefreshContent()
+					end
+				end
+			end
+		end
+	end)
 
 	function Window:Destroy()
 		if Window._ScreenGui then pcall(function() Window._ScreenGui:Destroy() end) end
