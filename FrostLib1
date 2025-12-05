@@ -1,5 +1,11 @@
--- VanUI (robuste Version) - Fehlerbehebungen für math.clamp / string-Inputs
--- Vollständige Library (ersetzt ältere Version)
+-- VanUI (robuste Version) - Dropdown & Colorpicker Verbesserungen
+-- Änderungen:
+-- 1) Dropdown: Tags / ausgewählte Items korrekt positioniert; ausgewählte Option im Dropdown heller hervorgehoben.
+-- 2) MultiDropdown: Tags als Pills angezeigt (horizontal, sauber positioniert).
+-- 3) Colorpicker: Interaktive HSV-Box + Hue-Slider + Hex-Eingabe + Farbvorschau (Google-ähnlich Verhalten).
+-- 4) Alle vorherigen Robustheitsfixes (toNumberOrDefault, safe clamps, Dropdown default as string/index etc.) bleiben erhalten.
+--
+-- Vollständige Library (ersetze deine alte Library-Datei damit)
 
 local Library = {}
 Library.Windows = {}
@@ -58,35 +64,81 @@ local function toNumberOrDefault(v, default)
 end
 
 local function toIndexFromValue(val, options, defaultIndex)
-	-- val kann number | string | nil sein
-	-- wenn number => clamp in range
-	-- wenn string => suche exakten match in options (v==val). Wenn gefunden => index
-	-- wenn string numerisch => tonumber -> clamp
-	-- sonst defaultIndex oder 1
 	if not options or #options == 0 then return 1 end
 	if type(val) == "number" then
 		return math.clamp(math.floor(val), 1, #options)
 	end
 	if type(val) == "string" then
-		-- suche nach text match
 		for i, v in ipairs(options) do
 			if tostring(v) == val then
 				return i
 			end
 		end
-		-- fallback wenn string numerisch
 		local n = tonumber(val)
 		if type(n) == "number" then
 			return math.clamp(math.floor(n), 1, #options)
 		end
 	end
-	-- fallback: benutze defaultIndex wenn gültig
 	if type(defaultIndex) == "number" then
 		return math.clamp(math.floor(defaultIndex), 1, #options)
 	end
 	return 1
 end
 
+-- Color helpers (RGB <-> HSV)
+local function RGBToHSV(c)
+	-- c: Color3
+	local r, g, b = c.r, c.g, c.b
+	local maxv = math.max(r,g,b)
+	local minv = math.min(r,g,b)
+	local delta = maxv - minv
+	local h = 0
+	if delta == 0 then
+		h = 0
+	else
+		if maxv == r then
+			h = (g - b) / delta
+			h = h % 6
+		elseif maxv == g then
+			h = (b - r) / delta + 2
+		else
+			h = (r - g) / delta + 4
+		end
+		h = h * 60
+		if h < 0 then h = h + 360 end
+	end
+	local s = 0
+	if maxv ~= 0 then s = delta / maxv end
+	local v = maxv
+	return h, s, v
+end
+
+local function HSVToRGB(h, s, v)
+	h = h % 360
+	local c = v * s
+	local x = c * (1 - math.abs(((h / 60) % 2) - 1))
+	local m = v - c
+	local r1, g1, b1 = 0,0,0
+	if h < 60 then r1, g1, b1 = c, x, 0
+	elseif h < 120 then r1, g1, b1 = x, c, 0
+	elseif h < 180 then r1, g1, b1 = 0, c, x
+	elseif h < 240 then r1, g1, b1 = 0, x, c
+	elseif h < 300 then r1, g1, b1 = x, 0, c
+	else r1, g1, b1 = c, 0, x end
+	return Color3.new(r1 + m, g1 + m, b1 + m)
+end
+
+local function lightenColor(c, amount)
+	-- amount 0..1 -> returns brighter color by interpolation towards white
+	amount = math.clamp(toNumberOrDefault(amount, 0.15), 0, 1)
+	return Color3.new(
+		math.clamp(c.r + (1 - c.r) * amount, 0, 1),
+		math.clamp(c.g + (1 - c.g) * amount, 0, 1),
+		math.clamp(c.b + (1 - c.b) * amount, 0, 1)
+	)
+end
+
+-- Mobile detection
 local function detectMobile()
 	local isTouchEnabled = UserInputService.TouchEnabled
 	local hasKeyboard = UserInputService.KeyboardEnabled
@@ -123,7 +175,6 @@ function Library:CreateWindow(title, subtitle, opts)
 	if opts.size and typeof(opts.size) == "UDim2" then
 		sizeUDim = opts.size
 	elseif opts.width and opts.height then
-		-- sichere Konvertierung
 		local w = toNumberOrDefault(opts.width, defaultW)
 		local h = toNumberOrDefault(opts.height, defaultH)
 		sizeUDim = UDim2.new(0, w, 0, h)
@@ -400,7 +451,6 @@ function Library:CreateWindow(title, subtitle, opts)
 			local centeredX = (vp2.X - boxW) / 2
 			local initialX, initialY
 
-			-- robust: falls vorher gespeicherte Position string/number gemischt ist
 			if Window._restorePosition and Window._restorePosition.X and Window._restorePosition.Y then
 				local savedX = toNumberOrDefault(Window._restorePosition.X, centeredX)
 				local savedY = toNumberOrDefault(Window._restorePosition.Y, margin)
@@ -613,7 +663,7 @@ function Library:CreateWindow(title, subtitle, opts)
 			}
 		end
 
-		-- Dropdown: defaultIndex kann Index oder String (Option text) sein
+		-- Dropdown: defaultIndex can be index or option string
 		function Tab:AddDropdown(text, options, defaultIndex, callback)
 			if type(options) ~= "table" then options = {} end
 			local default = toIndexFromValue(defaultIndex, options, 1)
@@ -641,13 +691,11 @@ function Library:CreateWindow(title, subtitle, opts)
 			}
 		end
 
-		-- MultiDropdown: options table, defaultValues = table of values/indices/strings
 		function Tab:AddMultiDropdown(text, options, defaultValues, callback)
 			if type(options) ~= "table" then options = {} end
 			local set = {}
 			if type(defaultValues) == "table" then
 				for _, v in ipairs(defaultValues) do
-					-- find index from value
 					local idx = toIndexFromValue(v, options, nil)
 					if idx and not set[idx] then set[idx] = true end
 				end
@@ -656,7 +704,7 @@ function Library:CreateWindow(title, subtitle, opts)
 				Type = "MultiDropdown",
 				Text = text,
 				Options = options,
-				Selected = set, -- map index -> true
+				Selected = set,
 				Callback = callback,
 				Visible = true,
 				_Expanded = false
@@ -686,9 +734,7 @@ function Library:CreateWindow(title, subtitle, opts)
 			}
 		end
 
-		-- Keybind: unterstützt (text, defaultKey, callback) oder (text, defaultKey, mode, callback)
 		function Tab:AddKeybind(text, defaultKey, mode, callback)
-			-- wenn mode tatsächlich callback ist
 			if type(mode) == "function" and callback == nil then
 				callback = mode
 				mode = nil
@@ -700,15 +746,12 @@ function Library:CreateWindow(title, subtitle, opts)
 				local k = Enum.KeyCode[defaultKey]
 				if k then parsedKey = k
 				else
-					-- falls single char like "F"
 					local upper = tostring(defaultKey):upper()
 					local k2 = Enum.KeyCode[upper]
 					if k2 then parsedKey = k2 end
 				end
 			elseif type(defaultKey) == "number" then
-				-- numeric KeyCode value (rare)
-				local ok, enumObj = pcall(function() return Enum.KeyCode[defaultKey] end)
-				if ok and enumObj then parsedKey = enumObj end
+				-- no reliable numeric mapping; fallback below
 			end
 			if not parsedKey then parsedKey = Enum.KeyCode.F end
 
@@ -739,22 +782,31 @@ function Library:CreateWindow(title, subtitle, opts)
 			}
 		end
 
-		-- Colorpicker (einfacher)
+		-- Colorpicker: defaultColor Color3, callback(Color3)
 		function Tab:AddColorpicker(text, defaultColor, callback)
 			local col = defaultColor
 			if type(col) ~= "userdata" then col = Color3.fromRGB(255,255,255) end
+			local h,s,v = RGBToHSV(col)
 			local Picker = {
 				Type = "Colorpicker",
 				Text = text,
 				Color = col,
+				HSV = {h=h, s=s, v=v},
 				Callback = callback,
-				Visible = true
+				Visible = true,
+				_UI = {}
 			}
 			table.insert(Tab.Elements, Picker)
 			Window:RefreshContent()
 			return {
 				Set = function(self, c)
-					if type(c) == "userdata" then Picker.Color = c; Window:RefreshContent(); if Picker.Callback then pcall(Picker.Callback, c) end end
+					if type(c) == "userdata" then
+						Picker.Color = c
+						local hh,ss,vv = RGBToHSV(c)
+						Picker.HSV.h = hh; Picker.HSV.s = ss; Picker.HSV.v = vv
+						Window:RefreshContent()
+						if Picker.Callback then pcall(Picker.Callback, c) end
+					end
 				end,
 				Get = function() return Picker.Color end,
 				Hide = function() Picker.Visible = false; Window:RefreshContent() end,
@@ -975,9 +1027,10 @@ function Library:CreateWindow(title, subtitle, opts)
 				end
 
 			elseif element.Type == "Dropdown" then
-				local baseHeight = isMobile and 40 or 44
+				-- Single dropdown with pill-style selected display and highlighted selected option when expanded
+				local baseHeight = isMobile and 44 or 48
 				local optionHeight = isMobile and 30 or 34
-				local visibleOptions = math.clamp(#element.Options, 0, 6)
+				local visibleOptions = math.clamp(#element.Options, 0, 8)
 				local collapsedHeight = baseHeight
 				local expandedHeight = baseHeight + (visibleOptions * optionHeight)
 
@@ -985,9 +1038,28 @@ function Library:CreateWindow(title, subtitle, opts)
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.06,0)})
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
-				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.6,0,0,0, ElementFontSize + 4), Font = Enum.Font.GothamMedium, Text = element.Text or "Dropdown", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
-				local SelectedLabel = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 6), Size = UDim2.new(0.94,0,0, ElementFontSize + 4), Font = Enum.Font.Gotham, Text = (element.Options[element.Selected] or ""), TextColor3 = Color3.fromRGB(150,150,150), TextSize = SmallFontSize, TextXAlignment = Enum.TextXAlignment.Left})
-				local Arrow = New("TextButton", { Parent = F, BackgroundTransparency = 1, Size = UDim2.new(0,32,0,32), Position = UDim2.new(1,-36,0,6), Text = element._Expanded and "▴" or "▾", Font = Enum.Font.SourceSansBold, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = isMobile and 16 or 18, AutoButtonColor = false })
+				-- Top: label + selected pill container
+				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,6), Size = UDim2.new(0.4,0,0,ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "Dropdown", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
+				local PillContainer = New("Frame", { Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 12), Size = UDim2.new(0.94,0,0, baseHeight - (ElementFontSize + 18))})
+				-- inside PillContainer we place a UIListLayout horizontal and display the selected option as a pill
+				local pillLayout = New("UIListLayout", { Parent = PillContainer, FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Left, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,6) })
+				pillLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() end)
+
+				local function renderSelectedPill()
+					-- clear old
+					for _,c in pairs(PillContainer:GetChildren()) do
+						if c:IsA("Frame") and c.Name == "SelectedPill" then c:Destroy() end
+					end
+					local selText = tostring(element.Options[element.Selected] or "")
+					local pill = New("Frame", { Parent = PillContainer, Name = "SelectedPill", BackgroundColor3 = lightenColor(themeGet(theme,"Tab"), 0.08), Size = UDim2.new(0, math.clamp(TextService:GetTextSize(selText, SmallFontSize, Enum.Font.Gotham, Vector2.new(800, math.huge)).X + 18, 60, PillContainer.AbsoluteSize.X), 0, PillContainer.AbsoluteSize.Y), BorderSizePixel = 0 })
+					New("UICorner", { Parent = pill, CornerRadius = UDim.new(0.5, 0) })
+					New("UIStroke", { Parent = pill, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
+					New("TextLabel", { Parent = pill, BackgroundTransparency = 1, Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = selText, TextXAlignment = Enum.TextXAlignment.Left, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(230,230,230) })
+				end
+				-- render initial
+				renderSelectedPill()
+
+				local Arrow = New("TextButton", { Parent = F, BackgroundTransparency = 1, Size = UDim2.new(0,28,0,28), Position = UDim2.new(1,-34,0,6), Text = element._Expanded and "▴" or "▾", Font = Enum.Font.SourceSansBold, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = isMobile and 14 or 16, AutoButtonColor = false })
 
 				local OptionsFrame = nil
 
@@ -1004,13 +1076,21 @@ function Library:CreateWindow(title, subtitle, opts)
 					OptionsFrame = New("Frame", { Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0,0,0, baseHeight), Size = UDim2.new(1,0,0, visibleOptions * optionHeight) })
 					local optsLayout = New("UIListLayout", { Parent = OptionsFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,2) })
 					for i, opt in ipairs(element.Options) do
-						local btn = New("TextButton", { Parent = OptionsFrame, BackgroundColor3 = themeGet(theme, "Tab"), Size = UDim2.new(1,0,0,optionHeight), Text = opt, Font = Enum.Font.Gotham, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(200,200,200), AutoButtonColor = false })
+						local isSelected = (i == element.Selected)
+						local bgColor = isSelected and lightenColor(themeGet(theme,"Tab"), 0.18) or themeGet(theme,"Tab")
+						local textColor = isSelected and Color3.fromRGB(20,20,20) or Color3.fromRGB(200,200,200)
+						local btn = New("TextButton", { Parent = OptionsFrame, BackgroundColor3 = bgColor, Size = UDim2.new(1,0,0,optionHeight), Text = "", AutoButtonColor = false })
 						New("UICorner", { Parent = btn, CornerRadius = UDim.new(0.06,0) })
 						New("UIStroke", { Parent = btn, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
+						local lbl = New("TextLabel", { Parent = btn, BackgroundTransparency = 1, Size = UDim2.new(1,-14,1,0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = opt, TextSize = SmallFontSize, TextColor3 = textColor, TextXAlignment = Enum.TextXAlignment.Left })
+						if isSelected then
+							-- add small check or highlight marker
+							local check = New("TextLabel", { Parent = btn, BackgroundTransparency = 1, Size = UDim2.new(0,24,0,optionHeight), Position = UDim2.new(1,-28,0,0), Font = Enum.Font.SourceSansBold, Text = "✓", TextSize = SmallFontSize + 4, TextColor3 = Color3.fromRGB(20,20,20) })
+						end
 						btn.MouseButton1Click:Connect(function()
 							element.Selected = i
 							if element.Callback then pcall(element.Callback, element.Selected, element.Options[element.Selected]) end
-							SelectedLabel.Text = element.Options[element.Selected]
+							renderSelectedPill()
 							collapse()
 						end)
 					end
@@ -1021,16 +1101,14 @@ function Library:CreateWindow(title, subtitle, opts)
 					if element._Expanded then collapse() else expand() end
 				end)
 
-				SelectedLabel.InputBegan:Connect(function(inp)
-					if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-						if element._Expanded then collapse() else expand() end
-					end
-				end)
+				-- when PillContainer absolute size changes (resize), re-render pill to fit width
+				PillContainer:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() renderSelectedPill() end)
 
 			elseif element.Type == "MultiDropdown" then
-				local baseHeight = isMobile and 40 or 44
-				local optionHeight = isMobile and 28 or 32
-				local visibleOptions = math.clamp(#element.Options, 0, 6)
+				-- MultiDropdown with horizontal pill area; expanded options highlight selected ones
+				local baseHeight = isMobile and 44 or 48
+				local optionHeight = isMobile and 30 or 34
+				local visibleOptions = math.clamp(#element.Options, 0, 8)
 				local collapsedHeight = baseHeight
 				local expandedHeight = baseHeight + (visibleOptions * optionHeight)
 
@@ -1038,20 +1116,27 @@ function Library:CreateWindow(title, subtitle, opts)
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.06,0)})
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
-				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.6,0,0,0, ElementFontSize + 4), Font = Enum.Font.GothamMedium, Text = element.Text or "MultiDropdown", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
-				local SelectedLabel = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 6), Size = UDim2.new(0.94,0,0, ElementFontSize + 4), Font = Enum.Font.Gotham, Text = "", TextColor3 = Color3.fromRGB(150,150,150), TextSize = SmallFontSize, TextXAlignment = Enum.TextXAlignment.Left})
-				local Arrow = New("TextButton", { Parent = F, BackgroundTransparency = 1, Size = UDim2.new(0,32,0,32), Position = UDim2.new(1,-36,0,6), Text = element._Expanded and "▴" or "▾", Font = Enum.Font.SourceSansBold, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = isMobile and 16 or 18, AutoButtonColor = false })
+				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,6), Size = UDim2.new(0.35,0,0,ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "MultiDropdown", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
+				local PillContainer = New("Frame", { Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 12), Size = UDim2.new(0.94,0,0, baseHeight - (ElementFontSize + 18))})
+				local pillLayout = New("UIListLayout", { Parent = PillContainer, FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Left, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,6) })
+
+				local function renderMultiPills()
+					for _,c in pairs(PillContainer:GetChildren()) do
+						if c:IsA("Frame") and c.Name == "MultiPill" then c:Destroy() end
+					end
+					for idx,_ in pairs(element.Selected) do
+						local text = tostring(element.Options[idx] or "")
+						local pill = New("Frame", { Parent = PillContainer, Name = "MultiPill", BackgroundColor3 = lightenColor(themeGet(theme,"Tab"), 0.08), Size = UDim2.new(0, math.clamp(TextService:GetTextSize(text, SmallFontSize, Enum.Font.Gotham, Vector2.new(800, math.huge)).X + 22, 60, PillContainer.AbsoluteSize.X), 0, PillContainer.AbsoluteSize.Y), BorderSizePixel = 0 })
+						New("UICorner", { Parent = pill, CornerRadius = UDim.new(0.5, 0) })
+						New("UIStroke", { Parent = pill, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
+						local lbl = New("TextLabel", { Parent = pill, BackgroundTransparency = 1, Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = text, TextXAlignment = Enum.TextXAlignment.Left, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(230,230,230) })
+					end
+				end
+				renderMultiPills()
+
+				local Arrow = New("TextButton", { Parent = F, BackgroundTransparency = 1, Size = UDim2.new(0,28,0,28), Position = UDim2.new(1,-34,0,6), Text = element._Expanded and "▴" or "▾", Font = Enum.Font.SourceSansBold, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = isMobile and 14 or 16, AutoButtonColor = false })
 
 				local OptionsFrame = nil
-
-				local function updateSelectedLabel()
-					local parts = {}
-					for idx,_ in pairs(element.Selected) do
-						table.insert(parts, tostring(element.Options[idx] or ""))
-					end
-					SelectedLabel.Text = table.concat(parts, ", ")
-				end
-				updateSelectedLabel()
 
 				local function collapse()
 					element._Expanded = false
@@ -1066,16 +1151,21 @@ function Library:CreateWindow(title, subtitle, opts)
 					OptionsFrame = New("Frame", { Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0,0,0, baseHeight), Size = UDim2.new(1,0,0, visibleOptions * optionHeight) })
 					local optsLayout = New("UIListLayout", { Parent = OptionsFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,2) })
 					for i, opt in ipairs(element.Options) do
-						local btn = New("TextButton", { Parent = OptionsFrame, BackgroundColor3 = themeGet(theme, "Tab"), Size = UDim2.new(1,0,0,optionHeight), Text = opt, Font = Enum.Font.Gotham, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(200,200,200), AutoButtonColor = false })
+						local isSelected = element.Selected[i]
+						local bgColor = isSelected and lightenColor(themeGet(theme,"Tab"), 0.18) or themeGet(theme,"Tab")
+						local textColor = isSelected and Color3.fromRGB(20,20,20) or Color3.fromRGB(200,200,200)
+						local btn = New("TextButton", { Parent = OptionsFrame, BackgroundColor3 = bgColor, Size = UDim2.new(1,0,0,optionHeight), Text = "", AutoButtonColor = false })
 						New("UICorner", { Parent = btn, CornerRadius = UDim.new(0.06,0) })
 						New("UIStroke", { Parent = btn, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
+						local lbl = New("TextLabel", { Parent = btn, BackgroundTransparency = 1, Size = UDim2.new(1,-14,1,0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = opt, TextSize = SmallFontSize, TextColor3 = textColor, TextXAlignment = Enum.TextXAlignment.Left })
+						local mark = New("TextLabel", { Parent = btn, BackgroundTransparency = 1, Size = UDim2.new(0,24,0,optionHeight), Position = UDim2.new(1,-28,0,0), Font = Enum.Font.SourceSansBold, Text = isSelected and "✓" or "", TextSize = SmallFontSize + 4, TextColor3 = Color3.fromRGB(20,20,20) })
 						btn.MouseButton1Click:Connect(function()
 							if element.Selected[i] then
 								element.Selected[i] = nil
 							else
 								element.Selected[i] = true
 							end
-							updateSelectedLabel()
+							renderMultiPills()
 							if element.Callback then
 								local vals = {}
 								for idx,_ in pairs(element.Selected) do table.insert(vals, element.Options[idx]) end
@@ -1090,11 +1180,7 @@ function Library:CreateWindow(title, subtitle, opts)
 					if element._Expanded then collapse() else expand() end
 				end)
 
-				SelectedLabel.InputBegan:Connect(function(inp)
-					if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-						if element._Expanded then collapse() else expand() end
-					end
-				end)
+				PillContainer:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() renderMultiPills() end)
 
 			elseif element.Type == "Keybind" then
 				local bindHeight = isMobile and 40 or 46
@@ -1152,26 +1238,160 @@ function Library:CreateWindow(title, subtitle, opts)
 				end)
 
 			elseif element.Type == "Colorpicker" then
-				local h = isMobile and 44 or 48
-				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,h)})
+				-- full small Google-like color picker: SV box + hue slider + hex input + preview
+				local h = isMobile and 140 or 160
+				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,h + 12)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.06,0)})
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
-				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.55,0,0,ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "Color", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
-				local swatch = New("Frame", { Parent = F, Size = UDim2.new(0, 34, 0, 28), Position = UDim2.new(1, -46, 0, 8), BackgroundColor3 = element.Color, BorderSizePixel = 0 })
-				New("UICorner", {Parent = swatch, CornerRadius = UDim.new(0.06,0)})
-				New("UIStroke", {Parent = swatch, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
+				local padding = 8
+				New("UIPadding", {Parent = F, PaddingLeft = UDim.new(0,padding), PaddingTop = UDim.new(0,padding)})
 
-				swatch.InputBegan:Connect(function(inp)
-					if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-						-- einfacher cycle (kein full colorpicker UI): rotiere R,G,B
-						local c = element.Color
-						local newC = Color3.new(1 - c.r, 1 - c.g, 1 - c.b)
-						element.Color = newC
-						swatch.BackgroundColor3 = newC
-						if element.Callback then pcall(element.Callback, newC) end
+				-- title
+				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0,0,0,0), Size = UDim2.new(1, - (h + 20), 0, ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "Color", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
+
+				-- SV box (square)
+				local svSize = h
+				local SV = New("Frame", { Parent = F, BackgroundColor3 = Color3.new(1,1,1), Size = UDim2.new(0, svSize, 0, svSize), Position = UDim2.new(0,0,0, ElementFontSize + 8) })
+				New("UICorner", { Parent = SV, CornerRadius = UDim.new(0.02, 0) })
+				-- overlays for hue and saturation/value
+				local SVColor = New("Frame", { Parent = SV, BackgroundColor3 = HSVToRGB(element.HSV.h, 1, 1), Size = UDim2.new(1,1,1,1), BorderSizePixel = 0 })
+				New("UICorner", { Parent = SVColor, CornerRadius = UDim.new(0.02, 0) })
+				local SVOverlay = New("ImageLabel", { Parent = SV, BackgroundTransparency = 1, Image = "rbxassetid://4155801250", ImageColor3 = Color3.new(1,1,1), Size = UDim2.new(1,1,1,1), ScaleType = Enum.ScaleType.Stretch })
+				-- SVOverlay uses a white->transparent gradient image; using built-in image id common trick (if unavailable, it's harmless)
+				-- Crosshair indicator
+				local Cross = New("Frame", { Parent = SV, Size = UDim2.new(0, 12, 0, 12), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Color3.new(0,0,0) })
+				New("UICorner", { Parent = Cross, CornerRadius = UDim.new(1, 0) })
+				local CrossInner = New("Frame", { Parent = Cross, Size = UDim2.new(1,1,1,1), BackgroundColor3 = Color3.new(1,1,1) })
+				New("UICorner", { Parent = CrossInner, CornerRadius = UDim.new(1, 0) })
+
+				-- Hue slider
+				local hueW = 28
+				local Hue = New("Frame", { Parent = F, Size = UDim2.new(0, hueW, 0, svSize), Position = UDim2.new(0, svSize + 12, 0, ElementFontSize + 8), BackgroundColor3 = Color3.new(1,0,0) })
+				New("UICorner", { Parent = Hue, CornerRadius = UDim.new(0.02, 0) })
+				-- gradient stripe: we'll approximate by cycling background using Image (if available)
+				local hueImg = New("ImageLabel", { Parent = Hue, BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0), Image = "rbxassetid://4318288741", ImageColor3 = Color3.new(1,1,1), ScaleType = Enum.ScaleType.Stretch })
+
+				-- Hue indicator
+				local HueIndicator = New("Frame", { Parent = Hue, Size = UDim2.new(1,0,0,6), AnchorPoint = Vector2.new(0,0.5), Position = UDim2.new(0,0, element.HSV.h / 360, 0), BackgroundColor3 = Color3.new(1,1,1) })
+				New("UICorner", { Parent = HueIndicator, CornerRadius = UDim.new(0.02, 0) })
+
+				-- Right side: preview + hex input
+				local rightX = svSize + 12 + hueW + 12
+				local Preview = New("Frame", { Parent = F, Size = UDim2.new(0, 60, 0, 60), Position = UDim2.new(0, rightX, 0, ElementFontSize + 8), BackgroundColor3 = element.Color })
+				New("UICorner", { Parent = Preview, CornerRadius = UDim.new(0.04, 0) })
+				New("UIStroke", { Parent = Preview, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
+
+				local HexBox = New("TextBox", { Parent = F, Size = UDim2.new(0, 120, 0, 28), Position = UDim2.new(0, rightX, 0, ElementFontSize + 8 + 68), BackgroundColor3 = themeGet(theme, "Tab"), Text = string.format("#%02X%02X%02X", math.floor(element.Color.r*255), math.floor(element.Color.g*255), math.floor(element.Color.b*255)), ClearTextOnFocus = false, TextColor3 = Color3.fromRGB(240,240,240), Font = Enum.Font.Gotham, TextSize = SmallFontSize, PlaceholderText = "#RRGGBB" })
+				New("UICorner", { Parent = HexBox, CornerRadius = UDim.new(0.04, 0) })
+				New("UIStroke", { Parent = HexBox, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
+
+				-- helper: set HSV & update UI elements
+				local function updatePickerFromHSV()
+					local newC = HSVToRGB(element.HSV.h, element.HSV.s, element.HSV.v)
+					element.Color = newC
+					SVColor.BackgroundColor3 = HSVToRGB(element.HSV.h, 1, 1)
+					Preview.BackgroundColor3 = newC
+					HexBox.Text = string.format("#%02X%02X%02X", math.floor(newC.r*255), math.floor(newC.g*255), math.floor(newC.b*255))
+					-- position crosshair
+					local svPosX = element.HSV.s * SV.AbsoluteSize.X
+					local svPosY = (1 - element.HSV.v) * SV.AbsoluteSize.Y
+					Cross.Position = UDim2.new(0, svPosX, 0, svPosY)
+					-- hue indicator
+					local hueY = (element.HSV.h / 360) * Hue.AbsoluteSize.Y
+					HueIndicator.Position = UDim2.new(0, 0, 0, math.clamp(hueY, 0, Hue.AbsoluteSize.Y))
+					if element.Callback then pcall(element.Callback, element.Color) end
+				end
+
+				-- interaction: SV box (saturation/value)
+				do
+					local draggingSV = false
+					local function setSVFromPos(pos)
+						local x = pos.X - SV.AbsolutePosition.X
+						local y = pos.Y - SV.AbsolutePosition.Y
+						local s = math.clamp(x / math.max(1, SV.AbsoluteSize.X), 0, 1)
+						local v = math.clamp(1 - (y / math.max(1, SV.AbsoluteSize.Y)), 0, 1)
+						element.HSV.s = s
+						element.HSV.v = v
+						updatePickerFromHSV()
+					end
+					SV.InputBegan:Connect(function(inp)
+						if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+							draggingSV = true
+							local ok, p = pcall(function() return inp.Position end)
+							if ok and p then setSVFromPos(p) end
+						end
+					end)
+					SV.InputEnded:Connect(function(inp)
+						if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+							draggingSV = false
+						end
+					end)
+					UserInputService.InputChanged:Connect(function(inp)
+						if not draggingSV then return end
+						if (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) and inp.Position then
+							setSVFromPos(inp.Position)
+						end
+					end)
+				end
+
+				-- hue slider interaction
+				do
+					local draggingHue = false
+					local function setHueFromPos(pos)
+						local y = pos.Y - Hue.AbsolutePosition.Y
+						local h = math.clamp((y / math.max(1, Hue.AbsoluteSize.Y)) * 360, 0, 360)
+						element.HSV.h = h
+						updatePickerFromHSV()
+					end
+					Hue.InputBegan:Connect(function(inp)
+						if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+							draggingHue = true
+							local ok, p = pcall(function() return inp.Position end)
+							if ok and p then setHueFromPos(p) end
+						end
+					end)
+					Hue.InputEnded:Connect(function(inp)
+						if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+							draggingHue = false
+						end
+					end)
+					UserInputService.InputChanged:Connect(function(inp)
+						if not draggingHue then return end
+						if (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) and inp.Position then
+							setHueFromPos(inp.Position)
+						end
+					end)
+				end
+
+				-- hex input handling
+				HexBox.FocusLost:Connect(function(enter)
+					local txt = tostring(HexBox.Text or "")
+					-- accept #RRGGBB or RRGGBB
+					txt = txt:gsub("#","")
+					if #txt == 6 then
+						local r = tonumber("0x"..txt:sub(1,2))
+						local g = tonumber("0x"..txt:sub(3,4))
+						local b = tonumber("0x"..txt:sub(5,6))
+						if r and g and b then
+							local c = Color3.fromRGB(r,g,b)
+							element.Color = c
+							local hh,ss,vv = RGBToHSV(c)
+							element.HSV.h = hh; element.HSV.s = ss; element.HSV.v = vv
+							updatePickerFromHSV()
+						end
+					else
+						-- restore current hex
+						HexBox.Text = string.format("#%02X%02X%02X", math.floor(element.Color.r*255), math.floor(element.Color.g*255), math.floor(element.Color.b*255))
 					end
 				end)
+
+				-- initialize visuals
+				task.spawn(function() task.wait(0.03); updatePickerFromHSV() end)
+
+				-- on resize, reposition cross/hue
+				SV:GetPropertyChangedSignal("AbsoluteSize"):Connect(updatePickerFromHSV)
+				Hue:GetPropertyChangedSignal("AbsoluteSize"):Connect(updatePickerFromHSV)
 			end
 		end
 	end
