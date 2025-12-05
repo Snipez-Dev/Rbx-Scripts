@@ -1,6 +1,5 @@
--- VanUI mit vollständigem Mobile Support + Custom Dropdowns & Keybinds
--- (gesamter Code: Original erhalten, neue Elemente: Dropdown + Keybind/Hotkey hinzugefügt)
--- Hinweis: Dieser gesamte Code ersetzt die vorherige Datei - volle Datei unten.
+-- VanUI (robuste Version) - Fehlerbehebungen für math.clamp / string-Inputs
+-- Vollständige Library (ersetzt ältere Version)
 
 local Library = {}
 Library.Windows = {}
@@ -48,14 +47,50 @@ local function getViewport()
 	return Vector2.new(1920,1080)
 end
 
--- Mobile Detection erweitert
+-- Utility: sichere Konvertierung / Clamp
+local function toNumberOrDefault(v, default)
+	if type(v) == "number" then return v end
+	if type(v) == "string" then
+		local n = tonumber(v)
+		if type(n) == "number" then return n end
+	end
+	return default
+end
+
+local function toIndexFromValue(val, options, defaultIndex)
+	-- val kann number | string | nil sein
+	-- wenn number => clamp in range
+	-- wenn string => suche exakten match in options (v==val). Wenn gefunden => index
+	-- wenn string numerisch => tonumber -> clamp
+	-- sonst defaultIndex oder 1
+	if not options or #options == 0 then return 1 end
+	if type(val) == "number" then
+		return math.clamp(math.floor(val), 1, #options)
+	end
+	if type(val) == "string" then
+		-- suche nach text match
+		for i, v in ipairs(options) do
+			if tostring(v) == val then
+				return i
+			end
+		end
+		-- fallback wenn string numerisch
+		local n = tonumber(val)
+		if type(n) == "number" then
+			return math.clamp(math.floor(n), 1, #options)
+		end
+	end
+	-- fallback: benutze defaultIndex wenn gültig
+	if type(defaultIndex) == "number" then
+		return math.clamp(math.floor(defaultIndex), 1, #options)
+	end
+	return 1
+end
+
 local function detectMobile()
 	local isTouchEnabled = UserInputService.TouchEnabled
 	local hasKeyboard = UserInputService.KeyboardEnabled
-	local hasMouse = UserInputService.MouseEnabled
 	local vp = getViewport()
-	
-	-- Mobile wenn: Touch enabled UND (kein Keyboard ODER kleine Bildschirmgröße)
 	return isTouchEnabled and (not hasKeyboard or vp.X < 800 or vp.Y < 600)
 end
 
@@ -71,54 +106,49 @@ function Library:CreateWindow(title, subtitle, opts)
 		pcall(function() Library.MainWindow:Destroy() end)
 	end
 
-	-- Mobile Detection
 	local isMobile = detectMobile()
 	local vp = getViewport()
 
-	-- Mobile-spezifische Skalierung (ANPASSUNG: kleinere Default-Größen für Mobile)
 	local scaleFactor = 1
 	local defaultW, defaultH = 760, 420
-	
+
 	if isMobile then
-		-- Noch kleinere UI für mobile Geräte (angepasst)
 		scaleFactor = 0.65
-		if vp.X < 500 then scaleFactor = 0.55 end -- Sehr kleine Bildschirme
-		-- Diese Werte wurden verringert, um die UI auf mobilen Geräten kompakter zu machen
-		defaultW = math.floor(vp.X * 0.82) -- vorher: vp.X * 0.92
-		defaultH = math.floor(vp.Y * 0.62) -- vorher: vp.Y * 0.75
+		if vp.X < 500 then scaleFactor = 0.55 end
+		defaultW = math.floor(vp.X * 0.82)
+		defaultH = math.floor(vp.Y * 0.62)
 	end
 
-	-- Größenberechnung
 	local sizeUDim
 	if opts.size and typeof(opts.size) == "UDim2" then
 		sizeUDim = opts.size
 	elseif opts.width and opts.height then
-		sizeUDim = UDim2.new(0, opts.width, 0, opts.height)
+		-- sichere Konvertierung
+		local w = toNumberOrDefault(opts.width, defaultW)
+		local h = toNumberOrDefault(opts.height, defaultH)
+		sizeUDim = UDim2.new(0, w, 0, h)
 	else
 		sizeUDim = UDim2.new(0, defaultW, 0, defaultH)
 	end
 	local absW = sizeUDim.X.Offset
 	local absH = sizeUDim.Y.Offset
 
-	-- Clamp für mobile
 	if isMobile then
 		absW = math.clamp(absW, 280, math.floor(vp.X * 0.98))
 		absH = math.clamp(absH, 320, math.floor(vp.Y * 0.95))
 	end
 
-	-- ScreenGui parented to CoreGui
-	local ScreenGui = New("ScreenGui", { 
-		Name = "VanUI", 
-		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, 
-		ResetOnSpawn = false 
+	local ScreenGui = New("ScreenGui", {
+		Name = "VanUI",
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		ResetOnSpawn = false
 	})
 	ScreenGui.Parent = CoreGui
-	
+
 	if isMobile then
 		ScreenGui.IgnoreGuiInset = true
 	end
 
-	-- Background
 	local Background = New("Frame", {
 		Name = "Background",
 		Parent = ScreenGui,
@@ -133,15 +163,13 @@ function Library:CreateWindow(title, subtitle, opts)
 	New("UICorner", {CornerRadius = UDim.new(0.02,0), Parent = Background})
 	local BackgroundStroke = New("UIStroke", {Color = themeGet(theme, "PanelStroke"), Thickness = 1, Transparency = 1, Parent = Background})
 
-	-- Open animation
-	TweenService:Create(Background, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { 
-		Size = UDim2.new(0, absW, 0, absH), 
-		BackgroundTransparency = 0 
+	TweenService:Create(Background, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Size = UDim2.new(0, absW, 0, absH),
+		BackgroundTransparency = 0
 	}):Play()
 	task.wait(0.22)
 	TweenService:Create(BackgroundStroke, TweenInfo.new(0.22), { Transparency = 0 }):Play()
 
-	-- Mobile-angepasste Größen
 	local HeaderHeight = isMobile and 48 or 60
 	local TitleFontSize = isMobile and 13 or 16
 	local SubtitleFontSize = isMobile and 10 or 12
@@ -149,80 +177,78 @@ function Library:CreateWindow(title, subtitle, opts)
 	local ElementFontSize = isMobile and 12 or 14
 	local SmallFontSize = isMobile and 10 or 13
 
-	-- TopBar / Header
-	local TopBar = New("Frame", { 
-		Name = "TopBar", 
-		Parent = Background, 
-		BackgroundTransparency = 1, 
-		Position = UDim2.new(0,0,0,0), 
-		Size = UDim2.new(1,0,0,HeaderHeight) 
-	})
-	
-	local titleYPos = isMobile and 0.15 or 0.18
-	local subtitleYPos = isMobile and 0.58 or 0.55
-	
-	local TitleLabel = New("TextLabel", { 
-		Name = "title", 
-		Parent = TopBar, 
-		BackgroundTransparency = 1, 
-		Position = UDim2.new(0.03,0,titleYPos,0), 
-		Size = UDim2.new(0.5,0,0,TitleFontSize + 8), 
-		Font = Enum.Font.GothamMedium, 
-		Text = title or "VanUI", 
-		TextColor3 = Color3.fromRGB(255,255,255), 
-		TextSize = TitleFontSize, 
-		TextXAlignment = Enum.TextXAlignment.Left, 
-		TextYAlignment = Enum.TextYAlignment.Center 
-	})
-	
-	New("TextLabel", { 
-		Name = "subtitle", 
-		Parent = TopBar, 
-		BackgroundTransparency = 1, 
-		Position = UDim2.new(0.03,0,subtitleYPos,0), 
-		Size = UDim2.new(0.5,0,0,SubtitleFontSize + 2), 
-		Font = Enum.Font.Gotham, 
-		Text = subtitle or "", 
-		TextColor3 = Color3.fromRGB(150,150,150), 
-		TextSize = SubtitleFontSize, 
-		TextXAlignment = Enum.TextXAlignment.Left 
+	local TopBar = New("Frame", {
+		Name = "TopBar",
+		Parent = Background,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0,0,0,0),
+		Size = UDim2.new(1,0,0,HeaderHeight)
 	})
 
-	-- Controls (mobile-optimiert)
+	local titleYPos = isMobile and 0.15 or 0.18
+	local subtitleYPos = isMobile and 0.58 or 0.55
+
+	local TitleLabel = New("TextLabel", {
+		Name = "title",
+		Parent = TopBar,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0.03,0,titleYPos,0),
+		Size = UDim2.new(0.5,0,0,TitleFontSize + 8),
+		Font = Enum.Font.GothamMedium,
+		Text = title or "VanUI",
+		TextColor3 = Color3.fromRGB(255,255,255),
+		TextSize = TitleFontSize,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center
+	})
+
+	New("TextLabel", {
+		Name = "subtitle",
+		Parent = TopBar,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0.03,0,subtitleYPos,0),
+		Size = UDim2.new(0.5,0,0,SubtitleFontSize + 2),
+		Font = Enum.Font.Gotham,
+		Text = subtitle or "",
+		TextColor3 = Color3.fromRGB(150,150,150),
+		TextSize = SubtitleFontSize,
+		TextXAlignment = Enum.TextXAlignment.Left
+	})
+
 	local btnSizeW = isMobile and 32 or 28
 	local btnSizeH = isMobile and 24 or 20
 	local btnFontSize = isMobile and 16 or 18
 	local controlsWidth = (btnSizeW * 2) + 8
-	
-	local ControlsFrame = New("Frame", { 
-		Name = "WindowControls", 
-		Parent = TopBar, 
-		BackgroundTransparency = 1, 
-		Size = UDim2.new(0, controlsWidth, 0, btnSizeH), 
-		Position = UDim2.new(1,-10,0, isMobile and 6 or 8), 
-		AnchorPoint = Vector2.new(1,0) 
+
+	local ControlsFrame = New("Frame", {
+		Name = "WindowControls",
+		Parent = TopBar,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(0, controlsWidth, 0, btnSizeH),
+		Position = UDim2.new(1,-10,0, isMobile and 6 or 8),
+		AnchorPoint = Vector2.new(1,0)
 	})
-	New("UIListLayout", { 
-		Parent = ControlsFrame, 
-		FillDirection = Enum.FillDirection.Horizontal, 
-		HorizontalAlignment = Enum.HorizontalAlignment.Right, 
-		VerticalAlignment = Enum.VerticalAlignment.Center, 
-		SortOrder = Enum.SortOrder.LayoutOrder, 
-		Padding = UDim.new(0, isMobile and 4 or 6) 
+	New("UIListLayout", {
+		Parent = ControlsFrame,
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, isMobile and 4 or 6)
 	})
 
 	local function makeControl(symbol)
-		local btn = New("TextButton", { 
-			Parent = ControlsFrame, 
-			BackgroundColor3 = Background.BackgroundColor3, 
-			BorderSizePixel = 0, 
-			Size = UDim2.new(0, btnSizeW, 0, btnSizeH), 
-			AutoButtonColor = false, 
-			Font = Enum.Font.SourceSansBold, 
-			Text = symbol, 
-			TextColor3 = themeGet(theme, "ControlBtnText"), 
-			TextSize = btnFontSize, 
-			TextScaled = true 
+		local btn = New("TextButton", {
+			Parent = ControlsFrame,
+			BackgroundColor3 = Background.BackgroundColor3,
+			BorderSizePixel = 0,
+			Size = UDim2.new(0, btnSizeW, 0, btnSizeH),
+			AutoButtonColor = false,
+			Font = Enum.Font.SourceSansBold,
+			Text = symbol,
+			TextColor3 = themeGet(theme, "ControlBtnText"),
+			TextSize = btnFontSize,
+			TextScaled = true
 		})
 		New("UICorner", {Parent = btn, CornerRadius = UDim.new(0.08,0)})
 		New("UIStroke", {Parent = btn, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
@@ -231,7 +257,6 @@ function Library:CreateWindow(title, subtitle, opts)
 	local MinBtn = makeControl("➖")
 	local CloseBtn = makeControl("❌")
 
-	-- Layout-Berechnung (mobile-angepasst)
 	local TabWidth = isMobile and (absW < 400 and 90 or 110) or 170
 	local TabLeftPadding = isMobile and 6 or 12
 	local ContentLeftPadding = isMobile and 6 or 12
@@ -239,61 +264,58 @@ function Library:CreateWindow(title, subtitle, opts)
 	local ContentWidth = math.max(120, absW - ContentLeft - (isMobile and 6 or 12))
 	local ContentHeight = math.max(80, absH - HeaderHeight - (isMobile and 10 or 20))
 
-	-- Tab Container
-	local TabContainer = New("Frame", { 
-		Name = "TabContainer", 
-		Parent = Background, 
-		BackgroundTransparency = 1, 
-		Position = UDim2.new(0, TabLeftPadding, 0, HeaderHeight), 
-		Size = UDim2.new(0, TabWidth, 0, ContentHeight) 
+	local TabContainer = New("Frame", {
+		Name = "TabContainer",
+		Parent = Background,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, TabLeftPadding, 0, HeaderHeight),
+		Size = UDim2.new(0, TabWidth, 0, ContentHeight)
 	})
 	New("UIListLayout", {
-		Parent = TabContainer, 
-		SortOrder = Enum.SortOrder.LayoutOrder, 
+		Parent = TabContainer,
+		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, isMobile and 5 or 8)
 	})
 
-	-- Content Container
-	local ContentContainer = New("ScrollingFrame", { 
-		Name = "ContentContainer", 
-		Parent = Background, 
-		BackgroundTransparency = 1, 
-		BorderSizePixel = 0, 
-		Position = UDim2.new(0, ContentLeft, 0, HeaderHeight - 2), 
-		Size = UDim2.new(0, ContentWidth, 0, ContentHeight + 2), 
-		CanvasSize = UDim2.new(0,0,0,0), 
-		ScrollBarThickness = isMobile and 4 or 6 
+	local ContentContainer = New("ScrollingFrame", {
+		Name = "ContentContainer",
+		Parent = Background,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, ContentLeft, 0, HeaderHeight - 2),
+		Size = UDim2.new(0, ContentWidth, 0, ContentHeight + 2),
+		CanvasSize = UDim2.new(0,0,0,0),
+		ScrollBarThickness = isMobile and 4 or 6
 	})
-	
+
 	local contentPadding = isMobile and 6 or 10
 	New("UIPadding", {
-		Parent = ContentContainer, 
-		PaddingLeft = UDim.new(0,contentPadding), 
-		PaddingRight = UDim.new(0,contentPadding), 
+		Parent = ContentContainer,
+		PaddingLeft = UDim.new(0,contentPadding),
+		PaddingRight = UDim.new(0,contentPadding),
 		PaddingTop = UDim.new(0,contentPadding)
 	})
-	
+
 	local contentLayout = New("UIListLayout", {
-		Parent = ContentContainer, 
-		SortOrder = Enum.SortOrder.LayoutOrder, 
+		Parent = ContentContainer,
+		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, isMobile and 5 or 8)
 	})
 	contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 		ContentContainer.CanvasSize = UDim2.new(0,0,0, contentLayout.AbsoluteContentSize.Y + contentPadding * 2)
 	end)
 
-	local ContentBackground = New("Frame", { 
-		Parent = Background, 
-		BackgroundColor3 = themeGet(theme, "Panel"), 
-		BackgroundTransparency = 0.3, 
-		BorderSizePixel = 0, 
-		Position = UDim2.new(0, ContentLeft, 0, HeaderHeight), 
-		Size = UDim2.new(0, ContentWidth, 0, ContentHeight) 
+	local ContentBackground = New("Frame", {
+		Parent = Background,
+		BackgroundColor3 = themeGet(theme, "Panel"),
+		BackgroundTransparency = 0.3,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, ContentLeft, 0, HeaderHeight),
+		Size = UDim2.new(0, ContentWidth, 0, ContentHeight)
 	})
 	New("UICorner", {Parent = ContentBackground, CornerRadius = UDim.new(0.01,0)})
 	New("UIStroke", {Parent = ContentBackground, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
-	-- Window object
 	local Window = {}
 	Window.Tabs = {}
 	Window.CurrentTab = nil
@@ -301,12 +323,9 @@ function Library:CreateWindow(title, subtitle, opts)
 	Window._ScreenGui = ScreenGui
 	Window._restoreGui = nil
 	Window._isMobile = isMobile
-	Window._restorePosition = Window._restorePosition or nil -- stored restore box position
+	Window._restorePosition = Window._restorePosition or nil
+	Window._Keybinds = Window._Keybinds or {}
 
-	-- Keybind handling store
-	Window._Keybinds = Window._Keybinds or {} -- list of {element = element, tab = tab}
-
-	-- Drag main window
 	local dragging, dragInput, dragStart, startPos, dragTween
 	TopBar.InputBegan:Connect(function(input)
 		local inputType = input.UserInputType
@@ -325,13 +344,13 @@ function Library:CreateWindow(title, subtitle, opts)
 			end
 		end
 	end)
-	
+
 	TopBar.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then 
-			dragInput = input 
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
 		end
 	end)
-	
+
 	UserInputService.InputChanged:Connect(function(input)
 		local inputType = input.UserInputType
 		if input == dragInput and dragging and (inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.Touch) then
@@ -343,7 +362,6 @@ function Library:CreateWindow(title, subtitle, opts)
 		end
 	end)
 
-	-- Close button
 	CloseBtn.MouseButton1Click:Connect(function()
 		if Window._ScreenGui then pcall(function() Window._ScreenGui:Destroy() end) end
 		if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
@@ -351,16 +369,13 @@ function Library:CreateWindow(title, subtitle, opts)
 		if Library.MainWindow == Window then Library.MainWindow = nil end
 	end)
 
-	-- Minimize button
 	MinBtn.MouseButton1Click:Connect(function()
 		if Window._isMinimized then
-			-- Restore
 			if Window._restoreGui then pcall(function() Window._restoreGui:Destroy() end) end
 			Window._restoreGui = nil
 			Background.Visible = true
 			Window._isMinimized = false
 		else
-			-- Minimize
 			Background.Visible = false
 			Window._isMinimized = true
 
@@ -369,11 +384,10 @@ function Library:CreateWindow(title, subtitle, opts)
 				Window._restoreGui = nil
 			end
 
-			-- Restore Box (mobile-optimiert) with position persistence
-			local RestoreGui = New("ScreenGui", { 
-				Name = "VanUI_Restore", 
-				ZIndexBehavior = Enum.ZIndexBehavior.Sibling, 
-				ResetOnSpawn = false 
+			local RestoreGui = New("ScreenGui", {
+				Name = "VanUI_Restore",
+				ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+				ResetOnSpawn = false
 			})
 			RestoreGui.Parent = CoreGui
 
@@ -385,58 +399,57 @@ function Library:CreateWindow(title, subtitle, opts)
 			local maxX = math.max(8, vp2.X - boxW - 8)
 			local centeredX = (vp2.X - boxW) / 2
 			local initialX, initialY
-		-- wenn wir vorher eine gespeicherte Position haben, verwende sie (Absolute Pixel)
-if Window._restorePosition and Window._restorePosition.X and Window._restorePosition.Y then
-    local savedX = Window._restorePosition.X
-    local savedY = Window._restorePosition.Y
-    -- clamppe in die Bildschirmgrenzen (auf box size achten)
-    initialX = math.clamp(savedX, minX, maxX)
-    initialY = math.clamp(savedY, margin, vp2.Y - boxH - margin)
-else
-    initialX = math.clamp(centeredX, minX, maxX)
-    initialY = margin
-end
 
+			-- robust: falls vorher gespeicherte Position string/number gemischt ist
+			if Window._restorePosition and Window._restorePosition.X and Window._restorePosition.Y then
+				local savedX = toNumberOrDefault(Window._restorePosition.X, centeredX)
+				local savedY = toNumberOrDefault(Window._restorePosition.Y, margin)
+				initialX = math.clamp(savedX, minX, maxX)
+				initialY = math.clamp(savedY, margin, vp2.Y - boxH - margin)
+			else
+				initialX = math.clamp(centeredX, minX, maxX)
+				initialY = margin
+			end
 
-			local Box = New("Frame", { 
-				Name = "RestoreBox", 
-				Parent = RestoreGui, 
-				AnchorPoint = Vector2.new(0,0), 
-				Size = UDim2.new(0, boxW, 0, boxH), 
-				Position = UDim2.new(0, initialX, 0, initialY), 
-				BackgroundColor3 = themeGet(theme, "Panel"), 
-				BorderSizePixel = 0 
+			local Box = New("Frame", {
+				Name = "RestoreBox",
+				Parent = RestoreGui,
+				AnchorPoint = Vector2.new(0,0),
+				Size = UDim2.new(0, boxW, 0, boxH),
+				Position = UDim2.new(0, initialX, 0, initialY),
+				BackgroundColor3 = themeGet(theme, "Panel"),
+				BorderSizePixel = 0
 			})
 			New("UICorner", { Parent = Box, CornerRadius = UDim.new(0.08,0) })
 			New("UIStroke", { Parent = Box, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 
 			local labelSize = isMobile and 10 or 14
-			local Label = New("TextLabel", { 
-				Parent = Box, 
-				BackgroundTransparency = 1, 
-				Size = UDim2.new(1, -(boxH + 4), 1, 0), 
-				Position = UDim2.new(0, 8, 0, 0), 
-				Font = Enum.Font.Gotham, 
-				Text = title or "VanUI", 
-				TextColor3 = Color3.fromRGB(255,255,255), 
-				TextSize = labelSize, 
-				TextXAlignment = Enum.TextXAlignment.Left, 
-				TextYAlignment = Enum.TextYAlignment.Center 
+			local Label = New("TextLabel", {
+				Parent = Box,
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, -(boxH + 4), 1, 0),
+				Position = UDim2.new(0, 8, 0, 0),
+				Font = Enum.Font.Gotham,
+				Text = title or "VanUI",
+				TextColor3 = Color3.fromRGB(255,255,255),
+				TextSize = labelSize,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextYAlignment = Enum.TextYAlignment.Center
 			})
 
 			local btnSize = isMobile and 26 or 34
-			local RestoreBtn = New("TextButton", { 
-				Parent = Box, 
-				Size = UDim2.new(0, btnSize, 0, btnSize), 
-				Position = UDim2.new(1, -(btnSize + 3), 0.5, -(btnSize/2)), 
-				BackgroundColor3 = Background.BackgroundColor3, 
-				BorderSizePixel = 0, 
-				Text = "▣", 
-				Font = Enum.Font.SourceSansBold, 
-				TextColor3 = themeGet(theme, "ControlBtnText"), 
-				TextSize = isMobile and 14 or 18, 
-				TextScaled = true, 
-				AutoButtonColor = false 
+			local RestoreBtn = New("TextButton", {
+				Parent = Box,
+				Size = UDim2.new(0, btnSize, 0, btnSize),
+				Position = UDim2.new(1, -(btnSize + 3), 0.5, -(btnSize/2)),
+				BackgroundColor3 = Background.BackgroundColor3,
+				BorderSizePixel = 0,
+				Text = "▣",
+				Font = Enum.Font.SourceSansBold,
+				TextColor3 = themeGet(theme, "ControlBtnText"),
+				TextSize = isMobile and 14 or 18,
+				TextScaled = true,
+				AutoButtonColor = false
 			})
 			New("UICorner", { Parent = RestoreBtn, CornerRadius = UDim.new(0.08,0) })
 			New("UIStroke", { Parent = RestoreBtn, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
@@ -450,7 +463,6 @@ end
 
 			RestoreBtn.MouseButton1Click:Connect(restoreWindow)
 
-			-- Dragging für Restore Box
 			local draggingBox = false
 			local dragStartPos = nil
 			local boxStartPos = nil
@@ -462,22 +474,21 @@ end
 					local mousePos = inp.Position
 					local btnPos = RestoreBtn.AbsolutePosition
 					local btnSizeVec = RestoreBtn.AbsoluteSize
-					local isOnButton = mousePos.X >= btnPos.X and mousePos.X <= btnPos.X + btnSizeVec.X and 
+					local isOnButton = mousePos.X >= btnPos.X and mousePos.X <= btnPos.X + btnSizeVec.X and
 								mousePos.Y >= btnPos.Y and mousePos.Y <= btnPos.Y + btnSizeVec.Y
-					
+
 					if not isOnButton then
 						draggingBox = true
 						hasMoved = false
 						dragStartPos = inp.Position
 						boxStartPos = Vector2.new(Box.Position.X.Offset, Box.Position.Y.Offset)
-						
+
 						inp.Changed:Connect(function()
 							if inp.UserInputState == Enum.UserInputState.End then
 								draggingBox = false
 								if not hasMoved then
 									restoreWindow()
 								else
-									-- save the new restore box position so it persists across minimize cycles
 									pcall(function()
 										Window._restorePosition = { X = Box.Position.X.Offset, Y = Box.Position.Y.Offset }
 									end)
@@ -495,7 +506,7 @@ end
 					if math.abs(delta.X) > 5 or math.abs(delta.Y) > 5 then
 						hasMoved = true
 					end
-					
+
 					local newX = boxStartPos.X + delta.X
 					local newY = boxStartPos.Y + delta.Y
 					local vp3 = getViewport()
@@ -509,7 +520,6 @@ end
 		end
 	end)
 
-	-- Tab API
 	function Window:CreateTab(name)
 		local Tab = {}
 		local isFirst = #Window.Tabs == 0
@@ -584,29 +594,29 @@ end
 		end
 
 		function Tab:AddSlider(text, min, max, default, callback)
-			min = min or 0
-			max = max or 100
-			default = default == nil and min or default
-			local Slider = { Type = "Slider", Text = text, Min = min, Max = max, Value = math.clamp(default, min, max), Callback = callback, Visible = true }
+			min = toNumberOrDefault(min, 0)
+			max = toNumberOrDefault(max, 100)
+			if max < min then max = min end
+			local defaultNum = toNumberOrDefault(default, min)
+			local Slider = { Type = "Slider", Text = text, Min = min, Max = max, Value = math.clamp(defaultNum, min, max), Callback = callback, Visible = true }
 			table.insert(Tab.Elements, Slider)
 			Window:RefreshContent()
 			return {
-				Set = function(self, value) 
-					Slider.Value = math.clamp(value, Slider.Min, Slider.Max)
+				Set = function(self, value)
+					local num = toNumberOrDefault(value, Slider.Min)
+					Slider.Value = math.clamp(num, Slider.Min, Slider.Max)
 					Window:RefreshContent()
-					if Slider.Callback then pcall(Slider.Callback, Slider.Value) end 
+					if Slider.Callback then pcall(Slider.Callback, Slider.Value) end
 				end,
 				Hide = function() Slider.Visible = false; Window:RefreshContent() end,
 				Show = function() Slider.Visible = true; Window:RefreshContent() end
 			}
 		end
 
-		-- NEW: AddDropdown
-		-- options: array of strings
-		-- defaultIndex: number (1-based)
-		-- callback: function(selectedIndex, selectedText)
+		-- Dropdown: defaultIndex kann Index oder String (Option text) sein
 		function Tab:AddDropdown(text, options, defaultIndex, callback)
-			local default = math.clamp(defaultIndex or 1, 1, #options)
+			if type(options) ~= "table" then options = {} end
+			local default = toIndexFromValue(defaultIndex, options, 1)
 			local Dropdown = {
 				Type = "Dropdown",
 				Text = text,
@@ -620,7 +630,8 @@ end
 			Window:RefreshContent()
 			return {
 				Set = function(self, index)
-					Dropdown.Selected = math.clamp(index or 1, 1, #Dropdown.Options)
+					local idx = toIndexFromValue(index, Dropdown.Options, Dropdown.Selected)
+					Dropdown.Selected = idx
 					Window:RefreshContent()
 					if Dropdown.Callback then pcall(Dropdown.Callback, Dropdown.Selected, Dropdown.Options[Dropdown.Selected]) end
 				end,
@@ -630,21 +641,75 @@ end
 			}
 		end
 
-		-- NEW: AddKeybind (Custom Hotkey)
-		-- defaultKey: Enum.KeyCode or string name (e.g. "F")
-		-- mode: "Toggle" or "Hold" (default "Toggle")
-		-- callback: function(state) called when key activates (true/false)
+		-- MultiDropdown: options table, defaultValues = table of values/indices/strings
+		function Tab:AddMultiDropdown(text, options, defaultValues, callback)
+			if type(options) ~= "table" then options = {} end
+			local set = {}
+			if type(defaultValues) == "table" then
+				for _, v in ipairs(defaultValues) do
+					-- find index from value
+					local idx = toIndexFromValue(v, options, nil)
+					if idx and not set[idx] then set[idx] = true end
+				end
+			end
+			local Multi = {
+				Type = "MultiDropdown",
+				Text = text,
+				Options = options,
+				Selected = set, -- map index -> true
+				Callback = callback,
+				Visible = true,
+				_Expanded = false
+			}
+			table.insert(Tab.Elements, Multi)
+			Window:RefreshContent()
+			return {
+				GetValues = function()
+					local res = {}
+					for idx,_ in pairs(Multi.Selected) do
+						table.insert(res, Multi.Options[idx])
+					end
+					return res
+				end,
+				SetValuesByIndices = function(self, indices)
+					local newSet = {}
+					for _, i in ipairs(indices or {}) do
+						local num = toNumberOrDefault(i, nil)
+						if num then newSet[math.clamp(math.floor(num),1,#options)] = true end
+					end
+					Multi.Selected = newSet
+					Window:RefreshContent()
+					if Multi.Callback then pcall(Multi.Callback, Multi:GetValues()) end
+				end,
+				Hide = function() Multi.Visible = false; Window:RefreshContent() end,
+				Show = function() Multi.Visible = true; Window:RefreshContent() end
+			}
+		end
+
+		-- Keybind: unterstützt (text, defaultKey, callback) oder (text, defaultKey, mode, callback)
 		function Tab:AddKeybind(text, defaultKey, mode, callback)
+			-- wenn mode tatsächlich callback ist
+			if type(mode) == "function" and callback == nil then
+				callback = mode
+				mode = nil
+			end
 			local parsedKey = nil
 			if typeof(defaultKey) == "EnumItem" then
 				parsedKey = defaultKey
 			elseif type(defaultKey) == "string" then
-				-- try to parse into Enum.KeyCode
-				local key = Enum.KeyCode[defaultKey]
-				if key then parsedKey = key end
+				local k = Enum.KeyCode[defaultKey]
+				if k then parsedKey = k
+				else
+					-- falls single char like "F"
+					local upper = tostring(defaultKey):upper()
+					local k2 = Enum.KeyCode[upper]
+					if k2 then parsedKey = k2 end
+				end
+			elseif type(defaultKey) == "number" then
+				-- numeric KeyCode value (rare)
+				local ok, enumObj = pcall(function() return Enum.KeyCode[defaultKey] end)
+				if ok and enumObj then parsedKey = enumObj end
 			end
-
-			-- fallback
 			if not parsedKey then parsedKey = Enum.KeyCode.F end
 
 			mode = (mode == "Hold" and "Hold") or "Toggle"
@@ -660,7 +725,6 @@ end
 				_Listening = false
 			}
 			table.insert(Tab.Elements, Keybind)
-			-- register in window keybind list
 			table.insert(Window._Keybinds, { element = Keybind, tab = Tab })
 
 			Window:RefreshContent()
@@ -675,10 +739,32 @@ end
 			}
 		end
 
+		-- Colorpicker (einfacher)
+		function Tab:AddColorpicker(text, defaultColor, callback)
+			local col = defaultColor
+			if type(col) ~= "userdata" then col = Color3.fromRGB(255,255,255) end
+			local Picker = {
+				Type = "Colorpicker",
+				Text = text,
+				Color = col,
+				Callback = callback,
+				Visible = true
+			}
+			table.insert(Tab.Elements, Picker)
+			Window:RefreshContent()
+			return {
+				Set = function(self, c)
+					if type(c) == "userdata" then Picker.Color = c; Window:RefreshContent(); if Picker.Callback then pcall(Picker.Callback, c) end end
+				end,
+				Get = function() return Picker.Color end,
+				Hide = function() Picker.Visible = false; Window:RefreshContent() end,
+				Show = function() Picker.Visible = true; Window:RefreshContent() end
+			}
+		end
+
 		return Tab
 	end
 
-	-- Refresh content (mobile-optimiert)
 	function Window:RefreshContent()
 		for _, child in pairs(ContentContainer:GetChildren()) do
 			if child:IsA("Frame") then child:Destroy() end
@@ -691,41 +777,41 @@ end
 			if element.Type == "Paragraph" then
 				local minHeight = isMobile and 70 or 100
 				local P = New("Frame", {
-					Parent = ContentContainer, 
-					BackgroundColor3 = themeGet(theme, "Panel"), 
-					BorderSizePixel = 0, 
+					Parent = ContentContainer,
+					BackgroundColor3 = themeGet(theme, "Panel"),
+					BorderSizePixel = 0,
 					Size = UDim2.new(1,0,0,minHeight)
 				})
 				New("UICorner", {Parent = P, CornerRadius = UDim.new(0.05,0)})
 				New("UIStroke", {Parent = P, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
-				
+
 				local padding = isMobile and 8 or 12
 				New("UIPadding", {Parent = P, PaddingLeft = UDim.new(0,padding), PaddingRight = UDim.new(0,padding), PaddingTop = UDim.new(0,padding), PaddingBottom = UDim.new(0,padding)})
-				
+
 				New("TextLabel", {
-					Parent = P, 
-					BackgroundTransparency = 1, 
-					Size = UDim2.new(1,0,0,ElementFontSize + 4), 
-					Font = Enum.Font.GothamMedium, 
-					Text = element.Title or "", 
-					TextColor3 = Color3.fromRGB(255,255,255), 
-					TextSize = ElementFontSize, 
+					Parent = P,
+					BackgroundTransparency = 1,
+					Size = UDim2.new(1,0,0,ElementFontSize + 4),
+					Font = Enum.Font.GothamMedium,
+					Text = element.Title or "",
+					TextColor3 = Color3.fromRGB(255,255,255),
+					TextSize = ElementFontSize,
 					TextXAlignment = Enum.TextXAlignment.Left
 				})
-				
+
 				New("TextLabel", {
-					Parent = P, 
-					BackgroundTransparency = 1, 
-					Position = UDim2.new(0,0,0,ElementFontSize + 6), 
-					Size = UDim2.new(1,0,1,-(ElementFontSize + 6)), 
-					Font = Enum.Font.Gotham, 
-					Text = element.Content or "", 
-					TextColor3 = Color3.fromRGB(150,150,150), 
-					TextSize = SmallFontSize, 
+					Parent = P,
+					BackgroundTransparency = 1,
+					Position = UDim2.new(0,0,0,ElementFontSize + 6),
+					Size = UDim2.new(1,0,1,-(ElementFontSize + 6)),
+					Font = Enum.Font.Gotham,
+					Text = element.Content or "",
+					TextColor3 = Color3.fromRGB(150,150,150),
+					TextSize = SmallFontSize,
 					TextWrapped = true,
 					TextYAlignment = Enum.TextYAlignment.Top
 				})
-				
+
 				task.spawn(function()
 					task.wait()
 					local titleSize = TextService:GetTextSize(element.Title or "", ElementFontSize, Enum.Font.GothamMedium, Vector2.new(P.AbsoluteSize.X - padding*2, math.huge))
@@ -751,7 +837,7 @@ end
 				local toggleHeight = isMobile and 36 or 42
 				local toggleSize = isMobile and 20 or 24
 				local indicatorSize = isMobile and 14 or 16
-				
+
 				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,toggleHeight)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.1,0)})
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
@@ -777,7 +863,7 @@ end
 				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,sliderHeight)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.06,0)})
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
-				
+
 				local padding = isMobile and 8 or 12
 				New("UIPadding", {Parent = F, PaddingLeft = UDim.new(0,padding), PaddingRight = UDim.new(0,padding), PaddingTop = UDim.new(0,padding-2), PaddingBottom = UDim.new(0,padding-2)})
 
@@ -808,14 +894,12 @@ end
 				end
 				updateVisuals(element.Value)
 
-				-- Helper: safely extract X coordinate from various position types
 				local function getNumericX(pos)
 					if not pos then return nil end
 					local ok, t = pcall(function() return typeof(pos) end)
 					if ok and t then
 						if t == "Vector2" or t == "Vector3" then return pos.X end
 						if t == "UDim2" then
-							-- UDim2.X can be a table-like value; prefer Offset
 							if pos.X and pos.X.Offset then return pos.X.Offset end
 							return pos.X and pos.X.Scale or nil
 						end
@@ -843,7 +927,6 @@ end
 					if element.Callback then pcall(element.Callback, element.Value) end
 				end
 
-				-- Slider dragging (Touch + Mouse) - reliable implementation
 				do
 					local draggingSlider = false
 					local function beginDragFromInput(inp)
@@ -890,8 +973,8 @@ end
 						end
 					end)
 				end
+
 			elseif element.Type == "Dropdown" then
-				-- Dropdown implementation
 				local baseHeight = isMobile and 40 or 44
 				local optionHeight = isMobile and 30 or 34
 				local visibleOptions = math.clamp(#element.Options, 0, 6)
@@ -902,27 +985,22 @@ end
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.06,0)})
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
-				-- label + current selection line
 				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.6,0,0,0, ElementFontSize + 4), Font = Enum.Font.GothamMedium, Text = element.Text or "Dropdown", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
 				local SelectedLabel = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 6), Size = UDim2.new(0.94,0,0, ElementFontSize + 4), Font = Enum.Font.Gotham, Text = (element.Options[element.Selected] or ""), TextColor3 = Color3.fromRGB(150,150,150), TextSize = SmallFontSize, TextXAlignment = Enum.TextXAlignment.Left})
 				local Arrow = New("TextButton", { Parent = F, BackgroundTransparency = 1, Size = UDim2.new(0,32,0,32), Position = UDim2.new(1,-36,0,6), Text = element._Expanded and "▴" or "▾", Font = Enum.Font.SourceSansBold, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = isMobile and 16 or 18, AutoButtonColor = false })
-				
-				-- Options frame (created on expand)
+
 				local OptionsFrame = nil
 
 				local function collapse()
 					element._Expanded = false
 					Arrow.Text = "▾"
-					-- shrink frame
 					F.Size = UDim2.new(1,0,0,collapsedHeight)
-					-- destroy options
 					if OptionsFrame then OptionsFrame:Destroy(); OptionsFrame = nil end
 				end
 
 				local function expand()
 					element._Expanded = true
 					Arrow.Text = "▴"
-					-- create options container
 					OptionsFrame = New("Frame", { Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0,0,0, baseHeight), Size = UDim2.new(1,0,0, visibleOptions * optionHeight) })
 					local optsLayout = New("UIListLayout", { Parent = OptionsFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,2) })
 					for i, opt in ipairs(element.Options) do
@@ -936,7 +1014,6 @@ end
 							collapse()
 						end)
 					end
-					-- enlarge frame
 					F.Size = UDim2.new(1,0,0, expandedHeight)
 				end
 
@@ -944,7 +1021,75 @@ end
 					if element._Expanded then collapse() else expand() end
 				end)
 
-				-- clicking the selection label also toggles
+				SelectedLabel.InputBegan:Connect(function(inp)
+					if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+						if element._Expanded then collapse() else expand() end
+					end
+				end)
+
+			elseif element.Type == "MultiDropdown" then
+				local baseHeight = isMobile and 40 or 44
+				local optionHeight = isMobile and 28 or 32
+				local visibleOptions = math.clamp(#element.Options, 0, 6)
+				local collapsedHeight = baseHeight
+				local expandedHeight = baseHeight + (visibleOptions * optionHeight)
+
+				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0, element._Expanded and expandedHeight or collapsedHeight)})
+				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.06,0)})
+				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
+
+				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.6,0,0,0, ElementFontSize + 4), Font = Enum.Font.GothamMedium, Text = element.Text or "MultiDropdown", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
+				local SelectedLabel = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 6), Size = UDim2.new(0.94,0,0, ElementFontSize + 4), Font = Enum.Font.Gotham, Text = "", TextColor3 = Color3.fromRGB(150,150,150), TextSize = SmallFontSize, TextXAlignment = Enum.TextXAlignment.Left})
+				local Arrow = New("TextButton", { Parent = F, BackgroundTransparency = 1, Size = UDim2.new(0,32,0,32), Position = UDim2.new(1,-36,0,6), Text = element._Expanded and "▴" or "▾", Font = Enum.Font.SourceSansBold, TextColor3 = themeGet(theme, "ControlBtnText"), TextSize = isMobile and 16 or 18, AutoButtonColor = false })
+
+				local OptionsFrame = nil
+
+				local function updateSelectedLabel()
+					local parts = {}
+					for idx,_ in pairs(element.Selected) do
+						table.insert(parts, tostring(element.Options[idx] or ""))
+					end
+					SelectedLabel.Text = table.concat(parts, ", ")
+				end
+				updateSelectedLabel()
+
+				local function collapse()
+					element._Expanded = false
+					Arrow.Text = "▾"
+					F.Size = UDim2.new(1,0,0,collapsedHeight)
+					if OptionsFrame then OptionsFrame:Destroy(); OptionsFrame = nil end
+				end
+
+				local function expand()
+					element._Expanded = true
+					Arrow.Text = "▴"
+					OptionsFrame = New("Frame", { Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0,0,0, baseHeight), Size = UDim2.new(1,0,0, visibleOptions * optionHeight) })
+					local optsLayout = New("UIListLayout", { Parent = OptionsFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,2) })
+					for i, opt in ipairs(element.Options) do
+						local btn = New("TextButton", { Parent = OptionsFrame, BackgroundColor3 = themeGet(theme, "Tab"), Size = UDim2.new(1,0,0,optionHeight), Text = opt, Font = Enum.Font.Gotham, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(200,200,200), AutoButtonColor = false })
+						New("UICorner", { Parent = btn, CornerRadius = UDim.new(0.06,0) })
+						New("UIStroke", { Parent = btn, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
+						btn.MouseButton1Click:Connect(function()
+							if element.Selected[i] then
+								element.Selected[i] = nil
+							else
+								element.Selected[i] = true
+							end
+							updateSelectedLabel()
+							if element.Callback then
+								local vals = {}
+								for idx,_ in pairs(element.Selected) do table.insert(vals, element.Options[idx]) end
+								pcall(element.Callback, vals)
+							end
+						end)
+					end
+					F.Size = UDim2.new(1,0,0, expandedHeight)
+				end
+
+				Arrow.MouseButton1Click:Connect(function()
+					if element._Expanded then collapse() else expand() end
+				end)
+
 				SelectedLabel.InputBegan:Connect(function(inp)
 					if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
 						if element._Expanded then collapse() else expand() end
@@ -952,7 +1097,6 @@ end
 				end)
 
 			elseif element.Type == "Keybind" then
-				-- Keybind UI
 				local bindHeight = isMobile and 40 or 46
 				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,bindHeight)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.08,0)})
@@ -976,13 +1120,11 @@ end
 
 				local ListenIndicator = New("TextLabel", { Parent = BindBtn, BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0), Position = UDim2.new(0,0,0,0), Text = "", Font = Enum.Font.Gotham, TextSize = isMobile and 12 or 14, TextColor3 = Color3.fromRGB(200,200,200) })
 
-				-- start/stop listening for new key
 				local listeningConn = nil
 				local function startListening()
 					element._Listening = true
 					BindBtn.Text = "Press Key..."
 					ListenIndicator.Text = ""
-					-- capture next keyboard input
 					listeningConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 						if gameProcessed then return end
 						if input.UserInputType == Enum.UserInputType.Keyboard then
@@ -1009,11 +1151,32 @@ end
 					end
 				end)
 
+			elseif element.Type == "Colorpicker" then
+				local h = isMobile and 44 or 48
+				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,h)})
+				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.06,0)})
+				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
+
+				New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,0), Size = UDim2.new(0.55,0,0,ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "Color", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
+				local swatch = New("Frame", { Parent = F, Size = UDim2.new(0, 34, 0, 28), Position = UDim2.new(1, -46, 0, 8), BackgroundColor3 = element.Color, BorderSizePixel = 0 })
+				New("UICorner", {Parent = swatch, CornerRadius = UDim.new(0.06,0)})
+				New("UIStroke", {Parent = swatch, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
+
+				swatch.InputBegan:Connect(function(inp)
+					if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+						-- einfacher cycle (kein full colorpicker UI): rotiere R,G,B
+						local c = element.Color
+						local newC = Color3.new(1 - c.r, 1 - c.g, 1 - c.b)
+						element.Color = newC
+						swatch.BackgroundColor3 = newC
+						if element.Callback then pcall(element.Callback, newC) end
+					end
+				end)
 			end
 		end
 	end
 
-	-- Global input handling for keybinds
+	-- Global Keybind Handling (robust)
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		if input.UserInputType == Enum.UserInputType.Keyboard then
@@ -1025,7 +1188,6 @@ end
 						if el.Callback then pcall(el.Callback, el.Value) end
 						Window:RefreshContent()
 					elseif el.Mode == "Hold" then
-						-- mark true on begin
 						el.Value = true
 						if el.Callback then pcall(el.Callback, true) end
 						Window:RefreshContent()
