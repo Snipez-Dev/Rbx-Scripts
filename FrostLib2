@@ -1,11 +1,4 @@
--- VanUI (robuste Version) - Dropdown & Colorpicker Verbesserungen
--- Änderungen:
--- 1) Dropdown: Tags / ausgewählte Items korrekt positioniert; ausgewählte Option im Dropdown heller hervorgehoben.
--- 2) MultiDropdown: Tags als Pills angezeigt (horizontal, sauber positioniert).
--- 3) Colorpicker: Interaktive HSV-Box + Hue-Slider + Hex-Eingabe + Farbvorschau (Google-ähnlich Verhalten).
--- 4) Alle vorherigen Robustheitsfixes (toNumberOrDefault, safe clamps, Dropdown default as string/index etc.) bleiben erhalten.
---
--- Vollständige Library (ersetze deine alte Library-Datei damit)
+
 
 local Library = {}
 Library.Windows = {}
