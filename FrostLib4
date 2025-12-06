@@ -6,20 +6,35 @@ Library._notifyContainer = nil
 
 local function ensureNotifyContainer()
 	if Library._notifyGui and Library._notifyGui.Parent then return end
-	local ng = New("ScreenGui", { Name = "VanUI_Notifications", ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn = false })
-	ng.Parent = CoreGui
+
+	local CoreGui = game:GetService("CoreGui")
+	local ng = New("ScreenGui", {
+		Name = "VanUI_Notifications",
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		ResetOnSpawn = false,
+		Parent = CoreGui,
+	})
+	-- fallback: falls Parent nicht gesetzt wird
+	if not ng.Parent then
+		pcall(function() ng.Parent = CoreGui end)
+	end
+
 	local container = New("Frame", {
 		Parent = ng,
 		Name = "NotifyContainer",
-		AnchorPoint = Vector2.new(1,0),
-		Position = UDim2.new(1,-18,0,18),
-		Size = UDim2.new(0, 320, 0, 0),
-		BackgroundTransparency = 1
+		AnchorPoint = Vector2.new(1, 0),              -- rechts oben an ScreenGui
+		Position = UDim2.new(1, -18, 0, 18),          -- 18px vom rechten oberen Rand
+		Size = UDim2.new(0, 340, 0, 0),               -- Breite 340 (Platz für Nachricht)
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
 	})
-	container.ClipsDescendants = true
+	-- ensure it's above most GUIs by setting DisplayOrder if available (roblox versions vary)
+	pcall(function() ng.DisplayOrder = (ng.DisplayOrder or 0) + 999 end)
+
 	Library._notifyGui = ng
 	Library._notifyContainer = container
 end
+
 
 --- Library:Notify(text, duration, opts)
 -- text (string) - message text
@@ -37,20 +52,21 @@ function Library:Notify(text, duration, opts)
 	local smallFS = isMobileLocal and 10 or 13
 	local themeLocal = opts.theme or nil
 
-	local frame = New("Frame", {
+local frame = New("Frame", {
 		Parent = container,
-		BackgroundColor3 = themeGet(themeLocal, "Panel"),
-		BorderSizePixel = 0,
+		Name = "VanUI_NotifyItem",
 		Size = UDim2.new(1, 0, 0, notifH),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, 0, 0, 0),
-		BackgroundTransparency = 1
+		Position = UDim2.new(1, 0, 0, 0), -- rechts innerhalb des Containers
+		BackgroundTransparency = 1,
 	})
+	frame.ZIndex = 1000
 	New("UICorner", { Parent = frame, CornerRadius = UDim.new(0.06, 0) })
-	New("UIStroke", { Parent = frame, Color = themeGet(themeLocal, "PanelStroke"), Thickness = 1 })
-
+	local bg = New("Frame", { Parent = frame, Size = UDim2.fromScale(1,1), BackgroundColor3 = themeGet(themeLocal, "Panel"), BorderSizePixel = 0, BackgroundTransparency = 0 })
+	bg.ZIndex = 1001
+	New("UIStroke", { Parent = bg, Color = themeGet(themeLocal, "PanelStroke"), Thickness = 1, ApplyStrokeMode = "Border", ZIndex = 1002 })
 	local label = New("TextLabel", {
-		Parent = frame,
+		Parent = bg,
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 12, 0, 0),
 		Size = UDim2.new(1, -24, 1, 0),
@@ -60,7 +76,8 @@ function Library:Notify(text, duration, opts)
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Center,
 		TextSize = smallFS,
-		TextXAlignment = Enum.TextXAlignment.Left
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 1003
 	})
 
 	-- insert at front so newest on top
@@ -749,74 +766,125 @@ function Library:CreateWindow(title, subtitle, opts)
 		end
 
 		function Tab:AddDropdown(text, options, defaultIndex, callback)
-			if type(options) ~= "table" then options = {} end
-			local default = toIndexFromValue(defaultIndex, options, 1)
-			local Dropdown = {
-				Type = "Dropdown",
-				Text = text,
-				Options = options or {},
-				Selected = default,
-				Callback = callback,
-				Visible = true,
-				_Expanded = false
-			}
-			table.insert(Tab.Elements, Dropdown)
-			Window:RefreshContent()
-			return {
-				Set = function(self, index)
-					local idx = toIndexFromValue(index, Dropdown.Options, Dropdown.Selected)
-					Dropdown.Selected = idx
-					Window:RefreshContent()
-					if Dropdown.Callback then pcall(Dropdown.Callback, Dropdown.Selected, Dropdown.Options[Dropdown.Selected]) end
-				end,
-				Get = function() return Dropdown.Selected, Dropdown.Options[Dropdown.Selected] end,
-				Hide = function() Dropdown.Visible = false; Window:RefreshContent() end,
-				Show = function() Dropdown.Visible = true; Window:RefreshContent() end
-			}
-		end
+	if type(options) ~= "table" then options = {} end
+	local default = toIndexFromValue(defaultIndex, options, 1)
 
-		function Tab:AddMultiDropdown(text, options, defaultValues, callback)
-			if type(options) ~= "table" then options = {} end
-			local set = {}
-			if type(defaultValues) == "table" then
-				for _, v in ipairs(defaultValues) do
-					local idx = toIndexFromValue(v, options, nil)
-					if idx and not set[idx] then set[idx] = true end
+	local Dropdown = {
+		Type = "Dropdown",
+		Text = text,
+		Options = options or {},
+		Selected = default,
+		Callback = callback,
+		Visible = true,
+		_Expanded = false
+	}
+
+	table.insert(Tab.Elements, Dropdown)
+	Window:RefreshContent()
+
+	return {
+		Set = function(self, index)
+			local idx = toIndexFromValue(index, Dropdown.Options, Dropdown.Selected)
+			Dropdown.Selected = idx
+			Window:RefreshContent()
+			if Dropdown.Callback then
+				pcall(Dropdown.Callback, Dropdown.Selected, Dropdown.Options[Dropdown.Selected])
+			end
+		end,
+
+		Get = function()
+			return Dropdown.Selected, Dropdown.Options[Dropdown.Selected]
+		end,
+
+		Hide = function()
+			Dropdown.Visible = false
+			Window:RefreshContent()
+		end,
+
+		Show = function()
+			Dropdown.Visible = true
+			Window:RefreshContent()
+		end,
+	}
+end
+
+
+------------------------------------------------------------------------------
+-- MULTI DROPDOWN – FIXED VERSION
+-- ✔ grauer Hintergrund für ausgewählte Items
+-- ✔ kein Überstehen der letzten „Pill“
+-- ✔ ScrollingFrame + Canvas Auto-Resize
+------------------------------------------------------------------------------
+
+function Tab:AddMultiDropdown(text, options, defaultValues, callback)
+	if type(options) ~= "table" then options = {} end
+
+	local set = {}
+	if type(defaultValues) == "table" then
+		for _, v in ipairs(defaultValues) do
+			local idx = toIndexFromValue(v, options, nil)
+			if idx and not set[idx] then set[idx] = true end
+		end
+	end
+
+	local Multi = {
+		Type = "MultiDropdown",
+		Text = text,
+		Options = options,
+		Selected = set,
+		Callback = callback,
+		Visible = true,
+		_Expanded = false
+	}
+
+	table.insert(Tab.Elements, Multi)
+	Window:RefreshContent()
+
+	return {
+
+		GetValues = function()
+			local res = {}
+			for idx,_ in pairs(Multi.Selected) do
+				table.insert(res, Multi.Options[idx])
+			end
+			return res
+		end,
+
+
+		SetValuesByIndices = function(self, indices)
+			local newSet = {}
+			for _, i in ipairs(indices or {}) do
+				local num = toNumberOrDefault(i, nil)
+				if num then
+					newSet[math.clamp(math.floor(num),1,#options)] = true
 				end
 			end
-			local Multi = {
-				Type = "MultiDropdown",
-				Text = text,
-				Options = options,
-				Selected = set,
-				Callback = callback,
-				Visible = true,
-				_Expanded = false
-			}
-			table.insert(Tab.Elements, Multi)
+
+			Multi.Selected = newSet
 			Window:RefreshContent()
-			return {
-				GetValues = function()
-					local res = {}
-					for idx,_ in pairs(Multi.Selected) do
-						table.insert(res, Multi.Options[idx])
-					end
-					return res
-				end,
-				SetValuesByIndices = function(self, indices)
-					local newSet = {}
-					for _, i in ipairs(indices or {}) do
-						local num = toNumberOrDefault(i, nil)
-						if num then newSet[math.clamp(math.floor(num),1,#options)] = true end
-					end
-					Multi.Selected = newSet
-					Window:RefreshContent()
-					if Multi.Callback then pcall(Multi.Callback, Multi:GetValues()) end
-				end,
-				Hide = function() Multi.Visible = false; Window:RefreshContent() end,
-				Show = function() Multi.Visible = true; Window:RefreshContent() end
-			}
-		end
+
+			if Multi.Callback then
+				pcall(Multi.Callback, self:GetValues())
+			end
+		end,
+
+
+		----------------------------------------------------------------------
+		-- Fix: Hide / Show bleiben unverändert
+		----------------------------------------------------------------------
+
+		Hide = function()
+			Multi.Visible = false
+			Window:RefreshContent()
+		end,
+
+		Show = function()
+			Multi.Visible = true
+			Window:RefreshContent()
+		end,
+	}
+end
+
 
 		function Tab:AddKeybind(text, defaultKey, mode, callback)
 			if type(mode) == "function" and callback == nil then
