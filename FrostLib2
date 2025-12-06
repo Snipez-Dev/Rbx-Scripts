@@ -1,4 +1,4 @@
--- VanUI (updated) - Dropdown reverted to inline + Colorpicker sizing fixes
+-- VanUI (updated) - Improved Notifications, Dropdown Highlights & Pill Fixes
 local Library = {}
 Library.Notifications = {}
 Library._notifyGui = nil
@@ -14,7 +14,6 @@ local function ensureNotifyContainer()
 		ResetOnSpawn = false,
 		Parent = CoreGui,
 	})
-	-- fallback: falls Parent nicht gesetzt wird
 	if not ng.Parent then
 		pcall(function() ng.Parent = CoreGui end)
 	end
@@ -22,24 +21,18 @@ local function ensureNotifyContainer()
 	local container = New("Frame", {
 		Parent = ng,
 		Name = "NotifyContainer",
-		AnchorPoint = Vector2.new(1, 0),              -- rechts oben an ScreenGui
-		Position = UDim2.new(1, -18, 0, 18),          -- 18px vom rechten oberen Rand
-		Size = UDim2.new(0, 340, 0, 0),               -- Breite 340 (Platz für Nachricht)
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -18, 0, 18),
+		Size = UDim2.new(0, 340, 0, 0),
 		BackgroundTransparency = 1,
 		ClipsDescendants = true,
 	})
-	-- ensure it's above most GUIs by setting DisplayOrder if available (roblox versions vary)
 	pcall(function() ng.DisplayOrder = (ng.DisplayOrder or 0) + 999 end)
 
 	Library._notifyGui = ng
 	Library._notifyContainer = container
 end
 
-
---- Library:Notify(text, duration, opts)
--- text (string) - message text
--- duration (number, optional) - seconds to show (default 4)
--- opts (table, optional) - { theme = themeTable }
 function Library:Notify(text, duration, opts)
 	duration = tonumber(duration) or 4
 	opts = opts or {}
@@ -52,12 +45,12 @@ function Library:Notify(text, duration, opts)
 	local smallFS = isMobileLocal and 10 or 13
 	local themeLocal = opts.theme or nil
 
-local frame = New("Frame", {
+	local frame = New("Frame", {
 		Parent = container,
 		Name = "VanUI_NotifyItem",
 		Size = UDim2.new(1, 0, 0, notifH),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, 0, 0, 0), -- rechts innerhalb des Containers
+		Position = UDim2.new(1, 0, 0, 0),
 		BackgroundTransparency = 1,
 	})
 	frame.ZIndex = 1000
@@ -80,20 +73,16 @@ local frame = New("Frame", {
 		ZIndex = 1003
 	})
 
-	-- insert at front so newest on top
 	table.insert(Library.Notifications, 1, frame)
 
-	-- reposition stack
 	local spacing = 8
 	for i, f in ipairs(Library.Notifications) do
 		local y = (i - 1) * (notifH + spacing)
 		TweenService:Create(f, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Position = UDim2.new(1, 0, 0, y), BackgroundTransparency = 0 }):Play()
 	end
 
-	-- auto remove after duration
 	spawn(function()
 		task.wait(duration)
-		-- fade out and collapse
 		pcall(function()
 			TweenService:Create(frame, TweenInfo.new(0.18), { BackgroundTransparency = 1 }):Play()
 			TweenService:Create(frame, TweenInfo.new(0.18), { Size = UDim2.new(1, 0, 0, 0) }):Play()
@@ -103,7 +92,6 @@ local frame = New("Frame", {
 			if f == frame then table.remove(Library.Notifications, i); break end
 		end
 		if frame and frame.Parent then frame:Destroy() end
-		-- shift remaining
 		for i, f in ipairs(Library.Notifications) do
 			local y = (i - 1) * (notifH + spacing)
 			TweenService:Create(f, TweenInfo.new(0.18), { Position = UDim2.new(1, 0, 0, y) }):Play()
@@ -112,7 +100,6 @@ local frame = New("Frame", {
 
 	return frame
 end
-
 
 Library.Windows = {}
 Library.MainWindow = nil
@@ -144,7 +131,8 @@ local DEFAULT_THEME = {
 	ToggleOn = Color3.fromRGB(230,230,230),
 	ToggleOff = Color3.fromRGB(30,30,30),
 	Fill = Color3.fromRGB(200,200,200),
-	ControlBtnText = Color3.fromRGB(150,150,150)
+	ControlBtnText = Color3.fromRGB(150,150,150),
+	SelectedOption = Color3.fromRGB(80,80,80)
 }
 
 local function themeGet(theme, key)
@@ -190,7 +178,6 @@ local function toIndexFromValue(val, options, defaultIndex)
 	return 1
 end
 
--- Color helpers
 local function RGBToHSV(c)
 	local r, g, b = c.r, c.g, c.b
 	local maxv = math.max(r,g,b)
@@ -766,125 +753,101 @@ function Library:CreateWindow(title, subtitle, opts)
 		end
 
 		function Tab:AddDropdown(text, options, defaultIndex, callback)
-	if type(options) ~= "table" then options = {} end
-	local default = toIndexFromValue(defaultIndex, options, 1)
+			if type(options) ~= "table" then options = {} end
+			local default = toIndexFromValue(defaultIndex, options, 1)
 
-	local Dropdown = {
-		Type = "Dropdown",
-		Text = text,
-		Options = options or {},
-		Selected = default,
-		Callback = callback,
-		Visible = true,
-		_Expanded = false
-	}
+			local Dropdown = {
+				Type = "Dropdown",
+				Text = text,
+				Options = options or {},
+				Selected = default,
+				Callback = callback,
+				Visible = true,
+				_Expanded = false
+			}
 
-	table.insert(Tab.Elements, Dropdown)
-	Window:RefreshContent()
-
-	return {
-		Set = function(self, index)
-			local idx = toIndexFromValue(index, Dropdown.Options, Dropdown.Selected)
-			Dropdown.Selected = idx
+			table.insert(Tab.Elements, Dropdown)
 			Window:RefreshContent()
-			if Dropdown.Callback then
-				pcall(Dropdown.Callback, Dropdown.Selected, Dropdown.Options[Dropdown.Selected])
-			end
-		end,
 
-		Get = function()
-			return Dropdown.Selected, Dropdown.Options[Dropdown.Selected]
-		end,
-
-		Hide = function()
-			Dropdown.Visible = false
-			Window:RefreshContent()
-		end,
-
-		Show = function()
-			Dropdown.Visible = true
-			Window:RefreshContent()
-		end,
-	}
-end
-
-
-------------------------------------------------------------------------------
--- MULTI DROPDOWN – FIXED VERSION
--- ✔ grauer Hintergrund für ausgewählte Items
--- ✔ kein Überstehen der letzten „Pill“
--- ✔ ScrollingFrame + Canvas Auto-Resize
-------------------------------------------------------------------------------
-
-function Tab:AddMultiDropdown(text, options, defaultValues, callback)
-	if type(options) ~= "table" then options = {} end
-
-	local set = {}
-	if type(defaultValues) == "table" then
-		for _, v in ipairs(defaultValues) do
-			local idx = toIndexFromValue(v, options, nil)
-			if idx and not set[idx] then set[idx] = true end
+			return {
+				Set = function(self, index)
+					local idx = toIndexFromValue(index, Dropdown.Options, Dropdown.Selected)
+					Dropdown.Selected = idx
+					Window:RefreshContent()
+					if Dropdown.Callback then
+						pcall(Dropdown.Callback, Dropdown.Selected, Dropdown.Options[Dropdown.Selected])
+					end
+				end,
+				Get = function()
+					return Dropdown.Selected, Dropdown.Options[Dropdown.Selected]
+				end,
+				Hide = function()
+					Dropdown.Visible = false
+					Window:RefreshContent()
+				end,
+				Show = function()
+					Dropdown.Visible = true
+					Window:RefreshContent()
+				end,
+			}
 		end
-	end
 
-	local Multi = {
-		Type = "MultiDropdown",
-		Text = text,
-		Options = options,
-		Selected = set,
-		Callback = callback,
-		Visible = true,
-		_Expanded = false
-	}
+		function Tab:AddMultiDropdown(text, options, defaultValues, callback)
+			if type(options) ~= "table" then options = {} end
 
-	table.insert(Tab.Elements, Multi)
-	Window:RefreshContent()
-
-	return {
-
-		GetValues = function()
-			local res = {}
-			for idx,_ in pairs(Multi.Selected) do
-				table.insert(res, Multi.Options[idx])
-			end
-			return res
-		end,
-
-
-		SetValuesByIndices = function(self, indices)
-			local newSet = {}
-			for _, i in ipairs(indices or {}) do
-				local num = toNumberOrDefault(i, nil)
-				if num then
-					newSet[math.clamp(math.floor(num),1,#options)] = true
+			local set = {}
+			if type(defaultValues) == "table" then
+				for _, v in ipairs(defaultValues) do
+					local idx = toIndexFromValue(v, options, nil)
+					if idx and not set[idx] then set[idx] = true end
 				end
 			end
 
-			Multi.Selected = newSet
+			local Multi = {
+				Type = "MultiDropdown",
+				Text = text,
+				Options = options,
+				Selected = set,
+				Callback = callback,
+				Visible = true,
+				_Expanded = false
+			}
+
+			table.insert(Tab.Elements, Multi)
 			Window:RefreshContent()
 
-			if Multi.Callback then
-				pcall(Multi.Callback, self:GetValues())
-			end
-		end,
-
-
-		----------------------------------------------------------------------
-		-- Fix: Hide / Show bleiben unverändert
-		----------------------------------------------------------------------
-
-		Hide = function()
-			Multi.Visible = false
-			Window:RefreshContent()
-		end,
-
-		Show = function()
-			Multi.Visible = true
-			Window:RefreshContent()
-		end,
-	}
-end
-
+			return {
+				GetValues = function()
+					local res = {}
+					for idx,_ in pairs(Multi.Selected) do
+						table.insert(res, Multi.Options[idx])
+					end
+					return res
+				end,
+				SetValuesByIndices = function(self, indices)
+					local newSet = {}
+					for _, i in ipairs(indices or {}) do
+						local num = toNumberOrDefault(i, nil)
+						if num then
+							newSet[math.clamp(math.floor(num),1,#options)] = true
+						end
+					end
+					Multi.Selected = newSet
+					Window:RefreshContent()
+					if Multi.Callback then
+						pcall(Multi.Callback, self:GetValues())
+					end
+				end,
+				Hide = function()
+					Multi.Visible = false
+					Window:RefreshContent()
+				end,
+				Show = function()
+					Multi.Visible = true
+					Window:RefreshContent()
+				end,
+			}
+		end
 
 		function Tab:AddKeybind(text, defaultKey, mode, callback)
 			if type(mode) == "function" and callback == nil then
@@ -999,7 +962,6 @@ end
 		for _, child in pairs(ContentContainer:GetChildren()) do
 			if child:IsA("Frame") then child:Destroy() end
 		end
-		-- cleanup any leftover option overlays (shouldn't be used now, but safety)
 		for _, t in pairs(Window.Tabs) do
 			for _, el in pairs(t.Elements) do
 				if (el.Type == "Dropdown" or el.Type == "MultiDropdown") and el._OptionsOverlay then
@@ -1216,7 +1178,6 @@ end
 				end
 
 			elseif element.Type == "Dropdown" then
-				-- reverted inline dropdown (no overlay). Uses a ScrollingFrame inside the element when expanded.
 				local baseHeight = isMobile and 44 or 48
 				local optionHeight = isMobile and 30 or 34
 				local maxVisibleOptions = 8
@@ -1229,33 +1190,28 @@ end
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
 				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,6), Size = UDim2.new(0.4,0,0,ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "Dropdown", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
-				local PillContainer = New("ScrollingFrame", { Parent = F, Name = "PillContainer", BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 12), Size = UDim2.new(0.94,0,0, baseHeight - (ElementFontSize + 18)), CanvasSize = UDim2.new(0,0,0,0), ScrollBarThickness = 6, HorizontalScrollBarEnabled = true, BorderSizePixel = 0 })
+				local PillContainer = New("ScrollingFrame", { Parent = F, Name = "PillContainer", BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 12), Size = UDim2.new(0.94,0,0, baseHeight - (ElementFontSize + 18)), CanvasSize = UDim2.new(0,0,0,0), ScrollBarThickness = 6, HorizontalScrollBarEnabled = true, BorderSizePixel = 0, ClipsDescendants = true })
 				local pillLayout = New("UIListLayout", { Parent = PillContainer, FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Left, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,6) })
--- update horizontal canvas size so pills can scroll when overflowing
-pillLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	pcall(function()
-		PillContainer.CanvasSize = UDim2.new(0, pillLayout.AbsoluteContentSize.X + 8, 0, 0)
-	end)
-end)
--- update horizontal canvas size so pills can scroll when overflowing
-pillLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	pcall(function()
-		PillContainer.CanvasSize = UDim2.new(0, pillLayout.AbsoluteContentSize.X + 8, 0, 0)
-	end)
-end)
+
+				pillLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+					pcall(function()
+						PillContainer.CanvasSize = UDim2.new(0, pillLayout.AbsoluteContentSize.X + 8, 0, 0)
+					end)
+				end)
 
 				local function renderSelectedPill()
 					for _,c in pairs(PillContainer:GetChildren()) do
 						if c:IsA("Frame") and c.Name == "SelectedPill" then c:Destroy() end
 					end
 					local selText = tostring(element.Options[element.Selected] or "")
-					local maxW = PillContainer.AbsoluteSize.X
-					if maxW < 60 then maxW = 60 end
-					local desiredW = math.clamp(TextService:GetTextSize(selText, SmallFontSize, Enum.Font.Gotham, Vector2.new(800, math.huge)).X + 18, 60, maxW)
-					local pill = New("Frame", { Parent = PillContainer, Name = "SelectedPill", BackgroundColor3 = lightenColor(themeGet(theme,"Tab"), 0.22), Size = UDim2.new(0, desiredW, 0, PillContainer.AbsoluteSize.Y), BorderSizePixel = 0 })
+					local containerW = PillContainer.AbsoluteSize.X
+					if containerW < 60 then containerW = 60 end
+					local textW = TextService:GetTextSize(selText, SmallFontSize, Enum.Font.Gotham, Vector2.new(800, math.huge)).X + 18
+					local desiredW = math.clamp(textW, 60, containerW - 10)
+					local pill = New("Frame", { Parent = PillContainer, Name = "SelectedPill", BackgroundColor3 = themeGet(theme, "SelectedOption"), Size = UDim2.new(0, desiredW, 1, 0), BorderSizePixel = 0 })
 					New("UICorner", { Parent = pill, CornerRadius = UDim.new(0.5, 0) })
 					New("UIStroke", { Parent = pill, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
-					New("TextLabel", { Parent = pill, BackgroundTransparency = 1, Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = selText, TextXAlignment = Enum.TextXAlignment.Left, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(230,230,230) })
+					New("TextLabel", { Parent = pill, BackgroundTransparency = 1, Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = selText, TextXAlignment = Enum.TextXAlignment.Left, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(230,230,230), TextTruncate = Enum.TextTruncate.AtEnd })
 				end
 				renderSelectedPill()
 
@@ -1276,20 +1232,19 @@ end)
 					visibleOptions = math.clamp(#element.Options, 0, maxVisibleOptions)
 					local expandedHeightLocal = baseHeight + (visibleOptions * optionHeight)
 
-					-- Create scrolling frame inside F, so the element expands inline and pushes content below
 					OptionsFrame = New("ScrollingFrame", { Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0,0,0, baseHeight), Size = UDim2.new(1,0,0, visibleOptions * optionHeight), CanvasSize = UDim2.new(0,0,0, math.max(#element.Options * optionHeight, visibleOptions * optionHeight)), ScrollBarThickness = 6 })
 					local optsLayout = New("UIListLayout", { Parent = OptionsFrame, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,2) })
 
 					for i, opt in ipairs(element.Options) do
 						local isSelected = (i == element.Selected)
-						local bgColor = isSelected and lightenColor(themeGet(theme,"Tab"), 0.22) or themeGet(theme,"Tab")
-						local textColor = isSelected and Color3.fromRGB(20,20,20) or Color3.fromRGB(200,200,200)
+						local bgColor = isSelected and themeGet(theme, "SelectedOption") or themeGet(theme,"Tab")
+						local textColor = isSelected and Color3.fromRGB(240,240,240) or Color3.fromRGB(200,200,200)
 						local btn = New("TextButton", { Parent = OptionsFrame, BackgroundColor3 = bgColor, Size = UDim2.new(1,0,0,optionHeight), Text = "", AutoButtonColor = false })
 						New("UICorner", { Parent = btn, CornerRadius = UDim.new(0.06,0) })
 						New("UIStroke", { Parent = btn, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 						local lbl = New("TextLabel", { Parent = btn, BackgroundTransparency = 1, Size = UDim2.new(1,-14,1,0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = opt, TextSize = SmallFontSize, TextColor3 = textColor, TextXAlignment = Enum.TextXAlignment.Left })
 						if isSelected then
-							local check = New("TextLabel", { Parent = btn, BackgroundTransparency = 1, Size = UDim2.new(0,24,0,optionHeight), Position = UDim2.new(1,-28,0,0), Font = Enum.Font.SourceSansBold, Text = "✓", TextSize = SmallFontSize + 4, TextColor3 = Color3.fromRGB(20,20,20) })
+							local check = New("TextLabel", { Parent = btn, BackgroundTransparency = 1, Size = UDim2.new(0,24,0,optionHeight), Position = UDim2.new(1,-28,0,0), Font = Enum.Font.SourceSansBold, Text = "✓", TextSize = SmallFontSize + 4, TextColor3 = Color3.fromRGB(240,240,240) })
 						end
 						btn.MouseButton1Click:Connect(function()
 							element.Selected = i
@@ -1309,7 +1264,6 @@ end)
 				PillContainer:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() renderSelectedPill() end)
 
 			elseif element.Type == "MultiDropdown" then
-				-- reverted inline multi dropdown (no overlay). Similar to Dropdown but allows multi-selection
 				local baseHeight = isMobile and 44 or 48
 				local optionHeight = isMobile and 30 or 34
 				local maxVisibleOptions = 8
@@ -1322,20 +1276,14 @@ end)
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
 				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,6), Size = UDim2.new(0.35,0,0,ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "MultiDropdown", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
-				local PillContainer = New("ScrollingFrame", { Parent = F, Name = "PillContainer", BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 12), Size = UDim2.new(0.94,0,0, baseHeight - (ElementFontSize + 18)), CanvasSize = UDim2.new(0,0,0,0), ScrollBarThickness = 6, HorizontalScrollBarEnabled = true, BorderSizePixel = 0 })
+				local PillContainer = New("ScrollingFrame", { Parent = F, Name = "PillContainer", BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 12), Size = UDim2.new(0.94,0,0, baseHeight - (ElementFontSize + 18)), CanvasSize = UDim2.new(0,0,0,0), ScrollBarThickness = 6, HorizontalScrollBarEnabled = true, BorderSizePixel = 0, ClipsDescendants = true })
 				local pillLayout = New("UIListLayout", { Parent = PillContainer, FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Left, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,6) })
--- update horizontal canvas size so pills can scroll when overflowing
-pillLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	pcall(function()
-		PillContainer.CanvasSize = UDim2.new(0, pillLayout.AbsoluteContentSize.X + 8, 0, 0)
-	end)
-end)
--- update horizontal canvas size so pills can scroll when overflowing
-pillLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	pcall(function()
-		PillContainer.CanvasSize = UDim2.new(0, pillLayout.AbsoluteContentSize.X + 8, 0, 0)
-	end)
-end)
+
+				pillLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+					pcall(function()
+						PillContainer.CanvasSize = UDim2.new(0, pillLayout.AbsoluteContentSize.X + 8, 0, 0)
+					end)
+				end)
 
 				local function renderMultiPills()
 					for _,c in pairs(PillContainer:GetChildren()) do
@@ -1343,13 +1291,14 @@ end)
 					end
 					for idx,_ in pairs(element.Selected) do
 						local text = tostring(element.Options[idx] or "")
-						local maxW = PillContainer.AbsoluteSize.X
-						if maxW < 60 then maxW = 60 end
-						local desiredW = math.clamp(TextService:GetTextSize(text, SmallFontSize, Enum.Font.Gotham, Vector2.new(800, math.huge)).X + 22, 60, maxW)
-						local pill = New("Frame", { Parent = PillContainer, Name = "MultiPill", BackgroundColor3 = lightenColor(themeGet(theme,"Tab"), 0.22), Size = UDim2.new(0, desiredW, 0, PillContainer.AbsoluteSize.Y), BorderSizePixel = 0 })
+						local containerW = PillContainer.AbsoluteSize.X
+						if containerW < 60 then containerW = 60 end
+						local textW = TextService:GetTextSize(text, SmallFontSize, Enum.Font.Gotham, Vector2.new(800, math.huge)).X + 22
+						local desiredW = math.clamp(textW, 60, containerW - 10)
+						local pill = New("Frame", { Parent = PillContainer, Name = "MultiPill", BackgroundColor3 = themeGet(theme, "SelectedOption"), Size = UDim2.new(0, desiredW, 1, 0), BorderSizePixel = 0 })
 						New("UICorner", { Parent = pill, CornerRadius = UDim.new(0.5, 0) })
 						New("UIStroke", { Parent = pill, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
-						local lbl = New("TextLabel", { Parent = pill, BackgroundTransparency = 1, Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = text, TextXAlignment = Enum.TextXAlignment.Left, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(230,230,230) })
+						local lbl = New("TextLabel", { Parent = pill, BackgroundTransparency = 1, Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = text, TextXAlignment = Enum.TextXAlignment.Left, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(230,230,230), TextTruncate = Enum.TextTruncate.AtEnd })
 					end
 				end
 				renderMultiPills()
@@ -1376,19 +1325,24 @@ end)
 
 					for i, opt in ipairs(element.Options) do
 						local isSelected = element.Selected[i]
-						local bgColor = isSelected and lightenColor(themeGet(theme,"Tab"), 0.22) or themeGet(theme,"Tab")
-						local textColor = isSelected and Color3.fromRGB(20,20,20) or Color3.fromRGB(200,200,200)
+						local bgColor = isSelected and themeGet(theme, "SelectedOption") or themeGet(theme,"Tab")
+						local textColor = isSelected and Color3.fromRGB(240,240,240) or Color3.fromRGB(200,200,200)
 						local btn = New("TextButton", { Parent = OptionsFrame, BackgroundColor3 = bgColor, Size = UDim2.new(1,0,0,optionHeight), Text = "", AutoButtonColor = false })
 						New("UICorner", { Parent = btn, CornerRadius = UDim.new(0.06,0) })
 						New("UIStroke", { Parent = btn, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 						local lbl = New("TextLabel", { Parent = btn, BackgroundTransparency = 1, Size = UDim2.new(1,-14,1,0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = opt, TextSize = SmallFontSize, TextColor3 = textColor, TextXAlignment = Enum.TextXAlignment.Left })
-						local mark = New("TextLabel", { Parent = btn, BackgroundTransparency = 1, Size = UDim2.new(0,24,0,optionHeight), Position = UDim2.new(1,-28,0,0), Font = Enum.Font.SourceSansBold, Text = isSelected and "✓" or "", TextSize = SmallFontSize + 4, TextColor3 = Color3.fromRGB(20,20,20) })
+						local mark = New("TextLabel", { Parent = btn, BackgroundTransparency = 1, Size = UDim2.new(0,24,0,optionHeight), Position = UDim2.new(1,-28,0,0), Font = Enum.Font.SourceSansBold, Text = isSelected and "✓" or "", TextSize = SmallFontSize + 4, TextColor3 = Color3.fromRGB(240,240,240) })
 						btn.MouseButton1Click:Connect(function()
 							if element.Selected[i] then
 								element.Selected[i] = nil
 							else
 								element.Selected[i] = true
 							end
+							local newBgColor = element.Selected[i] and themeGet(theme, "SelectedOption") or themeGet(theme,"Tab")
+							local newTextColor = element.Selected[i] and Color3.fromRGB(240,240,240) or Color3.fromRGB(200,200,200)
+							btn.BackgroundColor3 = newBgColor
+							lbl.TextColor3 = newTextColor
+							mark.Text = element.Selected[i] and "✓" or ""
 							renderMultiPills()
 							if element.Callback then
 								local vals = {}
@@ -1496,7 +1450,6 @@ end)
 				updateBindBtnVisual()
 
 			elseif element.Type == "Colorpicker" then
-				-- Colorpicker with constrained SV width (no overflow)
 				local baseH = isMobile and 140 or 160
 				local F = New("Frame", {Parent = ContentContainer, BackgroundColor3 = themeGet(theme, "Panel"), BorderSizePixel = 0, Size = UDim2.new(1,0,0,baseH + 12)})
 				New("UICorner", {Parent = F, CornerRadius = UDim.new(0.06,0)})
@@ -1532,14 +1485,11 @@ end)
 				New("UICorner", { Parent = HexBox, CornerRadius = UDim.new(0.04, 0) })
 				New("UIStroke", { Parent = HexBox, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 
-				-- Resize logic: compute svSize so it never hogs the whole width
 				local function resizeColorpicker()
 					local totalW = F.AbsoluteSize.X - padding*2
 					if totalW <= 0 then return end
 					local desiredRight = rightColumnWidth
-					-- ensure hueW + spacing included
 					local availableForSV = totalW - desiredRight - (hueW + 24)
-					-- limit SV to at most 45% of total width, and at least 90px, and no bigger than baseH
 					local svSize = math.clamp(math.floor(math.min(baseH, math.max(90, math.min( math.floor(totalW * 0.45), availableForSV )))), 90, baseH)
 					SV.Size = UDim2.new(0, svSize, 0, svSize)
 					Hue.Position = UDim2.new(0, svSize + 12, 0, ElementFontSize + 8)
@@ -1644,7 +1594,6 @@ end)
 					end
 				end)
 
-				-- init
 				task.spawn(function() task.wait(0.03); resizeColorpicker(); updatePickerFromHSV() end)
 				F:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() resizeColorpicker(); updatePickerFromHSV() end)
 				SV:GetPropertyChangedSignal("AbsoluteSize"):Connect(updatePickerFromHSV)
@@ -1653,7 +1602,6 @@ end)
 		end
 	end
 
-	-- Global Keybind Handling (robust for KeyCode, Mouse, Gamepad)
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		for _, kb in pairs(Window._Keybinds) do
