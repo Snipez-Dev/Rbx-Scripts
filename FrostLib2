@@ -1,5 +1,102 @@
 -- VanUI (updated) - Dropdown reverted to inline + Colorpicker sizing fixes
 local Library = {}
+Library.Notifications = {}
+Library._notifyGui = nil
+Library._notifyContainer = nil
+
+local function ensureNotifyContainer()
+	if Library._notifyGui and Library._notifyGui.Parent then return end
+	local ng = New("ScreenGui", { Name = "VanUI_Notifications", ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn = false })
+	ng.Parent = CoreGui
+	local container = New("Frame", {
+		Parent = ng,
+		Name = "NotifyContainer",
+		AnchorPoint = Vector2.new(1,0),
+		Position = UDim2.new(1,-18,0,18),
+		Size = UDim2.new(0, 320, 0, 0),
+		BackgroundTransparency = 1
+	})
+	container.ClipsDescendants = true
+	Library._notifyGui = ng
+	Library._notifyContainer = container
+end
+
+--- Library:Notify(text, duration, opts)
+-- text (string) - message text
+-- duration (number, optional) - seconds to show (default 4)
+-- opts (table, optional) - { theme = themeTable }
+function Library:Notify(text, duration, opts)
+	duration = tonumber(duration) or 4
+	opts = opts or {}
+	ensureNotifyContainer()
+	local container = Library._notifyContainer
+	if not container then return end
+
+	local isMobileLocal = detectMobile()
+	local notifH = isMobileLocal and 48 or 56
+	local smallFS = isMobileLocal and 10 or 13
+	local themeLocal = opts.theme or nil
+
+	local frame = New("Frame", {
+		Parent = container,
+		BackgroundColor3 = themeGet(themeLocal, "Panel"),
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, notifH),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 0),
+		BackgroundTransparency = 1
+	})
+	New("UICorner", { Parent = frame, CornerRadius = UDim.new(0.06, 0) })
+	New("UIStroke", { Parent = frame, Color = themeGet(themeLocal, "PanelStroke"), Thickness = 1 })
+
+	local label = New("TextLabel", {
+		Parent = frame,
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 12, 0, 0),
+		Size = UDim2.new(1, -24, 1, 0),
+		Font = Enum.Font.Gotham,
+		Text = tostring(text or ""),
+		TextColor3 = Color3.fromRGB(240,240,240),
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		TextSize = smallFS,
+		TextXAlignment = Enum.TextXAlignment.Left
+	})
+
+	-- insert at front so newest on top
+	table.insert(Library.Notifications, 1, frame)
+
+	-- reposition stack
+	local spacing = 8
+	for i, f in ipairs(Library.Notifications) do
+		local y = (i - 1) * (notifH + spacing)
+		TweenService:Create(f, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Position = UDim2.new(1, 0, 0, y), BackgroundTransparency = 0 }):Play()
+	end
+
+	-- auto remove after duration
+	spawn(function()
+		task.wait(duration)
+		-- fade out and collapse
+		pcall(function()
+			TweenService:Create(frame, TweenInfo.new(0.18), { BackgroundTransparency = 1 }):Play()
+			TweenService:Create(frame, TweenInfo.new(0.18), { Size = UDim2.new(1, 0, 0, 0) }):Play()
+		end)
+		task.wait(0.2)
+		for i, f in ipairs(Library.Notifications) do
+			if f == frame then table.remove(Library.Notifications, i); break end
+		end
+		if frame and frame.Parent then frame:Destroy() end
+		-- shift remaining
+		for i, f in ipairs(Library.Notifications) do
+			local y = (i - 1) * (notifH + spacing)
+			TweenService:Create(f, TweenInfo.new(0.18), { Position = UDim2.new(1, 0, 0, y) }):Play()
+		end
+	end)
+
+	return frame
+end
+
+
 Library.Windows = {}
 Library.MainWindow = nil
 
@@ -1064,8 +1161,20 @@ function Library:CreateWindow(title, subtitle, opts)
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
 				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,6), Size = UDim2.new(0.4,0,0,ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "Dropdown", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
-				local PillContainer = New("Frame", { Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 12), Size = UDim2.new(0.94,0,0, baseHeight - (ElementFontSize + 18))})
+				local PillContainer = New("ScrollingFrame", { Parent = F, Name = "PillContainer", BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 12), Size = UDim2.new(0.94,0,0, baseHeight - (ElementFontSize + 18)), CanvasSize = UDim2.new(0,0,0,0), ScrollBarThickness = 6, HorizontalScrollBarEnabled = true, BorderSizePixel = 0 })
 				local pillLayout = New("UIListLayout", { Parent = PillContainer, FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Left, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,6) })
+-- update horizontal canvas size so pills can scroll when overflowing
+pillLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	pcall(function()
+		PillContainer.CanvasSize = UDim2.new(0, pillLayout.AbsoluteContentSize.X + 8, 0, 0)
+	end)
+end)
+-- update horizontal canvas size so pills can scroll when overflowing
+pillLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	pcall(function()
+		PillContainer.CanvasSize = UDim2.new(0, pillLayout.AbsoluteContentSize.X + 8, 0, 0)
+	end)
+end)
 
 				local function renderSelectedPill()
 					for _,c in pairs(PillContainer:GetChildren()) do
@@ -1075,7 +1184,7 @@ function Library:CreateWindow(title, subtitle, opts)
 					local maxW = PillContainer.AbsoluteSize.X
 					if maxW < 60 then maxW = 60 end
 					local desiredW = math.clamp(TextService:GetTextSize(selText, SmallFontSize, Enum.Font.Gotham, Vector2.new(800, math.huge)).X + 18, 60, maxW)
-					local pill = New("Frame", { Parent = PillContainer, Name = "SelectedPill", BackgroundColor3 = lightenColor(themeGet(theme,"Tab"), 0.08), Size = UDim2.new(0, desiredW, 0, PillContainer.AbsoluteSize.Y), BorderSizePixel = 0 })
+					local pill = New("Frame", { Parent = PillContainer, Name = "SelectedPill", BackgroundColor3 = lightenColor(themeGet(theme,"Tab"), 0.22), Size = UDim2.new(0, desiredW, 0, PillContainer.AbsoluteSize.Y), BorderSizePixel = 0 })
 					New("UICorner", { Parent = pill, CornerRadius = UDim.new(0.5, 0) })
 					New("UIStroke", { Parent = pill, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 					New("TextLabel", { Parent = pill, BackgroundTransparency = 1, Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = selText, TextXAlignment = Enum.TextXAlignment.Left, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(230,230,230) })
@@ -1105,7 +1214,7 @@ function Library:CreateWindow(title, subtitle, opts)
 
 					for i, opt in ipairs(element.Options) do
 						local isSelected = (i == element.Selected)
-						local bgColor = isSelected and lightenColor(themeGet(theme,"Tab"), 0.18) or themeGet(theme,"Tab")
+						local bgColor = isSelected and lightenColor(themeGet(theme,"Tab"), 0.22) or themeGet(theme,"Tab")
 						local textColor = isSelected and Color3.fromRGB(20,20,20) or Color3.fromRGB(200,200,200)
 						local btn = New("TextButton", { Parent = OptionsFrame, BackgroundColor3 = bgColor, Size = UDim2.new(1,0,0,optionHeight), Text = "", AutoButtonColor = false })
 						New("UICorner", { Parent = btn, CornerRadius = UDim.new(0.06,0) })
@@ -1145,8 +1254,20 @@ function Library:CreateWindow(title, subtitle, opts)
 				New("UIStroke", {Parent = F, Color = themeGet(theme, "PanelStroke"), Thickness = 1})
 
 				local Label = New("TextLabel", {Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,6), Size = UDim2.new(0.35,0,0,ElementFontSize + 6), Font = Enum.Font.GothamMedium, Text = element.Text or "MultiDropdown", TextColor3 = Color3.fromRGB(255,255,255), TextSize = ElementFontSize, TextXAlignment = Enum.TextXAlignment.Left})
-				local PillContainer = New("Frame", { Parent = F, BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 12), Size = UDim2.new(0.94,0,0, baseHeight - (ElementFontSize + 18))})
+				local PillContainer = New("ScrollingFrame", { Parent = F, Name = "PillContainer", BackgroundTransparency = 1, Position = UDim2.new(0.03,0,0,ElementFontSize + 12), Size = UDim2.new(0.94,0,0, baseHeight - (ElementFontSize + 18)), CanvasSize = UDim2.new(0,0,0,0), ScrollBarThickness = 6, HorizontalScrollBarEnabled = true, BorderSizePixel = 0 })
 				local pillLayout = New("UIListLayout", { Parent = PillContainer, FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Left, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,6) })
+-- update horizontal canvas size so pills can scroll when overflowing
+pillLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	pcall(function()
+		PillContainer.CanvasSize = UDim2.new(0, pillLayout.AbsoluteContentSize.X + 8, 0, 0)
+	end)
+end)
+-- update horizontal canvas size so pills can scroll when overflowing
+pillLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	pcall(function()
+		PillContainer.CanvasSize = UDim2.new(0, pillLayout.AbsoluteContentSize.X + 8, 0, 0)
+	end)
+end)
 
 				local function renderMultiPills()
 					for _,c in pairs(PillContainer:GetChildren()) do
@@ -1157,7 +1278,7 @@ function Library:CreateWindow(title, subtitle, opts)
 						local maxW = PillContainer.AbsoluteSize.X
 						if maxW < 60 then maxW = 60 end
 						local desiredW = math.clamp(TextService:GetTextSize(text, SmallFontSize, Enum.Font.Gotham, Vector2.new(800, math.huge)).X + 22, 60, maxW)
-						local pill = New("Frame", { Parent = PillContainer, Name = "MultiPill", BackgroundColor3 = lightenColor(themeGet(theme,"Tab"), 0.08), Size = UDim2.new(0, desiredW, 0, PillContainer.AbsoluteSize.Y), BorderSizePixel = 0 })
+						local pill = New("Frame", { Parent = PillContainer, Name = "MultiPill", BackgroundColor3 = lightenColor(themeGet(theme,"Tab"), 0.22), Size = UDim2.new(0, desiredW, 0, PillContainer.AbsoluteSize.Y), BorderSizePixel = 0 })
 						New("UICorner", { Parent = pill, CornerRadius = UDim.new(0.5, 0) })
 						New("UIStroke", { Parent = pill, Color = themeGet(theme, "PanelStroke"), Thickness = 1 })
 						local lbl = New("TextLabel", { Parent = pill, BackgroundTransparency = 1, Size = UDim2.new(1, -8, 1, 0), Position = UDim2.new(0,8,0,0), Font = Enum.Font.Gotham, Text = text, TextXAlignment = Enum.TextXAlignment.Left, TextSize = SmallFontSize, TextColor3 = Color3.fromRGB(230,230,230) })
@@ -1187,7 +1308,7 @@ function Library:CreateWindow(title, subtitle, opts)
 
 					for i, opt in ipairs(element.Options) do
 						local isSelected = element.Selected[i]
-						local bgColor = isSelected and lightenColor(themeGet(theme,"Tab"), 0.18) or themeGet(theme,"Tab")
+						local bgColor = isSelected and lightenColor(themeGet(theme,"Tab"), 0.22) or themeGet(theme,"Tab")
 						local textColor = isSelected and Color3.fromRGB(20,20,20) or Color3.fromRGB(200,200,200)
 						local btn = New("TextButton", { Parent = OptionsFrame, BackgroundColor3 = bgColor, Size = UDim2.new(1,0,0,optionHeight), Text = "", AutoButtonColor = false })
 						New("UICorner", { Parent = btn, CornerRadius = UDim.new(0.06,0) })
