@@ -1488,7 +1488,7 @@ function Vanith:CreateWindow(opts)
         and not UserInputService.MouseEnabled
 
     if isMobile then
-        scale.Scale = 0.35
+        scale.Scale = 0.55
     elseif cam then
         local vp = cam.ViewportSize
         if vp.X < 900 then
