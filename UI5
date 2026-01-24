@@ -1,4 +1,3 @@
-
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
@@ -231,12 +230,11 @@ function Window:_makeTopTabButton(text)
         Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.GothamBold,
         Text = text,
-        TextSize = 12,
+        TextSize = 12, -- fest, Tabs werden NICHT mehr skaliert
         TextXAlignment = Enum.TextXAlignment.Center,
         Parent = btn,
         ZIndex = 5,
         TextColor3 = self.Theme.DimText,
-        TextScaled = true, -- wird kleiner, wenn Name zu lang ist
     })
 
     local underline = New("Frame", {
@@ -292,7 +290,7 @@ function Window:CreateTab(name)
         Size = UDim2.new(1, -20, 0, 22),
         Font = Enum.Font.GothamBold,
         Text = name,
-        TextSize = 13,
+        TextSize = 12, -- etwas kleiner
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = row,
         ZIndex = 3,
@@ -389,7 +387,6 @@ function Tab:SetTopTab(tt)
         }, 0.12)
     end
 
-    -- beim Wechsel oben alle Controls dieses Tabs auf ihr "Profil" syncen
     if self._sections then
         for _, sec in ipairs(self._sections) do
             if sec._controls then
@@ -412,7 +409,6 @@ function Tab:CreateSection(title, slot)
     local win  = self.Window
     local page = self.Page
 
-    -- 2x2 Grid, füllt komplette Höhe (kein dicker Abstand unten)
     local layout = {
         LeftTop = {
             Pos  = UDim2.new(0, 0, 0, 0),
@@ -456,13 +452,12 @@ function Tab:CreateSection(title, slot)
         Size = UDim2.new(1, -24, 0, 18),
         Font = Enum.Font.GothamBold,
         Text = title,
-        TextSize = 12,
+        TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = frame,
     })
     win:_track(head, "TextColor3", "Accent")
 
-    -- Scrollable Inner
     local inner = New("ScrollingFrame", {
         BorderSizePixel = 0,
         BackgroundTransparency = 1,
@@ -506,7 +501,7 @@ function Tab:CreateSection(title, slot)
     return sec
 end
 
---------------------------------------------------------------------- -- section controls (Slider / Toggle / Button / Textbox / Dropdown)
+--------------------------------------------------------------------- -- section controls
 --------------------------------------------------------------------- 
 
 function Section:CreateSlider(cfg)
@@ -543,7 +538,7 @@ function Section:CreateSlider(cfg)
         Size = UDim2.new(0.6, 0, 0, 18),
         Font = Enum.Font.Gotham,
         Text = c.Name or "Slider",
-        TextSize = 12,
+        TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = row,
     })
@@ -554,10 +549,9 @@ function Section:CreateSlider(cfg)
         Position = UDim2.new(0.6, 0, 0, 0),
         Size = UDim2.new(0.4, 0, 0, 18),
         Font = Enum.Font.GothamBold,
-        TextSize = 12,
+        TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Right,
         Parent = row,
-        TextScaled = true, -- schrumpft bei langem Text
     })
     win:_track(valueText, "TextColor3", "Accent")
 
@@ -658,7 +652,6 @@ function Section:CreateSlider(cfg)
         end
     end)
 
-    -- WICHTIG: damit der Slider auf PC/Maus sauber draggt
     track.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement
             or input.UserInputType == Enum.UserInputType.Touch then
@@ -693,7 +686,6 @@ function Section:CreateSlider(cfg)
     return obj
 end
 
--- nicer toggle
 function Section:CreateToggle(cfg)
     local win   = self.Window
     local inner = self.Inner
@@ -727,7 +719,7 @@ function Section:CreateToggle(cfg)
         Size = UDim2.new(1, -70, 1, 0),
         Font = Enum.Font.Gotham,
         Text = c.Name or "Toggle",
-        TextSize = 12,
+        TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = row,
     })
@@ -893,7 +885,7 @@ function Section:CreateButton(cfg)
         Size = UDim2.new(1, 0, 0, 24),
         Font = Enum.Font.GothamBold,
         Text = c.Name or "Button",
-        TextSize = 12,
+        TextSize = 11,
         Parent = inner,
     })
     win:_track(btn, "BackgroundColor3", "Field")
@@ -938,7 +930,7 @@ function Section:CreateTextbox(cfg)
         Font = Enum.Font.Gotham,
         Text = defaultText,
         PlaceholderText = c.Placeholder or "Enter text here",
-        TextSize = 12,
+        TextSize = 11,
         ClearTextOnFocus = false,
         Parent = inner,
     })
@@ -986,7 +978,6 @@ function Section:CreateTextbox(cfg)
     return obj
 end
 
--- Dropdown with scrolling if there are many options
 function Section:CreateDropdown(cfg)
     local win   = self.Window
     local inner = self.Inner
@@ -1034,7 +1025,7 @@ function Section:CreateDropdown(cfg)
         Size = UDim2.new(0.6, -10, 1, 0),
         Font = Enum.Font.Gotham,
         Text = c.Name or "Dropdown",
-        TextSize = 12,
+        TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = head,
     })
@@ -1046,10 +1037,9 @@ function Section:CreateDropdown(cfg)
         Size = UDim2.new(0.4, -26, 1, 0),
         Font = Enum.Font.GothamBold,
         Text = tostring(current),
-        TextSize = 12,
+        TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Right,
         Parent = head,
-        TextScaled = true, -- schrumpft, wenn Auswahlname zu lang ist
     })
     win:_track(valLbl, "TextColor3", "Text")
 
@@ -1123,7 +1113,7 @@ function Section:CreateDropdown(cfg)
                 Size = UDim2.new(1, 0, 0, 20),
                 Font = Enum.Font.Gotham,
                 Text = tostring(opt),
-                TextSize = 12,
+                TextSize = 11,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Parent = listBg,
             })
@@ -1306,7 +1296,7 @@ function Vanith:CreateWindow(opts)
     New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = top})
 
     ------------------------------------------------------------------
-    -- left brand box (Title, centered)
+    -- left brand box (Title, centered) mit dynamischem Shrink NUR hier
     ------------------------------------------------------------------
     local brand = New("Frame", {
         BorderSizePixel = 0,
@@ -1324,24 +1314,42 @@ function Vanith:CreateWindow(opts)
 
     local brandLabel = New("TextLabel", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 1, 0),
-        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, -8, 1, 0),
+        Position = UDim2.new(0, 4, 0, 0),
         Font = Enum.Font.GothamBold,
         Text = windowTitle,
-        TextSize = 15,
+        TextSize = 14, -- max Größe
         TextXAlignment = Enum.TextXAlignment.Center,
         Parent = brand,
         ZIndex = 4,
     })
     self:_track(brandLabel, "TextColor3", "Accent")
 
+    -- Nur der Titel shrinkt, Tabs oben / Slider / Dropdown NICHT
+    local function fitTitle()
+        local maxSize = 14
+        local minSize = 10
+        for size = maxSize, minSize, -1 do
+            brandLabel.TextSize = size
+            if brand.AbsoluteSize.X > 0 then
+                if brandLabel.TextBounds.X <= (brand.AbsoluteSize.X - 8) then
+                    break
+                end
+            end
+        end
+    end
+
+    brand:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitTitle)
+    brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
+    fitTitle()
+
     ------------------------------------------------------------------
-    -- top weapon-tab strip (mittig)
+    -- top weapon-tab strip
     ------------------------------------------------------------------
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
-        Size = UDim2.new(1, -260, 0, 34), -- etwas kleiner wegen breiterer Control-Box rechts
+        Size = UDim2.new(1, -260, 0, 34),
         Parent = top,
         ZIndex = 2,
     })
@@ -1390,7 +1398,7 @@ function Vanith:CreateWindow(opts)
         Position = UDim2.new(0, 0, 0, 0),
         Font = Enum.Font.GothamBold,
         Text = "-",
-        TextSize = 16,
+        TextSize = 14,
         Parent = controlBox,
         ZIndex = 4,
     })
@@ -1403,13 +1411,12 @@ function Vanith:CreateWindow(opts)
         Position = UDim2.new(0.5, 0, 0, 0),
         Font = Enum.Font.GothamBold,
         Text = "X",
-        TextSize = 16,
+        TextSize = 14,
         Parent = controlBox,
         ZIndex = 4,
     })
     self:_track(closeBtn, "TextColor3", "Accent")
 
-    -- Minimize: nur Optik (kein Verhalten), kleine Klick-Animation
     minimizeBtn.MouseButton1Click:Connect(function()
         PlayTween(minimizeBtn, {TextColor3 = self.Theme.Muted}, 0.08)
         task.delay(0.08, function()
@@ -1419,7 +1426,6 @@ function Vanith:CreateWindow(opts)
         end)
     end)
 
-    -- Close: UI schließen
     closeBtn.MouseButton1Click:Connect(function()
         if self.Gui then
             self.Gui:Destroy()
@@ -1491,7 +1497,7 @@ function Vanith:CreateWindow(opts)
     end
 
     ------------------------------------------------------------------
-    -- mobile autoscale (Mobile = 50% der Original-Größe)
+    -- mobile autoscale (Mobile noch kleiner: 35% der Originalgröße)
     ------------------------------------------------------------------
     local scale = New("UIScale", {Parent = main})
     local cam   = workspace.CurrentCamera
@@ -1501,10 +1507,8 @@ function Vanith:CreateWindow(opts)
         and not UserInputService.MouseEnabled
 
     if isMobile then
-        -- fest 50% auf echtem Handy/Tablet ohne Tastatur/Maus
-        scale.Scale = 0.5
+        scale.Scale = 0.35  -- vorher 0.5, jetzt deutlich kleiner
     elseif cam then
-        -- PC/Tablet: leichte Anpassung bei sehr kleiner Auflösung
         local vp = cam.ViewportSize
         if vp.X < 900 then
             scale.Scale = math.clamp(vp.X / 900, 0.75, 1)
@@ -1518,8 +1522,6 @@ function Vanith:CreateWindow(opts)
     return self
 end
 
--- alias
 Vanith.Createwindow = Vanith.CreateWindow
 
 return Vanith
-
