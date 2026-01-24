@@ -375,6 +375,16 @@ function Tab:CreateTopTab(name)
     return tt
 end
 
+-- Helper: per Name umschalten (falls du beim Erstellen der Sections wechseln willst)
+function Tab:SetTopTabByName(name)
+    for _, tt in ipairs(self._topTabs) do
+        if tt.Label and tt.Label.Text == name then
+            self:SetTopTab(tt)
+            break
+        end
+    end
+end
+
 function Tab:SetTopTab(tt)
     self._activeTopTab = tt
     local win = self.Window
@@ -387,6 +397,18 @@ function Tab:SetTopTab(tt)
         }, 0.12)
     end
 
+    -- NEU: Sections nach TopTab filtern
+    -- sec._topTab == nil  -> global, immer sichtbar
+    -- sec._topTab == tt   -> nur im aktiven TopTab sichtbar
+    for _, sec in ipairs(self._sections) do
+        if sec._topTab == nil then
+            sec.Frame.Visible = true
+        else
+            sec.Frame.Visible = (sec._topTab == tt)
+        end
+    end
+
+    -- Profile-Values der Controls syncen
     if self._sections then
         for _, sec in ipairs(self._sections) do
             if sec._controls then
@@ -405,10 +427,14 @@ function Tab:GetActiveTopTabName()
 end
 
 -- slot: "LeftTop", "LeftBottom", "RightTop", "RightBottom"
-function Tab:CreateSection(title, slot)
+-- NEU: optional 3. Parameter topTabNameOrObj -> Section nur in diesem TopTab anzeigen
+function Tab:CreateSection(title, slot, topTabNameOrObj)
     local win  = self.Window
     local page = self.Page
 
+    ------------------------------------------------------------------
+    -- linker & rechter Rand gleich, in der Mitte 12px Gap
+    ------------------------------------------------------------------
     local layout = {
         LeftTop = {
             Pos  = UDim2.new(0, 0, 0, 0),
@@ -473,7 +499,7 @@ function Tab:CreateSection(title, slot)
     })
 
     local list = New("UIListLayout", {
-        Padding = UDim.new(0, 6), -- kleiner, damit weniger Abstand zwischen Controls
+        Padding = UDim.new(0, 6),
         SortOrder = Enum.SortOrder.LayoutOrder,
         Parent = inner,
     })
@@ -489,6 +515,26 @@ function Tab:CreateSection(title, slot)
         inner.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 16)
     end)
 
+    -- zugehörigen TopTab suchen (optional)
+    local associatedTopTab = nil
+    if topTabNameOrObj ~= nil then
+        if typeof(topTabNameOrObj) == "string" then
+            for _, tt in ipairs(self._topTabs) do
+                if tt.Label and tt.Label.Text == topTabNameOrObj then
+                    associatedTopTab = tt
+                    break
+                end
+            end
+        elseif type(topTabNameOrObj) == "table" and topTabNameOrObj.Label then
+            associatedTopTab = topTabNameOrObj
+        end
+    end
+
+    -- Wenn eine Bindung existiert und dieser TopTab gerade NICHT aktiv ist -> Section erstmal verstecken
+    if associatedTopTab and self._activeTopTab and self._activeTopTab ~= associatedTopTab then
+        frame.Visible = false
+    end
+
     local sec = setmetatable({
         Window    = win,
         Tab       = self,
@@ -496,6 +542,7 @@ function Tab:CreateSection(title, slot)
         Inner     = inner,
         List      = list,
         _controls = {},
+        _topTab   = associatedTopTab, -- nil = global
     }, Section)
 
     table.insert(self._sections, sec)
@@ -1135,7 +1182,6 @@ function Section:CreateDropdown(cfg)
             b.MouseButton1Click:Connect(function()
                 applySelectionForCurrentProfile(opt, true)
                 rebuild()
-                -- wieder zuklappen
                 open = false
                 PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.12)
                 PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT)}, 0.12)
