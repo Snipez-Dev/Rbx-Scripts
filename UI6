@@ -1,7 +1,7 @@
--- Vanith UI Library
--- usage:
+-- Vanith UI Library (Eternesus-style)
+-- Usage:
 -- local Vanith = loadstring(game:HttpGet("YOUR_URL_HERE"))()
--- local win = Vanith:CreateWindow({ Title = "Vanith" })
+-- local Window = Vanith:CreateWindow({ Title = "Vanith" })
 
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -44,10 +44,14 @@ end
 local function PlayTween(inst, props, time)
     if not inst then return end
     time = time or 0.15
-    local ok, tween = pcall(TweenService.Create, TweenService, inst, TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)
-    if ok and tween then
-        tween:Play()
-    end
+    local ok, tween = pcall(
+        TweenService.Create,
+        TweenService,
+        inst,
+        TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        props
+    )
+    if ok and tween then tween:Play() end
 end
 
 -- default theme (dark, purple)
@@ -161,9 +165,9 @@ function Window:_enableDrag(handle, target)
     end)
 end
 
--- resize bottom right
+-- resize bottom right, minSize = Erstellungsgröße
 function Window:_enableResize(handle, target)
-    local minSize = Vector2.new(450, 350)
+    local minSize = self.MinSize or Vector2.new(649, 417)
 
     local resizing
     local dragStart
@@ -995,6 +999,7 @@ function Vanith:CreateWindow(opts)
         theme[k] = v
     end
 
+    -- choose parent (CoreGui preferred)
     local parent
     do
         local ok, cg = pcall(function()
@@ -1011,11 +1016,18 @@ function Vanith:CreateWindow(opts)
         end
     end
 
+    -- size + minSize from creation size
+    local initialSize = opts.Size or UDim2.fromOffset(649, 417)
+    local baseWidth   = initialSize.X.Offset > 0 and initialSize.X.Offset or 649
+    local baseHeight  = initialSize.Y.Offset > 0 and initialSize.Y.Offset or 417
+    local minSizeVec  = Vector2.new(baseWidth, baseHeight)
+
     local self = setmetatable({
         Theme          = theme,
         _themeBindings = {},
         Tabs           = {},
         TopTabs        = {},
+        MinSize        = minSizeVec,
     }, Window)
 
     local gui = New("ScreenGui", {
@@ -1027,7 +1039,7 @@ function Vanith:CreateWindow(opts)
     self.Gui = gui
 
     local main = New("Frame", {
-        Size = opts.Size or UDim2.fromOffset(649, 417),
+        Size = initialSize,
         Position = opts.Position or UDim2.fromScale(0.5, 0.5),
         AnchorPoint = Vector2.new(0.5, 0.5),
         BorderSizePixel = 0,
@@ -1118,7 +1130,7 @@ function Vanith:CreateWindow(opts)
     local topLayout = New("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 16),
+        Padding = UDim.new(0, 24), -- mehr Abstand zwischen Waffen-Tabs
         Parent = tabsHolder,
     })
     topLayout.VerticalAlignment = Enum.VerticalAlignment.Center
@@ -1221,7 +1233,7 @@ function Vanith:CreateWindow(opts)
     return self
 end
 
--- alias (klein geschrieben, falls du das lieber magst)
+-- alias (klein geschrieben)
 Vanith.Createwindow = Vanith.CreateWindow
 
 return Vanith
