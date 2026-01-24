@@ -230,7 +230,7 @@ function Window:_makeTopTabButton(text)
         Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.GothamBold,
         Text = text,
-        TextSize = 12, -- Tabs bleiben feste Größe
+        TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Center,
         Parent = btn,
         ZIndex = 5,
@@ -387,7 +387,6 @@ function Tab:SetTopTab(tt)
         }, 0.12)
     end
 
-    -- Controls auf Profil (Weapon-Tab) synchronisieren
     if self._sections then
         for _, sec in ipairs(self._sections) do
             if sec._controls then
@@ -410,7 +409,6 @@ function Tab:CreateSection(title, slot)
     local win  = self.Window
     local page = self.Page
 
-    -- Layout mit kleinerem Abstand zwischen linkem und rechtem Panel
     local layout = {
         LeftTop = {
             Pos  = UDim2.new(0, 0, 0, 0),
@@ -1213,7 +1211,6 @@ function Vanith:CreateWindow(opts)
         theme[k] = v
     end
 
-    -- parent
     local parent
     do
         local ok, cg = pcall(function()
@@ -1230,7 +1227,6 @@ function Vanith:CreateWindow(opts)
         end
     end
 
-    -- StartSize (Vector2 oder UDim2)
     local sizeOpt = opts.StartSize or opts.Size
     local initialSize
     if typeof(sizeOpt) == "Vector2" then
@@ -1284,7 +1280,6 @@ function Vanith:CreateWindow(opts)
     })
     New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = glass})
 
-    -- top bar
     local top = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 54),
@@ -1295,9 +1290,6 @@ function Vanith:CreateWindow(opts)
     self:_track(top, "BackgroundColor3", "BG2")
     New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = top})
 
-    ------------------------------------------------------------------
-    -- left brand box (Title, centered) mit dynamischem Shrink NUR hier
-    ------------------------------------------------------------------
     local brand = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(12, 10),
@@ -1318,14 +1310,13 @@ function Vanith:CreateWindow(opts)
         Position = UDim2.new(0, 4, 0, 0),
         Font = Enum.Font.GothamBold,
         Text = windowTitle,
-        TextSize = 14, -- max Größe
+        TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Center,
         Parent = brand,
         ZIndex = 4,
     })
     self:_track(brandLabel, "TextColor3", "Accent")
 
-    -- Nur der Titel shrinkt
     local function fitTitle()
         local maxSize = 14
         local minSize = 10
@@ -1344,12 +1335,12 @@ function Vanith:CreateWindow(opts)
     fitTitle()
 
     ------------------------------------------------------------------
-    -- top weapon-tab strip (mittig) – schmaler, damit mehr Abstand zum Close
+    -- Tab-Strip: Breite so, dass Abstand links/rechts ~gleich ist
     ------------------------------------------------------------------
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
-        Size = UDim2.new(1, -320, 0, 34), -- vorher -260 -> jetzt mehr Abstand zur rechten Box
+        Size = UDim2.new(1, -264, 0, 34), -- HIER: Abstand zum Close-Box ≈ Abstand zum Title
         Parent = top,
         ZIndex = 2,
     })
@@ -1376,9 +1367,6 @@ function Vanith:CreateWindow(opts)
     topLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
     topLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
-    ------------------------------------------------------------------
-    -- control box: Minimize + Close
-    ------------------------------------------------------------------
     local controlBox = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.new(1, -96, 0, 10),
@@ -1432,9 +1420,6 @@ function Vanith:CreateWindow(opts)
         end
     end)
 
-    ------------------------------------------------------------------
-    -- sidebar + pages
-    ------------------------------------------------------------------
     local sidebar = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(12, 66),
@@ -1470,9 +1455,6 @@ function Vanith:CreateWindow(opts)
     })
     self.Pages = pages
 
-    ------------------------------------------------------------------
-    -- resize arrow bottom right
-    ------------------------------------------------------------------
     local resize = New("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.fromOffset(16, 16),
@@ -1496,9 +1478,6 @@ function Vanith:CreateWindow(opts)
         self:_enableDrag(top, main)
     end
 
-    ------------------------------------------------------------------
-    -- mobile autoscale (Mobile noch kleiner: 35%)
-    ------------------------------------------------------------------
     local scale = New("UIScale", {Parent = main})
     local cam   = workspace.CurrentCamera
 
