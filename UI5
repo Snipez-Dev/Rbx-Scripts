@@ -473,7 +473,7 @@ function Tab:CreateSection(title, slot)
     })
 
     local list = New("UIListLayout", {
-        Padding = UDim.new(0, 10),
+        Padding = UDim.new(0, 6), -- kleiner, damit weniger Abstand zwischen Controls
         SortOrder = Enum.SortOrder.LayoutOrder,
         Parent = inner,
     })
@@ -980,7 +980,7 @@ function Section:CreateTextbox(cfg)
     return obj
 end
 
---------------------------------------------------------------------- -- DROPDOWN (fix: kein großer Abstand, alle Optionen sichtbar)
+--------------------------------------------------------------------- -- DROPDOWN (manuelle Höhe, kein fetter Abstand)
 --------------------------------------------------------------------- 
 
 function Section:CreateDropdown(cfg)
@@ -1003,20 +1003,31 @@ function Section:CreateDropdown(cfg)
 
     local current   = defaultSelection
     local open      = false
-    local maxHeight = c.MaxHeight -- optional
+    local maxHeight = c.MaxHeight -- optional limit
 
-    -- Wrap: im zugeklappten Zustand nur 24px hoch
+    local ROW_HEIGHT   = 24       -- Höhe des Kopfes (geschlossen)
+    local ITEM_HEIGHT  = 20       -- Höhe eines Buttons
+    local ITEM_PADDING = 4        -- Abstand zwischen Buttons
+    local TOP_BOTTOM   = 8        -- Padding oben + unten
+
+    local function calcContentHeight()
+        local count = #options
+        if count <= 0 then return 0 end
+        local buttonsHeight = count * ITEM_HEIGHT
+        local spacing       = (count - 1) * ITEM_PADDING
+        return buttonsHeight + spacing + TOP_BOTTOM
+    end
+
     local wrap = New("Frame", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 24),
-        AutomaticSize = Enum.AutomaticSize.Y,
+        Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
         Parent = inner,
     })
 
     local head = New("TextButton", {
         AutoButtonColor = false,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 24),
+        Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
         Text = "",
         Parent = wrap,
     })
@@ -1052,7 +1063,7 @@ function Section:CreateDropdown(cfg)
     local arrow = New("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.new(1, -22, 0, 0),
-        Size = UDim2.fromOffset(20, 24),
+        Size = UDim2.fromOffset(20, ROW_HEIGHT),
         Font = Enum.Font.GothamBold,
         Text = "▾",
         TextSize = 14,
@@ -1062,7 +1073,7 @@ function Section:CreateDropdown(cfg)
 
     local listWrap = New("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(0, 24),
+        Position = UDim2.fromOffset(0, ROW_HEIGHT),
         Size = UDim2.new(1, 0, 0, 0),
         ClipsDescendants = true,
         Parent = wrap,
@@ -1071,7 +1082,6 @@ function Section:CreateDropdown(cfg)
     local listBg = New("Frame", {
         BorderSizePixel        = 0,
         Size                   = UDim2.new(1, 0, 0, 0),
-        AutomaticSize          = Enum.AutomaticSize.Y,
         BackgroundTransparency = 0,
         Parent                 = listWrap,
     })
@@ -1082,14 +1092,14 @@ function Section:CreateDropdown(cfg)
 
     local list = New("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding   = UDim.new(0, 4),
+        Padding   = UDim.new(0, ITEM_PADDING),
         Parent    = listBg,
     })
     New("UIPadding", {
-        PaddingTop    = UDim.new(0, 4),
+        PaddingTop    = UDim.new(0, TOP_BOTTOM/2),
         PaddingLeft   = UDim.new(0, 10),
         PaddingRight  = UDim.new(0, 10),
-        PaddingBottom = UDim.new(0, 4),
+        PaddingBottom = UDim.new(0, TOP_BOTTOM/2),
         Parent        = listBg,
     })
 
@@ -1113,7 +1123,7 @@ function Section:CreateDropdown(cfg)
             local b = New("TextButton", {
                 AutoButtonColor = false,
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 20),
+                Size = UDim2.new(1, 0, 0, ITEM_HEIGHT),
                 Font = Enum.Font.Gotham,
                 Text = tostring(opt),
                 TextSize = 11,
@@ -1125,9 +1135,10 @@ function Section:CreateDropdown(cfg)
             b.MouseButton1Click:Connect(function()
                 applySelectionForCurrentProfile(opt, true)
                 rebuild()
-                -- nach Wahl wieder zuklappen
+                -- wieder zuklappen
                 open = false
-                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
+                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.12)
+                PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT)}, 0.12)
                 arrow.Text = "▾"
             end)
         end
@@ -1135,19 +1146,30 @@ function Section:CreateDropdown(cfg)
 
     rebuild()
 
-    -- Höhe bei offenem Dropdown exakt nach Inhalt (inkl. Mobile + UIScale)
-    local function updateOpenHeight()
-        if not open then return end
-        local h = listBg.AbsoluteSize.Y
-        if maxHeight and maxHeight > 0 then
-            h = math.min(h, maxHeight)
+    local function setOpen(state)
+        if state == open then return end
+        open = state
+
+        if open then
+            arrow.Text = "▴"
+            local contentHeight = calcContentHeight()
+            if maxHeight and maxHeight > 0 then
+                contentHeight = math.min(contentHeight, maxHeight)
+            end
+
+            listBg.Size   = UDim2.new(1, 0, 0, contentHeight)
+            listWrap.Size = UDim2.new(1, 0, 0, contentHeight)
+            wrap.Size     = UDim2.new(1, 0, 0, ROW_HEIGHT + contentHeight)
+        else
+            arrow.Text = "▾"
+            listWrap.Size = UDim2.new(1, 0, 0, 0)
+            wrap.Size     = UDim2.new(1, 0, 0, ROW_HEIGHT)
         end
-        -- kleines Polster gegen Rundungsfehler
-        h = h + 2
-        PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, h)}, 0.14)
     end
 
-    listBg:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateOpenHeight)
+    head.MouseButton1Click:Connect(function()
+        setOpen(not open)
+    end)
 
     local function syncProfile()
         local key = getProfileKey()
@@ -1162,23 +1184,6 @@ function Section:CreateDropdown(cfg)
     end
 
     syncProfile()
-
-    local function setOpen(state)
-        if state == open then return end
-        open = state
-        if open then
-            arrow.Text = "▴"
-            -- einen Frame warten, damit das Layout steht, dann Höhe holen
-            task.defer(updateOpenHeight)
-        else
-            arrow.Text = "▾"
-            PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
-        end
-    end
-
-    head.MouseButton1Click:Connect(function()
-        setOpen(not open)
-    end)
 
     local obj = {}
     function obj:SetOptions(opts)
@@ -1351,7 +1356,7 @@ function Vanith:CreateWindow(opts)
     brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
     fitTitle()
 
-    -- Tab-Strip oben, zentriert solange alle Tabs reinpassen
+    -- Tab-Strip mit Auto-Scroll (wenn viele Waffen), sonst zentriert
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
