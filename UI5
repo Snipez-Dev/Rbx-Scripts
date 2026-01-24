@@ -1,13 +1,18 @@
--- Vanith UI Library (CoreGui, animated, resizable)
+-- Vanith UI Library
+-- usage:
+-- local Vanith = loadstring(game:HttpGet("YOUR_URL_HERE"))()
+-- local win = Vanith:CreateWindow({ Title = "Vanith" })
 
-local Players           = game:GetService("Players")
-local UserInputService  = game:GetService("UserInputService")
-local TweenService      = game:GetService("TweenService")
+local Players          = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService     = game:GetService("TweenService")
 
 local Vanith = {}
 
-local function new(class, props)
-    local inst = Instance.new(class)
+-- small helpers
+
+local function New(className, props)
+    local inst = Instance.new(className)
     if props then
         for k, v in pairs(props) do
             inst[k] = v
@@ -16,34 +21,36 @@ local function new(class, props)
     return inst
 end
 
-local function isMouse(t)
+local function IsMouse(t)
     return t == Enum.UserInputType.MouseButton1
         or t == Enum.UserInputType.MouseButton2
         or t == Enum.UserInputType.MouseButton3
 end
 
-local function isTouch(t)
+local function IsTouch(t)
     return t == Enum.UserInputType.Touch
 end
 
-local function clamp01(x)
+local function Clamp01(x)
     return math.clamp(x, 0, 1)
 end
 
-local function roundStep(v, minv, step)
+local function RoundStep(v, minv, step)
     if not step or step <= 0 then return v end
     local n = (v - minv) / step
     return (math.floor(n + 0.5) * step) + minv
 end
 
-local function tween(inst, props, t)
+local function PlayTween(inst, props, time)
     if not inst then return end
-    t = t or 0.15
-    local ok, tw = pcall(TweenService.Create, TweenService, inst, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)
-    if ok and tw then tw:Play() end
+    time = time or 0.15
+    local ok, tween = pcall(TweenService.Create, TweenService, inst, TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)
+    if ok and tween then
+        tween:Play()
+    end
 end
 
--- dunkles Theme
+-- default theme (dark, purple)
 local DEFAULT_THEME = {
     Accent  = Color3.fromRGB(170, 90, 255),
     BG0     = Color3.fromRGB(4, 4, 6),
@@ -57,18 +64,18 @@ local DEFAULT_THEME = {
     Field   = Color3.fromRGB(16, 16, 20),
 }
 
-local Window = {}
+local Window  = {}
 Window.__index = Window
 
-local Tab = {}
-Tab.__index = Tab
+local Tab     = {}
+Tab.__index   = Tab
 
 local Section = {}
 Section.__index = Section
 
-------------------------------------------------------------
--- Window helpers
-------------------------------------------------------------
+---------------------------------------------------------------------
+-- window helpers
+---------------------------------------------------------------------
 
 function Window:_track(inst, prop, key)
     table.insert(self._themeBindings, {inst = inst, prop = prop, key = key})
@@ -84,15 +91,15 @@ function Window:ApplyTheme()
     end
 end
 
-function Window:SetTheme(t)
-    for k, v in pairs(t or {}) do
+function Window:SetTheme(tbl)
+    for k, v in pairs(tbl or {}) do
         self.Theme[k] = v
     end
     self:ApplyTheme()
 end
 
-function Window:SetAccent(c)
-    self.Theme.Accent = c
+function Window:SetAccent(color)
+    self.Theme.Accent = color
     self:ApplyTheme()
 end
 
@@ -108,29 +115,33 @@ function Window:Destroy()
     end
 end
 
+-- drag top bar
 function Window:_enableDrag(handle, target)
-    local dragging, startPos, dragStart, active
+    local dragging
+    local dragStart
+    local startPos
+    local activeInput
 
     local function update(input)
         if not dragging then return end
-        local delta = input.Position - dragStart
+        local posDelta = input.Position - dragStart
         target.Position = UDim2.new(
-            startPos.X.Scale, startPos.X.Offset + delta.X,
-            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            startPos.X.Scale, startPos.X.Offset + posDelta.X,
+            startPos.Y.Scale, startPos.Y.Offset + posDelta.Y
         )
     end
 
     handle.InputBegan:Connect(function(input)
-        if isMouse(input.UserInputType) or isTouch(input.UserInputType) then
-            dragging  = true
-            active    = input
-            dragStart = input.Position
-            startPos  = target.Position
+        if IsMouse(input.UserInputType) or IsTouch(input.UserInputType) then
+            dragging    = true
+            activeInput = input
+            dragStart   = input.Position
+            startPos    = target.Position
 
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                    active   = nil
+                    dragging    = false
+                    activeInput = nil
                 end
             end)
         end
@@ -139,20 +150,25 @@ function Window:_enableDrag(handle, target)
     handle.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement
             or input.UserInputType == Enum.UserInputType.Touch then
-            active = input
+            activeInput = input
         end
     end)
 
     UserInputService.InputChanged:Connect(function(input)
-        if input == active then
+        if input == activeInput then
             update(input)
         end
     end)
 end
 
+-- resize bottom right
 function Window:_enableResize(handle, target)
-    local minSize = Vector2.new(520, 320)
-    local resizing, startSize, dragStart, active
+    local minSize = Vector2.new(450, 350)
+
+    local resizing
+    local dragStart
+    local startSize
+    local activeInput
 
     local function update(input)
         if not resizing then return end
@@ -165,16 +181,16 @@ function Window:_enableResize(handle, target)
     end
 
     handle.InputBegan:Connect(function(input)
-        if isMouse(input.UserInputType) or isTouch(input.UserInputType) then
-            resizing  = true
-            active    = input
-            dragStart = input.Position
-            startSize = Vector2.new(target.AbsoluteSize.X, target.AbsoluteSize.Y)
+        if IsMouse(input.UserInputType) or IsTouch(input.UserInputType) then
+            resizing    = true
+            activeInput = input
+            dragStart   = input.Position
+            startSize   = Vector2.new(target.AbsoluteSize.X, target.AbsoluteSize.Y)
 
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
-                    resizing = false
-                    active   = nil
+                    resizing    = false
+                    activeInput = nil
                 end
             end)
         end
@@ -183,31 +199,32 @@ function Window:_enableResize(handle, target)
     handle.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement
             or input.UserInputType == Enum.UserInputType.Touch then
-            active = input
+            activeInput = input
         end
     end)
 
     UserInputService.InputChanged:Connect(function(input)
-        if input == active then
+        if input == activeInput then
             update(input)
         end
     end)
 end
 
--- interner Helper: Top-Tab Button
+-- internal: create a top-tab button (used per Tab)
 function Window:_makeTopTabButton(text)
     local holder = self.TopTabsHolder
 
-    local btn = new("TextButton", {
+    local btn = New("TextButton", {
         AutoButtonColor = false,
         BackgroundTransparency = 1,
         Text = "",
-        Size = UDim2.fromOffset(72, 34),
+        Size = UDim2.new(0, 0, 1, 0),
+        AutomaticSize = Enum.AutomaticSize.X,
         Parent = holder,
         ZIndex = 3,
     })
 
-    local label = new("TextLabel", {
+    local label = New("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.GothamBold,
@@ -219,7 +236,7 @@ function Window:_makeTopTabButton(text)
         TextColor3 = self.Theme.DimText,
     })
 
-    local underline = new("Frame", {
+    local underline = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.new(0.7, 0, 0, 2),
         Position = UDim2.new(0.15, 0, 1, -3),
@@ -234,12 +251,12 @@ function Window:_makeTopTabButton(text)
     return t
 end
 
-------------------------------------------------------------
--- Tabs (links)
-------------------------------------------------------------
+---------------------------------------------------------------------
+-- left side tabs
+---------------------------------------------------------------------
 
 function Window:CreateTab(name)
-    local row = new("TextButton", {
+    local row = New("TextButton", {
         AutoButtonColor = false,
         BackgroundTransparency = 1,
         Text = "",
@@ -248,7 +265,7 @@ function Window:CreateTab(name)
         ZIndex = 2,
     })
 
-    local bg = new("Frame", {
+    local bg = New("Frame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 1, 0),
@@ -257,7 +274,7 @@ function Window:CreateTab(name)
     })
     self:_track(bg, "BackgroundColor3", "BG2")
 
-    local accent = new("Frame", {
+    local accent = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.new(0, 2, 0.6, 0),
         Position = UDim2.new(0, 0, 0.2, 0),
@@ -267,7 +284,7 @@ function Window:CreateTab(name)
     })
     self:_track(accent, "BackgroundColor3", "Accent")
 
-    local label = new("TextLabel", {
+    local label = New("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(10, 8),
         Size = UDim2.new(1, -20, 0, 22),
@@ -280,7 +297,7 @@ function Window:CreateTab(name)
     })
     self:_track(label, "TextColor3", "Muted")
 
-    local page = new("Frame", {
+    local page = New("Frame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 1, 0),
@@ -322,12 +339,12 @@ function Window:SelectTab(tab)
 
         t.Page.Visible = active
 
-        tween(t.Bg, {BackgroundTransparency = active and 0 or 1}, 0.12)
+        PlayTween(t.Bg, {BackgroundTransparency = active and 0 or 1}, 0.12)
         t.Accent.Visible = active
-        tween(t.Label, {TextColor3 = active and self.Theme.Text or self.Theme.Muted}, 0.12)
+        PlayTween(t.Label, {TextColor3 = active and self.Theme.Text or self.Theme.Muted}, 0.12)
 
-        for _, tt in ipairs(t._topTabs) do
-            tt.Button.Visible = active
+        for _, topTab in ipairs(t._topTabs) do
+            topTab.Button.Visible = active
         end
     end
 
@@ -336,17 +353,17 @@ function Window:SelectTab(tab)
     end
 end
 
-------------------------------------------------------------
--- Tab methods (Top-Tabs + Sections)
-------------------------------------------------------------
+---------------------------------------------------------------------
+-- tab methods (top-tabs + sections)
+---------------------------------------------------------------------
 
 function Tab:CreateTopTab(name)
-    local window = self.Window
-    local tt = window:_makeTopTabButton(name)
-    tt.Tab = self
-    table.insert(self._topTabs, tt)
+    local win = self.Window
+    local tt  = win:_makeTopTabButton(name)
+    tt.Tab    = self
 
-    tt.Button.Visible = (window.ActiveTab == self)
+    table.insert(self._topTabs, tt)
+    tt.Button.Visible = (win.ActiveTab == self)
 
     tt.Button.MouseButton1Click:Connect(function()
         self:SetTopTab(tt)
@@ -366,7 +383,7 @@ function Tab:SetTopTab(tt)
     for _, other in ipairs(self._topTabs) do
         local active = (other == tt)
         other.Underline.Visible = active and (win.ActiveTab == self)
-        tween(other.Label, {
+        PlayTween(other.Label, {
             TextColor3 = active and win.Theme.Accent or win.Theme.DimText
         }, 0.12)
     end
@@ -374,18 +391,31 @@ end
 
 -- slot: "LeftTop", "LeftBottom", "RightTop", "RightBottom"
 function Tab:CreateSection(title, slot)
-    local win   = self.Window
-    local page  = self.Page
+    local win  = self.Window
+    local page = self.Page
 
     local layout = {
-        LeftTop = {Pos = UDim2.fromOffset(0, 0),     Size = UDim2.fromOffset(330, 190)},
-        LeftBottom = {Pos = UDim2.fromOffset(0, 204), Size = UDim2.fromOffset(330, 133)},
-        RightTop = {Pos = UDim2.fromOffset(344, 0),   Size = UDim2.fromOffset(147, 190)},
-        RightBottom = {Pos = UDim2.fromOffset(344, 204), Size = UDim2.fromOffset(147, 133)},
+        LeftTop = {
+            Pos  = UDim2.new(0, 0, 0, 0),
+            Size = UDim2.new(0.68, -6, 0, 190),
+        },
+        LeftBottom = {
+            Pos  = UDim2.new(0, 0, 0, 204),
+            Size = UDim2.new(0.68, -6, 0, 133),
+        },
+        RightTop = {
+            Pos  = UDim2.new(0.7, 6, 0, 0),
+            Size = UDim2.new(0.3, -6, 0, 190),
+        },
+        RightBottom = {
+            Pos  = UDim2.new(0.7, 6, 0, 204),
+            Size = UDim2.new(0.3, -6, 0, 133),
+        },
     }
 
-    local info   = layout[slot or ""]
-    local props  = {BorderSizePixel = 0, Parent = page, ClipsDescendants = true}
+    local info  = layout[slot or ""]
+    local props = {BorderSizePixel = 0, Parent = page, ClipsDescendants = true}
+
     if info then
         props.Position = info.Pos
         props.Size     = info.Size
@@ -395,13 +425,13 @@ function Tab:CreateSection(title, slot)
         props.Size     = UDim2.new(1, 0, 0, 180)
     end
 
-    local frame = new("Frame", props)
+    local frame = New("Frame", props)
     win:_track(frame, "BackgroundColor3", "BG1")
-    new("UICorner", {CornerRadius = UDim.new(0, 8), Parent = frame})
-    local str = new("UIStroke", {Thickness = 1, Transparency = 0.25, Parent = frame})
-    win:_track(str, "Color", "Stroke")
+    New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = frame})
+    local stroke = New("UIStroke", {Thickness = 1, Transparency = 0.25, Parent = frame})
+    win:_track(stroke, "Color", "Stroke")
 
-    local head = new("TextLabel", {
+    local head = New("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(12, 10),
         Size = UDim2.new(1, -24, 0, 18),
@@ -413,19 +443,19 @@ function Tab:CreateSection(title, slot)
     })
     win:_track(head, "TextColor3", "Accent")
 
-    local inner = new("Frame", {
+    local inner = New("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(0, 34),
         Size = UDim2.new(1, 0, 1, -34),
         Parent = frame,
     })
 
-    local list = new("UIListLayout", {
+    local list = New("UIListLayout", {
         Padding = UDim.new(0, 10),
         SortOrder = Enum.SortOrder.LayoutOrder,
         Parent = inner,
     })
-    new("UIPadding", {
+    New("UIPadding", {
         PaddingTop = UDim.new(0, 6),
         PaddingLeft = UDim.new(0, 12),
         PaddingRight = UDim.new(0, 12),
@@ -445,27 +475,27 @@ function Tab:CreateSection(title, slot)
     return sec
 end
 
-------------------------------------------------------------
--- Section controls
-------------------------------------------------------------
+---------------------------------------------------------------------
+-- section controls
+---------------------------------------------------------------------
 
-function Section:CreateSlider(config)
+function Section:CreateSlider(cfg)
     local win   = self.Window
     local inner = self.Inner
-    local c     = config or {}
+    local c     = cfg or {}
 
     local minv  = c.Min or 0
     local maxv  = c.Max or 100
     local step  = c.Step or 1
-    local value = roundStep(math.clamp(c.Default or minv, minv, maxv), minv, step)
+    local value = RoundStep(math.clamp(c.Default or minv, minv, maxv), minv, step)
 
-    local row = new("Frame", {
+    local row = New("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 54),
         Parent = inner,
     })
 
-    local label = new("TextLabel", {
+    local label = New("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(0.6, 0, 0, 18),
         Font = Enum.Font.Gotham,
@@ -476,7 +506,7 @@ function Section:CreateSlider(config)
     })
     win:_track(label, "TextColor3", "DimText")
 
-    local valueText = new("TextLabel", {
+    local valueText = New("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.new(0.6, 0, 0, 0),
         Size = UDim2.new(0.4, 0, 0, 18),
@@ -487,51 +517,52 @@ function Section:CreateSlider(config)
     })
     win:_track(valueText, "TextColor3", "Accent")
 
-    local track = new("Frame", {
+    local track = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(0, 26),
         Size = UDim2.new(1, 0, 0, 4),
         Parent = row,
     })
     win:_track(track, "BackgroundColor3", "Track")
-    new("UICorner", {CornerRadius = UDim.new(0, 2), Parent = track})
+    New("UICorner", {CornerRadius = UDim.new(0, 2), Parent = track})
 
-    local fill = new("Frame", {
+    local fill = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.new(0, 0, 1, 0),
         Parent = track,
     })
     win:_track(fill, "BackgroundColor3", "Accent")
-    new("UICorner", {CornerRadius = UDim.new(0, 2), Parent = fill})
+    New("UICorner", {CornerRadius = UDim.new(0, 2), Parent = fill})
 
-    local knob = new("Frame", {
+    local knob = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.fromOffset(10, 10),
         Parent = track,
     })
     win:_track(knob, "BackgroundColor3", "Muted")
-    new("UICorner", {CornerRadius = UDim.new(0, 2), Parent = knob})
+    New("UICorner", {CornerRadius = UDim.new(0, 2), Parent = knob})
 
-    local function setVisual(v, animate)
+    local function setVisual(v, tweenIt)
         local t = (v - minv) / (maxv - minv)
-        t = clamp01(t)
+        t = Clamp01(t)
+
         local fillSize = UDim2.new(t, 0, 1, 0)
         local knobPos  = UDim2.new(t, -5, 0.5, -5)
 
-        if animate then
-            tween(fill, {Size = fillSize}, 0.12)
-            tween(knob, {Position = knobPos}, 0.12)
+        if tweenIt then
+            PlayTween(fill, {Size = fillSize}, 0.12)
+            PlayTween(knob, {Position = knobPos}, 0.12)
         else
             fill.Size     = fillSize
             knob.Position = knobPos
         end
 
-        local txt = c.Format and c.Format(v) or tostring(v)
-        valueText.Text = txt
+        local text = c.Format and c.Format(v) or tostring(v)
+        valueText.Text = text
     end
 
     local function setValue(v, fromUser)
-        v = roundStep(math.clamp(v, minv, maxv), minv, step)
+        v = RoundStep(math.clamp(v, minv, maxv), minv, step)
         value = v
         setVisual(v, true)
         if fromUser and c.Callback then
@@ -541,37 +572,38 @@ function Section:CreateSlider(config)
 
     setVisual(value, false)
 
-    local dragging, startInput
+    local dragging
+    local activeInput
 
     local function valueFromInput(input)
         local x = input.Position.X - track.AbsolutePosition.X
-        local ratio = clamp01(x / math.max(track.AbsoluteSize.X, 1))
+        local ratio = Clamp01(x / math.max(track.AbsoluteSize.X, 1))
         return minv + ratio * (maxv - minv)
     end
 
     local function begin(input)
-        dragging   = true
-        startInput = input
-        tween(knob, {BackgroundColor3 = win.Theme.Accent}, 0.1)
+        dragging    = true
+        activeInput = input
+        PlayTween(knob, {BackgroundColor3 = win.Theme.Accent}, 0.1)
         setValue(valueFromInput(input), true)
 
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-                startInput = nil
-                tween(knob, {BackgroundColor3 = win.Theme.Muted}, 0.1)
+                dragging    = false
+                activeInput = nil
+                PlayTween(knob, {BackgroundColor3 = win.Theme.Muted}, 0.1)
             end
         end)
     end
 
     track.InputBegan:Connect(function(input)
-        if isMouse(input.UserInputType) or isTouch(input.UserInputType) then
+        if IsMouse(input.UserInputType) or IsTouch(input.UserInputType) then
             begin(input)
         end
     end)
 
     UserInputService.InputChanged:Connect(function(input)
-        if dragging and input == startInput then
+        if dragging and input == activeInput then
             setValue(valueFromInput(input), true)
         end
     end)
@@ -582,17 +614,17 @@ function Section:CreateSlider(config)
     return obj
 end
 
--- nicer Toggle: großes Pill + animierter Knopf
--- Small = true => kleines Quadrat (für Rechts-Aimbot 0/1/2/3)
-function Section:CreateToggle(config)
+-- nicer toggle
+-- cfg.Small = true ==> kleines Quadrat (für rechte AIMBOT-Liste)
+function Section:CreateToggle(cfg)
     local win   = self.Window
     local inner = self.Inner
-    local c     = config or {}
+    local c     = cfg or {}
 
     local state = c.Default and true or false
     local small = c.Small or false
 
-    local row = new("TextButton", {
+    local row = New("TextButton", {
         AutoButtonColor = false,
         BackgroundTransparency = 1,
         Text = "",
@@ -600,7 +632,7 @@ function Section:CreateToggle(config)
         Parent = inner,
     })
 
-    local label = new("TextLabel", {
+    local label = New("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, -70, 1, 0),
         Font = Enum.Font.Gotham,
@@ -612,29 +644,29 @@ function Section:CreateToggle(config)
     win:_track(label, "TextColor3", "Text")
 
     if small then
-        local box = new("Frame", {
+        local box = New("Frame", {
             BorderSizePixel = 0,
             Size = UDim2.fromOffset(16, 16),
             Position = UDim2.new(1, -24, 0.5, -8),
             Parent = row,
         })
         win:_track(box, "BackgroundColor3", "Field")
-        new("UICorner", {CornerRadius = UDim.new(0, 3), Parent = box})
-        local st = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = box})
+        New("UICorner", {CornerRadius = UDim.new(0, 3), Parent = box})
+        local st = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = box})
         win:_track(st, "Color", "Stroke")
 
-        local fill = new("Frame", {
+        local fill = New("Frame", {
             BorderSizePixel = 0,
             Size = UDim2.new(1, -4, 1, -4),
             Position = UDim2.fromOffset(2, 2),
             Parent = box,
         })
-        new("UICorner", {CornerRadius = UDim.new(0, 2), Parent = fill})
+        New("UICorner", {CornerRadius = UDim.new(0, 2), Parent = fill})
 
-        local function render(animate)
+        local function render(animated)
             local col = state and win.Theme.Accent or win.Theme.Track
-            if animate then
-                tween(fill, {BackgroundColor3 = col}, 0.12)
+            if animated then
+                PlayTween(fill, {BackgroundColor3 = col}, 0.12)
             else
                 fill.BackgroundColor3 = col
             end
@@ -649,47 +681,46 @@ function Section:CreateToggle(config)
                 task.spawn(c.Callback, state)
             end
         end)
-
     else
-        local sw = new("Frame", {
+        local sw = New("Frame", {
             BorderSizePixel = 0,
             Size = UDim2.fromOffset(28, 18),
             Position = UDim2.new(1, -36, 0.5, -9),
             Parent = row,
         })
         win:_track(sw, "BackgroundColor3", "Field")
-        new("UICorner", {CornerRadius = UDim.new(0, 10), Parent = sw})
-        local st = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = sw})
+        New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = sw})
+        local st = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = sw})
         win:_track(st, "Color", "Stroke")
 
-        local fill = new("Frame", {
+        local fill = New("Frame", {
             BorderSizePixel = 0,
             Size = UDim2.new(1, -4, 1, -4),
             Position = UDim2.fromOffset(2, 2),
             Parent = sw,
         })
-        new("UICorner", {CornerRadius = UDim.new(0, 10), Parent = fill})
+        New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = fill})
 
-        local knob = new("Frame", {
+        local knob = New("Frame", {
             BorderSizePixel = 0,
             Size = UDim2.fromOffset(12, 12),
             Parent = sw,
         })
-        new("UICorner", {CornerRadius = UDim.new(1, 0), Parent = knob})
+        New("UICorner", {CornerRadius = UDim.new(1, 0), Parent = knob})
 
-        local function render(animate)
+        local function render(animated)
             local onCol  = win.Theme.Accent
             local offCol = win.Theme.Track
-            local knobOn = UDim2.fromOffset(13, 3)
-            local knobOff= UDim2.fromOffset(3, 3)
-            local fillCol= state and onCol or offCol
+            local posOn  = UDim2.fromOffset(13, 3)
+            local posOff = UDim2.fromOffset(3, 3)
+            local col    = state and onCol or offCol
 
-            if animate then
-                tween(fill, {BackgroundColor3 = fillCol}, 0.12)
-                tween(knob, {Position = state and knobOn or knobOff, BackgroundColor3 = Color3.new(1,1,1)}, 0.12)
+            if animated then
+                PlayTween(fill, {BackgroundColor3 = col}, 0.12)
+                PlayTween(knob, {Position = state and posOn or posOff, BackgroundColor3 = Color3.new(1,1,1)}, 0.12)
             else
-                fill.BackgroundColor3 = fillCol
-                knob.Position         = state and knobOn or knobOff
+                fill.BackgroundColor3 = col
+                knob.Position         = state and posOn or posOff
                 knob.BackgroundColor3 = Color3.new(1,1,1)
             end
         end
@@ -711,12 +742,12 @@ function Section:CreateToggle(config)
     return obj
 end
 
-function Section:CreateButton(config)
+function Section:CreateButton(cfg)
     local win   = self.Window
     local inner = self.Inner
-    local c     = config or {}
+    local c     = cfg or {}
 
-    local btn = new("TextButton", {
+    local btn = New("TextButton", {
         AutoButtonColor = false,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 24),
@@ -727,29 +758,29 @@ function Section:CreateButton(config)
     })
     win:_track(btn, "BackgroundColor3", "Field")
     win:_track(btn, "TextColor3", "Text")
-    new("UICorner", {CornerRadius = UDim.new(0, 3), Parent = btn})
-    local st = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = btn})
+    New("UICorner", {CornerRadius = UDim.new(0, 3), Parent = btn})
+    local st = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = btn})
     win:_track(st, "Color", "Stroke")
 
     btn.MouseButton1Click:Connect(function()
-        tween(btn, {BackgroundColor3 = win.Theme.Track}, 0.08)
+        PlayTween(btn, {BackgroundColor3 = win.Theme.Track}, 0.08)
         if c.Callback then
             task.spawn(c.Callback)
         end
         task.delay(0.08, function()
-            tween(btn, {BackgroundColor3 = win.Theme.Field}, 0.12)
+            PlayTween(btn, {BackgroundColor3 = win.Theme.Field}, 0.12)
         end)
     end)
 
     return btn
 end
 
-function Section:CreateTextbox(config)
+function Section:CreateTextbox(cfg)
     local win   = self.Window
     local inner = self.Inner
-    local c     = config or {}
+    local c     = cfg or {}
 
-    local box = new("TextBox", {
+    local box = New("TextBox", {
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 24),
         Font = Enum.Font.Gotham,
@@ -762,13 +793,13 @@ function Section:CreateTextbox(config)
     win:_track(box, "BackgroundColor3", "Field")
     win:_track(box, "TextColor3", "Text")
     box.PlaceholderColor3 = win.Theme.Muted
-    new("UICorner", {CornerRadius = UDim.new(0, 3), Parent = box})
-    local st = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = box})
+    New("UICorner", {CornerRadius = UDim.new(0, 3), Parent = box})
+    local st = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = box})
     win:_track(st, "Color", "Stroke")
 
-    box.FocusLost:Connect(function(enter)
+    box.FocusLost:Connect(function(enterPressed)
         if c.Callback then
-            task.spawn(c.Callback, box.Text, enter)
+            task.spawn(c.Callback, box.Text, enterPressed)
         end
     end)
 
@@ -778,23 +809,23 @@ function Section:CreateTextbox(config)
     return obj
 end
 
-function Section:CreateDropdown(config)
+function Section:CreateDropdown(cfg)
     local win   = self.Window
     local inner = self.Inner
-    local c     = config or {}
+    local c     = cfg or {}
 
     local options = c.Options or {}
     local current = c.Default or options[1] or "None"
     local open    = false
 
-    local wrap = new("Frame", {
+    local wrap = New("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 30),
         AutomaticSize = Enum.AutomaticSize.Y,
         Parent = inner,
     })
 
-    local head = new("TextButton", {
+    local head = New("TextButton", {
         AutoButtonColor = false,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 24),
@@ -802,11 +833,11 @@ function Section:CreateDropdown(config)
         Parent = wrap,
     })
     win:_track(head, "BackgroundColor3", "Field")
-    new("UICorner", {CornerRadius = UDim.new(0, 3), Parent = head})
-    local st = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = head})
+    New("UICorner", {CornerRadius = UDim.new(0, 3), Parent = head})
+    local st = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = head})
     win:_track(st, "Color", "Stroke")
 
-    local nameLbl = new("TextLabel", {
+    local nameLbl = New("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(10, 0),
         Size = UDim2.new(0.6, -10, 1, 0),
@@ -818,7 +849,7 @@ function Section:CreateDropdown(config)
     })
     win:_track(nameLbl, "TextColor3", "DimText")
 
-    local valLbl = new("TextLabel", {
+    local valLbl = New("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.new(0.6, 0, 0, 0),
         Size = UDim2.new(0.4, -26, 1, 0),
@@ -830,7 +861,7 @@ function Section:CreateDropdown(config)
     })
     win:_track(valLbl, "TextColor3", "Text")
 
-    local arrow = new("TextLabel", {
+    local arrow = New("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.new(1, -22, 0, 0),
         Size = UDim2.fromOffset(20, 24),
@@ -841,7 +872,7 @@ function Section:CreateDropdown(config)
     })
     win:_track(arrow, "TextColor3", "Muted")
 
-    local listWrap = new("Frame", {
+    local listWrap = New("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(0, 28),
         Size = UDim2.new(1, 0, 0, 0),
@@ -849,22 +880,22 @@ function Section:CreateDropdown(config)
         Parent = wrap,
     })
 
-    local listBg = new("Frame", {
+    local listBg = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 0),
         Parent = listWrap,
     })
     win:_track(listBg, "BackgroundColor3", "Field")
-    new("UICorner", {CornerRadius = UDim.new(0, 3), Parent = listBg})
-    local st2 = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = listBg})
+    New("UICorner", {CornerRadius = UDim.new(0, 3), Parent = listBg})
+    local st2 = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = listBg})
     win:_track(st2, "Color", "Stroke")
 
-    local list = new("UIListLayout", {
+    local list = New("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
         Padding = UDim.new(0, 6),
         Parent = listBg,
     })
-    new("UIPadding", {
+    New("UIPadding", {
         PaddingTop = UDim.new(0, 8),
         PaddingLeft = UDim.new(0, 10),
         PaddingRight = UDim.new(0, 10),
@@ -880,7 +911,7 @@ function Section:CreateDropdown(config)
         end
 
         for _, opt in ipairs(options) do
-            local b = new("TextButton", {
+            local b = New("TextButton", {
                 AutoButtonColor = false,
                 BackgroundTransparency = 1,
                 Size = UDim2.new(1, 0, 0, 20),
@@ -900,8 +931,8 @@ function Section:CreateDropdown(config)
                 end
                 rebuild()
                 open = false
-                tween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
-                tween(listBg,   {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
+                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
+                PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
                 arrow.Text = "▾"
             end)
         end
@@ -914,12 +945,12 @@ function Section:CreateDropdown(config)
         if open then
             task.wait()
             local h = list.AbsoluteContentSize.Y + 16
-            tween(listWrap, {Size = UDim2.new(1, 0, 0, h)}, 0.14)
-            tween(listBg,   {Size = UDim2.new(1, 0, 0, h)}, 0.14)
+            PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, h)}, 0.14)
+            PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, h)}, 0.14)
             arrow.Text = "▴"
         else
-            tween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
-            tween(listBg,   {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
+            PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
+            PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
             arrow.Text = "▾"
         end
     end
@@ -938,7 +969,6 @@ function Section:CreateDropdown(config)
         rebuild()
         setOpen(false)
     end
-
     function obj:Set(v)
         if table.find(options, v) then
             current = v
@@ -946,26 +976,22 @@ function Section:CreateDropdown(config)
             rebuild()
         end
     end
-
-    function obj:Get()
-        return current
-    end
-
+    function obj:Get() return current end
     return obj
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------
 -- Vanith:CreateWindow
-------------------------------------------------------------
+---------------------------------------------------------------------
 
-function Vanith:CreateWindow(opt)
-    opt = opt or {}
+function Vanith:CreateWindow(opts)
+    opts = opts or {}
 
     local theme = {}
     for k, v in pairs(DEFAULT_THEME) do
         theme[k] = v
     end
-    for k, v in pairs(opt.Theme or {}) do
+    for k, v in pairs(opts.Theme or {}) do
         theme[k] = v
     end
 
@@ -981,7 +1007,7 @@ function Vanith:CreateWindow(opt)
             parent = cg
         else
             local lp = Players.LocalPlayer
-            parent = lp and lp:WaitForChild("PlayerGui") or nil
+            parent = lp and lp:FindFirstChildOfClass("PlayerGui") or nil
         end
     end
 
@@ -992,38 +1018,38 @@ function Vanith:CreateWindow(opt)
         TopTabs        = {},
     }, Window)
 
-    local gui = new("ScreenGui", {
-        Name = opt.Name or "VanithUI",
+    local gui = New("ScreenGui", {
+        Name = opts.Name or "VanithUI",
         ResetOnSpawn = false,
         IgnoreGuiInset = true,
         Parent = parent,
     })
     self.Gui = gui
 
-    local main = new("Frame", {
-        Size = opt.Size or UDim2.fromOffset(649, 417),
-        Position = opt.Position or UDim2.fromScale(0.5, 0.5),
+    local main = New("Frame", {
+        Size = opts.Size or UDim2.fromOffset(649, 417),
+        Position = opts.Position or UDim2.fromScale(0.5, 0.5),
         AnchorPoint = Vector2.new(0.5, 0.5),
         BorderSizePixel = 0,
         Parent = gui,
     })
     self.Main = main
     self:_track(main, "BackgroundColor3", "BG0")
-    new("UICorner", {CornerRadius = UDim.new(0, 10), Parent = main})
-    local ms = new("UIStroke", {Thickness = 1, Transparency = 0.2, Parent = main})
+    New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = main})
+    local ms = New("UIStroke", {Thickness = 1, Transparency = 0.2, Parent = main})
     self:_track(ms, "Color", "Stroke")
 
-    local glass = new("Frame", {
-        BackgroundColor3 = Color3.new(1,1,1),
+    local glass = New("Frame", {
+        BackgroundColor3 = Color3.new(1, 1, 1),
         BackgroundTransparency = 0.97,
         BorderSizePixel = 0,
-        Size = UDim2.fromScale(1,1),
+        Size = UDim2.fromScale(1, 1),
         Parent = main,
     })
-    new("UICorner", {CornerRadius = UDim.new(0,10), Parent = glass})
+    New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = glass})
 
-    -- Top bar
-    local top = new("Frame", {
+    -- top bar
+    local top = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 54),
         Parent = main,
@@ -1031,9 +1057,9 @@ function Vanith:CreateWindow(opt)
     })
     self.TopBar = top
     self:_track(top, "BackgroundColor3", "BG2")
-    new("UICorner", {CornerRadius = UDim.new(0, 10), Parent = top})
+    New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = top})
 
-    new("Frame", {
+    New("Frame", {
         BackgroundColor3 = theme.BG2,
         BorderSizePixel = 0,
         Position = UDim2.new(0, 0, 0, 44),
@@ -1042,8 +1068,8 @@ function Vanith:CreateWindow(opt)
         ZIndex = 1,
     })
 
-    -- Brand Box (leicht breiter als Name)
-    local brand = new("Frame", {
+    -- brand box (Vanith)
+    local brand = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(12, 10),
         Size = UDim2.fromOffset(140, 34),
@@ -1051,24 +1077,24 @@ function Vanith:CreateWindow(opt)
         ZIndex = 3,
     })
     self:_track(brand, "BackgroundColor3", "BG1")
-    new("UICorner", {CornerRadius = UDim.new(0, 8), Parent = brand})
-    local bstr = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = brand})
-    self:_track(bstr, "Color", "Stroke")
+    New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = brand})
+    local bStroke = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = brand})
+    self:_track(bStroke, "Color", "Stroke")
 
-    local brandLbl = new("TextLabel", {
+    local brandLabel = New("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, -16, 1, 0),
         Position = UDim2.fromOffset(8, 0),
         Font = Enum.Font.GothamBold,
-        Text = opt.Title or "Vanith",
+        Text = opts.Title or "Vanith",
         TextSize = 15,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = brand,
     })
-    self:_track(brandLbl, "TextColor3", "Accent")
+    self:_track(brandLabel, "TextColor3", "Accent")
 
-    -- Long top tab strip (breiter, damit GLOCK-17 passt)
-    local strip = new("Frame", {
+    -- top tab strip
+    local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
         Size = UDim2.new(1, -220, 0, 34),
@@ -1076,11 +1102,11 @@ function Vanith:CreateWindow(opt)
         ZIndex = 2,
     })
     self:_track(strip, "BackgroundColor3", "BG1")
-    new("UICorner", {CornerRadius = UDim.new(0,8), Parent = strip})
-    local sstr = new("UIStroke", {Thickness = 1, Transparency = 0.5, Parent = strip})
-    self:_track(sstr, "Color", "Stroke")
+    New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = strip})
+    local sStroke = New("UIStroke", {Thickness = 1, Transparency = 0.5, Parent = strip})
+    self:_track(sStroke, "Color", "Stroke")
 
-    local tabsHolder = new("Frame", {
+    local tabsHolder = New("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(8, 0),
         Size = UDim2.new(1, -16, 1, 0),
@@ -1088,16 +1114,17 @@ function Vanith:CreateWindow(opt)
         ZIndex = 2,
     })
     self.TopTabsHolder = tabsHolder
-    local layout = new("UIListLayout", {
+
+    local topLayout = New("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
         SortOrder = Enum.SortOrder.LayoutOrder,
         Padding = UDim.new(0, 16),
         Parent = tabsHolder,
     })
-    layout.VerticalAlignment = Enum.VerticalAlignment.Center
+    topLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    -- small gear box
-    local gearBox = new("Frame", {
+    -- gear box
+    local gearBox = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.new(1, -46, 0, 10),
         Size = UDim2.fromOffset(34, 34),
@@ -1105,11 +1132,11 @@ function Vanith:CreateWindow(opt)
         ZIndex = 3,
     })
     self:_track(gearBox, "BackgroundColor3", "BG1")
-    new("UICorner", {CornerRadius = UDim.new(0, 8), Parent = gearBox})
-    local gstr = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = gearBox})
-    self:_track(gstr, "Color", "Stroke")
+    New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = gearBox})
+    local gStroke = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = gearBox})
+    self:_track(gStroke, "Color", "Stroke")
 
-    local gear = new("TextLabel", {
+    local gear = New("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.GothamBold,
@@ -1120,8 +1147,8 @@ function Vanith:CreateWindow(opt)
     })
     self:_track(gear, "TextColor3", "Accent")
 
-    -- Sidebar
-    local sidebar = new("Frame", {
+    -- sidebar
+    local sidebar = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(12, 68),
         Size = UDim2.new(0, 120, 1, -80),
@@ -1130,26 +1157,26 @@ function Vanith:CreateWindow(opt)
     })
     self.Sidebar = sidebar
     self:_track(sidebar, "BackgroundColor3", "BG2")
-    new("UICorner", {CornerRadius = UDim.new(0, 8), Parent = sidebar})
-    local sbs = new("UIStroke", {Thickness = 1, Transparency = 0.25, Parent = sidebar})
-    self:_track(sbs, "Color", "Stroke")
+    New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = sidebar})
+    local sbStroke = New("UIStroke", {Thickness = 1, Transparency = 0.25, Parent = sidebar})
+    self:_track(sbStroke, "Color", "Stroke")
 
-    local sideList = new("Frame", {
+    local sideList = New("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(10, 14),
         Size = UDim2.new(1, -20, 1, -24),
         Parent = sidebar,
     })
     self.SideList = sideList
-    local sideLayout = new("UIListLayout", {
+    local sideLayout = New("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
         Padding = UDim.new(0, 6),
         Parent = sideList,
     })
     sideLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 
-    -- Pages
-    local pages = new("Frame", {
+    -- pages
+    local pages = New("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(146, 68),
         Size = UDim2.new(1, -158, 1, -80),
@@ -1158,14 +1185,14 @@ function Vanith:CreateWindow(opt)
     self.Pages = pages
 
     -- resize arrow bottom right
-    local resize = new("Frame", {
+    local resize = New("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.fromOffset(16, 16),
         Position = UDim2.new(1, -18, 1, -18),
         Parent = main,
         ZIndex = 5,
     })
-    local resizeLbl = new("TextLabel", {
+    local resizeLbl = New("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.GothamBold,
@@ -1177,12 +1204,12 @@ function Vanith:CreateWindow(opt)
 
     self:_enableResize(resize, main)
 
-    if opt.Draggable ~= false then
+    if opts.Draggable ~= false then
         self:_enableDrag(top, main)
     end
 
-    -- leichte Autoscale für Mobile
-    local scale = new("UIScale", {Parent = main})
+    -- simple mobile autoscale
+    local scale = New("UIScale", {Parent = main})
     local cam = workspace.CurrentCamera
     if cam then
         local vp = cam.ViewportSize
@@ -1194,7 +1221,7 @@ function Vanith:CreateWindow(opt)
     return self
 end
 
--- alias falls du klein schreiben willst
+-- alias (klein geschrieben, falls du das lieber magst)
 Vanith.Createwindow = Vanith.CreateWindow
 
 return Vanith
