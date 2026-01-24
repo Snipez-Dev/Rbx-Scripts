@@ -50,20 +50,20 @@ local function PlayTween(inst, props, time)
     if ok and tween then tween:Play() end
 end
 
---------------------------------------------------------------------- -- theme
+--------------------------------------------------------------------- -- theme (dunkler)
 --------------------------------------------------------------------- 
 
 local DEFAULT_THEME = {
-    Accent  = Color3.fromRGB(170, 90, 255),
-    BG0     = Color3.fromRGB(4, 4, 6),
-    BG1     = Color3.fromRGB(10, 10, 14),
-    BG2     = Color3.fromRGB(10, 10, 14),
-    Stroke  = Color3.fromRGB(40, 40, 50),
-    Text    = Color3.fromRGB(230, 230, 238),
-    Muted   = Color3.fromRGB(140, 140, 150),
-    DimText = Color3.fromRGB(95, 95, 110),
-    Track   = Color3.fromRGB(22, 22, 28),
-    Field   = Color3.fromRGB(16, 16, 20),
+    Accent  = Color3.fromRGB(160, 90, 255),
+    BG0     = Color3.fromRGB(2, 2, 4),
+    BG1     = Color3.fromRGB(6, 6, 10),
+    BG2     = Color3.fromRGB(8, 8, 12),
+    Stroke  = Color3.fromRGB(30, 30, 40),
+    Text    = Color3.fromRGB(220, 220, 235),
+    Muted   = Color3.fromRGB(130, 130, 145),
+    DimText = Color3.fromRGB(105, 105, 120),
+    Track   = Color3.fromRGB(14, 14, 20),
+    Field   = Color3.fromRGB(8, 8, 12),
 }
 
 local Window  = {}
@@ -409,9 +409,7 @@ function Tab:CreateSection(title, slot)
     local win  = self.Window
     local page = self.Page
 
-    ------------------------------------------------------------------
     -- Layout
-    ------------------------------------------------------------------
     local layout = {
         LeftTop = {
             Pos  = UDim2.new(0, 0, 0, 0),
@@ -446,7 +444,7 @@ function Tab:CreateSection(title, slot)
     local frame = New("Frame", props)
     win:_track(frame, "BackgroundColor3", "BG1")
     New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = frame})
-    local stroke = New("UIStroke", {Thickness = 1, Transparency = 1 - 0.75, Parent = frame})
+    local stroke = New("UIStroke", {Thickness = 1, Transparency = 0.25, Parent = frame})
     win:_track(stroke, "Color", "Stroke")
 
     local head = New("TextLabel", {
@@ -471,7 +469,7 @@ function Tab:CreateSection(title, slot)
         ScrollBarImageTransparency = 0.3,
         ScrollBarImageColor3 = win.Theme.Accent,
         ScrollingDirection = Enum.ScrollingDirection.Y,
-        AutomaticCanvasSize = Enum.AutomaticSize.Y, -- wichtig für Mobile
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
         Parent = frame,
     })
 
@@ -487,6 +485,11 @@ function Tab:CreateSection(title, slot)
         PaddingBottom = UDim.new(0, 10),
         Parent = inner,
     })
+
+    -- zusätzlich CanvasSize setzen (sicher für Mobile)
+    list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        inner.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 16)
+    end)
 
     local sec = setmetatable({
         Window    = win,
@@ -979,6 +982,9 @@ function Section:CreateTextbox(cfg)
     return obj
 end
 
+--------------------------------------------------------------------- -- DROPDOWN (fix: alle Optionen, wenig Platz, UI macht Platz)
+--------------------------------------------------------------------- 
+
 function Section:CreateDropdown(cfg)
     local win   = self.Window
     local inner = self.Inner
@@ -999,11 +1005,10 @@ function Section:CreateDropdown(cfg)
 
     local current   = defaultSelection
     local open      = false
-    local maxHeight = c.MaxHeight -- optional
 
     local wrap = New("Frame", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 30),
+        Size = UDim2.new(1, 0, 0, 24),
         AutomaticSize = Enum.AutomaticSize.Y,
         Parent = inner,
     })
@@ -1057,7 +1062,7 @@ function Section:CreateDropdown(cfg)
 
     local listWrap = New("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(0, 28),
+        Position = UDim2.fromOffset(0, 24),
         Size = UDim2.new(1, 0, 0, 0),
         ClipsDescendants = true,
         Parent = wrap,
@@ -1077,14 +1082,14 @@ function Section:CreateDropdown(cfg)
 
     local list = New("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding   = UDim.new(0, 6),
+        Padding   = UDim.new(0, 4),
         Parent    = listBg,
     })
     New("UIPadding", {
-        PaddingTop    = UDim.new(0, 6),
+        PaddingTop    = UDim.new(0, 4),
         PaddingLeft   = UDim.new(0, 10),
         PaddingRight  = UDim.new(0, 10),
-        PaddingBottom = UDim.new(0, 6),
+        PaddingBottom = UDim.new(0, 4),
         Parent        = listBg,
     })
 
@@ -1096,8 +1101,6 @@ function Section:CreateDropdown(cfg)
             task.spawn(c.Callback, current)
         end
     end
-
-    local setOpen -- forward
 
     local function rebuild()
         for _, child in ipairs(listBg:GetChildren()) do
@@ -1122,17 +1125,24 @@ function Section:CreateDropdown(cfg)
             b.MouseButton1Click:Connect(function()
                 applySelectionForCurrentProfile(opt, true)
                 rebuild()
-                setOpen(false)
+                -- beim Klick direkt wieder schließen
+                open = false
+                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
+                arrow.Text = "▾"
             end)
         end
-
-        -- nachdem Layout fertig ist, ggf. Höhe anpassen
-        task.defer(function()
-            if open then
-                setOpen(true)
-            end
-        end)
     end
+
+    rebuild()
+
+    -- wenn sich die Inhalte ändern, Höhe nachziehen (wichtig für Mobile)
+    local function updateHeight()
+        if not open then return end
+        local contentHeight = list.AbsoluteContentSize.Y + 8 -- Padding oben/unten
+        PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, contentHeight)}, 0.14)
+    end
+
+    list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateHeight)
 
     local function syncProfile()
         local key = getProfileKey()
@@ -1148,18 +1158,15 @@ function Section:CreateDropdown(cfg)
 
     syncProfile()
 
-    setOpen = function(state)
+    local function setOpen(state)
+        if state == open then return end
         open = state
         if open then
-            listWrap.Visible = true
+            -- nach einem Frame Höhe anhand Layout berechnen
             task.defer(function()
-                local contentH = listBg.AbsoluteSize.Y
-                local targetH  = contentH
-                if maxHeight and maxHeight > 0 then
-                    targetH = math.min(contentH, maxHeight)
-                end
-                -- Dropdown soll nah dran sein -> kein riesiger Abstand
-                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, targetH)}, 0.14)
+                local contentHeight = list.AbsoluteContentSize.Y + 8
+                listWrap.Size = UDim2.new(1, 0, 0, 0)
+                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, contentHeight)}, 0.14)
             end)
             arrow.Text = "▴"
         else
@@ -1343,7 +1350,7 @@ function Vanith:CreateWindow(opts)
     brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
     fitTitle()
 
-    -- Tab-Strip mit dynamischem Layout (zentriert solange kein Scroll nötig)
+    -- Tab-Strip mit Auto-Scroll, zentriert solange alles reinpasst
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
