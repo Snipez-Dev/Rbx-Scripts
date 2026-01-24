@@ -409,22 +409,25 @@ function Tab:CreateSection(title, slot)
     local win  = self.Window
     local page = self.Page
 
+    ------------------------------------------------------------------
+    -- NEUES LAYOUT: linker & rechter Rand gleich, in der Mitte 12px Gap
+    ------------------------------------------------------------------
     local layout = {
         LeftTop = {
             Pos  = UDim2.new(0, 0, 0, 0),
-            Size = UDim2.new(0.7, -12, 0.5, -6),
+            Size = UDim2.new(0.7, -6, 0.5, -6),
         },
         LeftBottom = {
             Pos  = UDim2.new(0, 0, 0.5, 6),
-            Size = UDim2.new(0.7, -12, 0.5, -6),
+            Size = UDim2.new(0.7, -6, 0.5, -6),
         },
         RightTop = {
-            Pos  = UDim2.new(0.7, 0, 0, 0),
-            Size = UDim2.new(0.3, -12, 0.5, -6),
+            Pos  = UDim2.new(0.7, 6, 0, 0),
+            Size = UDim2.new(0.3, -6, 0.5, -6),
         },
         RightBottom = {
-            Pos  = UDim2.new(0.7, 0, 0.5, 6),
-            Size = UDim2.new(0.3, -12, 0.5, -6),
+            Pos  = UDim2.new(0.7, 6, 0.5, 6),
+            Size = UDim2.new(0.3, -6, 0.5, -6),
         },
     }
 
@@ -1334,13 +1337,11 @@ function Vanith:CreateWindow(opts)
     brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
     fitTitle()
 
-    ------------------------------------------------------------------
-    -- Tab-Strip: Breite so, dass Abstand links/rechts ~gleich ist
-    ------------------------------------------------------------------
+    -- Tab-Strip mit etwas Luft zu den Buttons rechts
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
-        Size = UDim2.new(1, -264, 0, 34), -- HIER: Abstand zum Close-Box ≈ Abstand zum Title
+        Size = UDim2.new(1, -264, 0, 34),
         Parent = top,
         ZIndex = 2,
     })
@@ -1367,6 +1368,7 @@ function Vanith:CreateWindow(opts)
     topLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
     topLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
+    -- Minimize / Close Box
     local controlBox = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.new(1, -96, 0, 10),
