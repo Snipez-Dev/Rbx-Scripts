@@ -2,8 +2,8 @@
 -- Usage:
 -- local Vanith = loadstring(game:HttpGet("YOUR_URL_HERE"))()
 -- local Window = Vanith:CreateWindow({
---     Title = "Vanith",
---     Theme = { Accent = Color3.fromRGB(170,90,255) }
+--     Title     = "Vanith",
+--     StartSize = Vector2.new(649, 417), -- optional Startgröße
 -- })
 
 local Players          = game:GetService("Players")
@@ -482,7 +482,7 @@ function Tab:CreateSection(title, slot)
     return sec
 end
 
---------------------------------------------------------------------- -- section controls (Slider / Toggle / Button / Textbox / Dropdown)
+--------------------------------------------------------------------- -- section controls
 --------------------------------------------------------------------- 
 
 function Section:CreateSlider(cfg)
@@ -814,14 +814,16 @@ function Section:CreateTextbox(cfg)
     return obj
 end
 
+-- Dropdown mit Scrollen bei vielen Einträgen
 function Section:CreateDropdown(cfg)
     local win   = self.Window
     local inner = self.Inner
     local c     = cfg or {}
 
-    local options = c.Options or {}
-    local current = c.Default or options[1] or "None"
-    local open    = false
+    local options   = c.Options or {}
+    local current   = c.Default or options[1] or "None"
+    local open      = false
+    local maxHeight = c.MaxHeight or 120 -- maximale Anzeigehöhe bevor Scrollbar
 
     local wrap = New("Frame", {
         BackgroundTransparency = 1,
@@ -885,10 +887,16 @@ function Section:CreateDropdown(cfg)
         Parent = wrap,
     })
 
-    local listBg = New("Frame", {
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 0),
-        Parent = listWrap,
+    -- SCROLLINGFRAME für Optionen
+    local listBg = New("ScrollingFrame", {
+        BorderSizePixel       = 0,
+        Size                  = UDim2.new(1, 0, 0, 0),
+        CanvasSize            = UDim2.new(0, 0, 0, 0),
+        ScrollBarThickness    = 3,
+        ScrollBarImageColor3  = win.Theme.Accent,
+        ScrollBarImageTransparency = 0.3,
+        BackgroundTransparency = 0,
+        Parent                = listWrap,
     })
     win:_track(listBg, "BackgroundColor3", "Field")
     New("UICorner", {CornerRadius = UDim.new(0, 3), Parent = listBg})
@@ -897,15 +905,15 @@ function Section:CreateDropdown(cfg)
 
     local list = New("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 6),
-        Parent = listBg,
+        Padding   = UDim.new(0, 6),
+        Parent    = listBg,
     })
     New("UIPadding", {
-        PaddingTop = UDim.new(0, 8),
-        PaddingLeft = UDim.new(0, 10),
-        PaddingRight = UDim.new(0, 10),
+        PaddingTop    = UDim.new(0, 8),
+        PaddingLeft   = UDim.new(0, 10),
+        PaddingRight  = UDim.new(0, 10),
         PaddingBottom = UDim.new(0, 8),
-        Parent = listBg,
+        Parent        = listBg,
     })
 
     local function rebuild()
@@ -941,6 +949,12 @@ function Section:CreateDropdown(cfg)
                 arrow.Text = "▾"
             end)
         end
+
+        -- CanvasSize für Scrollbar
+        task.defer(function()
+            local contentHeight = list.AbsoluteContentSize.Y + 16
+            listBg.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
+        end)
     end
 
     rebuild()
@@ -949,9 +963,13 @@ function Section:CreateDropdown(cfg)
         open = state
         if open then
             task.wait()
-            local h = list.AbsoluteContentSize.Y + 16
+            local contentHeight = list.AbsoluteContentSize.Y + 16
+            local h = math.min(contentHeight, maxHeight)
+
             PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, h)}, 0.14)
             PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, h)}, 0.14)
+
+            listBg.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
             arrow.Text = "▴"
         else
             PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
@@ -1016,7 +1034,17 @@ function Vanith:CreateWindow(opts)
         end
     end
 
-    local initialSize = opts.Size or UDim2.fromOffset(649, 417)
+    -- Startgröße: StartSize (Vector2 oder UDim2) oder Size fallback
+    local sizeOpt = opts.StartSize or opts.Size
+    local initialSize
+    if typeof(sizeOpt) == "Vector2" then
+        initialSize = UDim2.fromOffset(sizeOpt.X, sizeOpt.Y)
+    elseif typeof(sizeOpt) == "UDim2" then
+        initialSize = sizeOpt
+    else
+        initialSize = UDim2.fromOffset(649, 417)
+    end
+
     local baseWidth   = initialSize.X.Offset > 0 and initialSize.X.Offset or 649
     local baseHeight  = initialSize.Y.Offset > 0 and initialSize.Y.Offset or 417
     local minSizeVec  = Vector2.new(baseWidth, baseHeight)
@@ -1060,7 +1088,7 @@ function Vanith:CreateWindow(opts)
     })
     New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = glass})
 
-    -- top bar
+    -- top bar (gleiche „dunkle“ Farbe, kein helleres Band mehr)
     local top = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 54),
@@ -1068,20 +1096,11 @@ function Vanith:CreateWindow(opts)
         ZIndex = 2,
     })
     self.TopBar = top
-    self:_track(top, "BackgroundColor3", "BG2")
+    self:_track(top, "BackgroundColor3", "BG1") -- gleich wie Panels
     New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = top})
 
-    New("Frame", {
-        BackgroundColor3 = theme.BG2,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 0, 0, 44),
-        Size = UDim2.new(1, 0, 0, 20),
-        Parent = top,
-        ZIndex = 2,
-    })
-
     ------------------------------------------------------------------
-    -- left brand box (Title)
+    -- left brand box (Title), zentriert
     ------------------------------------------------------------------
     local brand = New("Frame", {
         BorderSizePixel = 0,
@@ -1099,14 +1118,14 @@ function Vanith:CreateWindow(opts)
 
     local brandLabel = New("TextLabel", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, -16, 1, 0),
-        Position = UDim2.fromOffset(8, 0),
+        Size = UDim2.new(1, 0, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
         Font = Enum.Font.GothamBold,
         Text = windowTitle,
         TextSize = 15,
-        TextXAlignment = Enum.TextXAlignment.Left,
+        TextXAlignment = Enum.TextXAlignment.Center, -- mittig
         Parent = brand,
-        ZIndex = 4, -- über allem in der Box
+        ZIndex = 4,
     })
     self:_track(brandLabel, "TextColor3", "Accent")
 
@@ -1136,9 +1155,9 @@ function Vanith:CreateWindow(opts)
 
     local topLayout = New("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 32), -- MEHR ABSTAND zwischen AK-47, M4A1,...
-        Parent = tabsHolder,
+        SortOrder     = Enum.SortOrder.LayoutOrder,
+        Padding       = UDim.new(0, 32), -- mehr Abstand
+        Parent        = tabsHolder,
     })
     topLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
     topLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -1194,8 +1213,8 @@ function Vanith:CreateWindow(opts)
     self.SideList = sideList
     local sideLayout = New("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 6),
-        Parent = sideList,
+        Padding   = UDim.new(0, 6),
+        Parent    = sideList,
     })
     sideLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 
