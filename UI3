@@ -1,6 +1,8 @@
--- Vanith UI Library - Eternesus style (1:1-ish, purple accent)
--- Usage:
--- local Vanith = loadstring(game:HttpGet("https://your.url/vanith.lua"))()
+-- Vanith UI Library - Eternesus style (fixed top bar, per-tab top tabs, darker theme)
+-- Put this file at:
+-- https://raw.githubusercontent.com/Snipez-Dev/Rbx-Scripts/refs/heads/main/UI2
+-- Usage from script:
+-- local Vanith = loadstring(game:HttpGet(".../UI2"))()
 -- local Window = Vanith:CreateWindow({ Title = "Vanith" })
 
 local Players = game:GetService("Players")
@@ -29,30 +31,26 @@ local function isMouse(t)
         or t == Enum.UserInputType.MouseButton3
 end
 
-local function clamp01(x)
-    return math.clamp(x, 0, 1)
-end
+local function clamp01(x) return math.clamp(x, 0, 1) end
 
 local function roundStep(value, minv, step)
-    if not step or step <= 0 then
-        return value
-    end
+    if not step or step <= 0 then return value end
     local n = (value - minv) / step
     return (math.floor(n + 0.5) * step) + minv
 end
 
--- Theme (default purple, can be overridden)
+-- DARKER THEME
 local DEFAULT_THEME = {
     Accent  = Color3.fromRGB(170, 90, 255), -- purple
-    BG0     = Color3.fromRGB(12, 12, 14),
-    BG1     = Color3.fromRGB(16, 16, 19),
-    BG2     = Color3.fromRGB(20, 20, 24),
-    Stroke  = Color3.fromRGB(38, 38, 45),
-    Text    = Color3.fromRGB(220, 220, 225),
-    Muted   = Color3.fromRGB(125, 125, 135),
-    DimText = Color3.fromRGB(75, 75, 85),
-    Track   = Color3.fromRGB(30, 30, 36),
-    Field   = Color3.fromRGB(26, 26, 31),
+    BG0     = Color3.fromRGB(6, 6, 8),
+    BG1     = Color3.fromRGB(10, 10, 14),
+    BG2     = Color3.fromRGB(14, 14, 18),
+    Stroke  = Color3.fromRGB(40, 40, 50),
+    Text    = Color3.fromRGB(230, 230, 238),
+    Muted   = Color3.fromRGB(145, 145, 155),
+    DimText = Color3.fromRGB(95, 95, 110),
+    Track   = Color3.fromRGB(22, 22, 28),
+    Field   = Color3.fromRGB(16, 16, 20),
 }
 
 local Window = {}
@@ -152,17 +150,17 @@ function Window:_enableDrag(handle, target)
 end
 
 --------------------------------------------------
--- Top weapon tabs (AK-47 / M4A1 / ...)
+-- INTERNAL: create a top-tab button (used per Tab)
 --------------------------------------------------
 
-function Window:CreateTopTab(text)
+function Window:_createTopTabInternal(text)
     local holder = self.TopTabsHolder
 
     local btn = create("TextButton", {
         AutoButtonColor = false,
         BackgroundTransparency = 1,
         Text = "",
-        Size = UDim2.fromOffset(70, 34),
+        Size = UDim2.fromOffset(72, 34),
         Parent = holder,
     })
 
@@ -180,38 +178,21 @@ function Window:CreateTopTab(text)
     local underline = create("Frame", {
         BackgroundColor3 = self.Theme.Accent,
         BorderSizePixel = 0,
-        Size = UDim2.new(0.6, 0, 0, 2),
-        Position = UDim2.new(0.2, 0, 1, -2),
+        Size = UDim2.new(0.7, 0, 0, 2),
+        Position = UDim2.new(0.15, 0, 1, -3),
         Visible = false,
         Parent = btn,
     })
 
     local topTab = {
-        Button = btn,
-        Label = label,
+        Button    = btn,
+        Label     = label,
         Underline = underline,
+        Tab       = nil,   -- will be set by Tab:CreateTopTab
     }
 
     table.insert(self.TopTabs, topTab)
-
-    btn.MouseButton1Click:Connect(function()
-        self:SetTopTab(topTab)
-    end)
-
-    if #self.TopTabs == 1 then
-        self:SetTopTab(topTab)
-    end
-
     return topTab
-end
-
-function Window:SetTopTab(tab)
-    self.ActiveTopTab = tab
-    for _, t in ipairs(self.TopTabs) do
-        local active = (t == tab)
-        t.Underline.Visible = active
-        t.Label.TextColor3 = active and self.Theme.Accent or self.Theme.DimText
-    end
 end
 
 --------------------------------------------------
@@ -241,7 +222,7 @@ function Window:CreateTab(name, iconText)
     local label = create("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(32, 8),
-        Size = UDim2.new(1, -52, 0, 22), -- extra space for the right accent bar
+        Size = UDim2.new(1, -52, 0, 22), -- Platz rechts für Accent-Bar
         Font = Enum.Font.GothamBold,
         Text = name,
         TextSize = 13,
@@ -268,14 +249,16 @@ function Window:CreateTab(name, iconText)
     })
 
     local tab = setmetatable({
-        Window = self,
-        Name = name,
-        Button = btn,
-        Icon = icon,
-        Label = label,
-        ActiveBar = activeBar,
-        Page = page,
-        _sections = {},
+        Window      = self,
+        Name        = name,
+        Button      = btn,
+        Icon        = icon,
+        Label       = label,
+        ActiveBar   = activeBar,
+        Page        = page,
+        _sections   = {},
+        _topTabs    = {}, -- top tabs belonging to this tab
+        _activeTopTab = nil,
     }, Tab)
 
     btn.MouseButton1Click:Connect(function()
@@ -292,25 +275,63 @@ end
 
 function Window:SelectTab(tab)
     self.ActiveTab = tab
+
     for _, t in ipairs(self.Tabs) do
         local active = (t == tab)
+
         t.Page.Visible = active
         t.ActiveBar.Visible = active
         t.Icon.TextColor3 = active and self.Theme.Accent or self.Theme.DimText
         t.Label.TextColor3 = active and self.Theme.Text or self.Theme.Muted
+
+        -- Show/hide this tab's top-tab buttons
+        for _, tt in ipairs(t._topTabs) do
+            tt.Button.Visible = active
+        end
+    end
+
+    -- Re-apply underline for this tab's active top tab
+    if tab._activeTopTab then
+        tab:SetTopTab(tab._activeTopTab)
     end
 end
 
 --------------------------------------------------
--- Tab methods
+-- Tab methods (including per-tab top tabs)
 --------------------------------------------------
 
-function Tab:Select()
-    self.Window:SelectTab(self)
+function Tab:CreateTopTab(text)
+    local window = self.Window
+    local tt = window:_createTopTabInternal(text)
+    tt.Tab = self
+    table.insert(self._topTabs, tt)
+
+    -- hidden if this tab is not active
+    tt.Button.Visible = (window.ActiveTab == self)
+
+    tt.Button.MouseButton1Click:Connect(function()
+        self:SetTopTab(tt)
+    end)
+
+    if not self._activeTopTab then
+        self:SetTopTab(tt)
+    end
+
+    return tt
 end
 
--- slot = "LeftTop" | "LeftBottom" | "RightTop" | "RightBottom"
---  -> matches the 4 boxes layout from the screenshot
+function Tab:SetTopTab(tt)
+    local window = self.Window
+    self._activeTopTab = tt
+
+    for _, t in ipairs(self._topTabs) do
+        local active = (t == tt)
+        t.Underline.Visible = active and (window.ActiveTab == self)
+        t.Label.TextColor3 = active and window.Theme.Accent or window.Theme.DimText
+    end
+end
+
+-- layout slots for the 4 main boxes
 function Tab:CreateSection(title, slot)
     local window = self.Window
     local page = self.Page
@@ -338,6 +359,7 @@ function Tab:CreateSection(title, slot)
     local frameProps = {
         BorderSizePixel = 0,
         Parent = page,
+        ClipsDescendants = true, -- nichts ragt mehr raus
     }
 
     if info then
@@ -404,7 +426,7 @@ function Tab:CreateSection(title, slot)
 end
 
 --------------------------------------------------
--- Section methods (Slider, Dropdown, Toggle, etc.)
+-- Section methods (controls)
 --------------------------------------------------
 
 function Section:CreateSlider(cfg)
@@ -722,8 +744,7 @@ function Section:CreateDropdown(cfg)
     return ddObj
 end
 
--- Block-toggle like in the screenshot (no sliding knob)
--- cfg.Small = true  -> small square (right AIMBOT list)
+-- Block toggle (rectangles) – small variant for the right AIMBOT column
 function Section:CreateToggle(cfg)
     local window = self.Window
     local inner  = self.Inner
@@ -789,9 +810,7 @@ function Section:CreateToggle(cfg)
     row.MouseButton1Click:Connect(function()
         state = not state
         render()
-        if cfg.Callback then
-            task.spawn(cfg.Callback, state)
-        end
+        if cfg.Callback then task.spawn(cfg.Callback, state) end
     end)
 
     local tObj = {}
@@ -841,7 +860,7 @@ function Section:CreateTextbox(cfg)
         Size = UDim2.new(1, 0, 0, 24),
         Font = Enum.Font.Gotham,
         Text = cfg.Default or "",
-        PlaceholderText = cfg.Placeholder or "Enter text...",
+        PlaceholderText = cfg.Placeholder or "Enter your text here",
         TextSize = 12,
         ClearTextOnFocus = false,
         Parent = inner,
@@ -868,7 +887,7 @@ function Section:CreateTextbox(cfg)
 end
 
 --------------------------------------------------
--- Vanith:CreateWindow (main entry)
+-- Vanith:CreateWindow
 --------------------------------------------------
 
 function Vanith:CreateWindow(cfg)
@@ -902,7 +921,7 @@ function Vanith:CreateWindow(cfg)
         Theme = theme,
         _themeBindings = {},
         Tabs = {},
-        TopTabs = {},
+        TopTabs = {}, -- all top-tab buttons, per-tab visibility
     }, Window)
 
     local gui = create("ScreenGui", {
@@ -927,15 +946,15 @@ function Vanith:CreateWindow(cfg)
     local ms = create("UIStroke", {Thickness = 1, Transparency = 0.2, Parent = main})
     self:_bindTheme(ms, "Color", "Stroke")
 
-    -- slight glass overlay like original
+    -- glass overlay
     local glass = create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundColor3 = Color3.fromRGB(255,255,255),
         BackgroundTransparency = 0.97,
         BorderSizePixel = 0,
-        Size = UDim2.fromScale(1, 1),
+        Size = UDim2.fromScale(1,1),
         Parent = main,
     })
-    create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = glass})
+    create("UICorner", {CornerRadius = UDim.new(0,10), Parent = glass})
 
     -- top bar
     local top = create("Frame", {
@@ -956,7 +975,7 @@ function Vanith:CreateWindow(cfg)
         Parent = top,
     })
 
-    -- left brand box (auto width, only as long as name)
+    -- brand box (auto width)
     local titleBox = create("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(12, 10),
@@ -986,11 +1005,11 @@ function Vanith:CreateWindow(cfg)
     })
     self:_bindTheme(title, "TextColor3", "Accent")
 
-    -- long box for AK-47 / M4A1 / GALIL / ...
+    -- long box for weapon tabs (wider so GLOCK-17 fits)
     local tabsStrip = create("Frame", {
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(160, 10),
-        Size = UDim2.new(1, -260, 0, 34),
+        Position = UDim2.fromOffset(140, 10),
+        Size = UDim2.new(1, -200, 0, 34), -- breiter als vorher
         Parent = top,
     })
     self:_bindTheme(tabsStrip, "BackgroundColor3", "BG1")
@@ -1013,10 +1032,10 @@ function Vanith:CreateWindow(cfg)
     })
     tabsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    -- small gear box on the right
+    -- small gear box top right
     local gearBox = create("Frame", {
         BorderSizePixel = 0,
-        Position = UDim2.new(1, -46, 10, 0),
+        Position = UDim2.new(1, -46, 0, 10), -- FIX: Y scale 0, offset 10
         Size = UDim2.fromOffset(34, 34),
         Parent = top,
     })
@@ -1063,7 +1082,7 @@ function Vanith:CreateWindow(cfg)
     })
     sideLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 
-    -- main content area (where 4 boxes sit)
+    -- main content area
     local pages = create("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(146, 68),
@@ -1072,12 +1091,11 @@ function Vanith:CreateWindow(cfg)
     })
     self.Pages = pages
 
-    -- drag by top bar
     if cfg.Draggable ~= false then
         self:_enableDrag(top, main)
     end
 
-    -- mobile scaling
+    -- simple mobile scaling
     local uiScale = create("UIScale", {Parent = main})
     local cam = workspace.CurrentCamera
     if cam then
