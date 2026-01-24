@@ -1,3 +1,4 @@
+
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
@@ -57,7 +58,7 @@ local DEFAULT_THEME = {
     Accent  = Color3.fromRGB(170, 90, 255),
     BG0     = Color3.fromRGB(4, 4, 6),
     BG1     = Color3.fromRGB(10, 10, 14),
-    BG2     = Color3.fromRGB(10, 10, 14), -- gleiche Farbe wie BG1 -> kein Farbbruch oben
+    BG2     = Color3.fromRGB(10, 10, 14),
     Stroke  = Color3.fromRGB(40, 40, 50),
     Text    = Color3.fromRGB(230, 230, 238),
     Muted   = Color3.fromRGB(140, 140, 150),
@@ -235,6 +236,7 @@ function Window:_makeTopTabButton(text)
         Parent = btn,
         ZIndex = 5,
         TextColor3 = self.Theme.DimText,
+        TextScaled = true, -- wird kleiner, wenn Name zu lang ist
     })
 
     local underline = New("Frame", {
@@ -410,7 +412,7 @@ function Tab:CreateSection(title, slot)
     local win  = self.Window
     local page = self.Page
 
-    -- 2x2 Grid, nutzt die komplette Höhe der Page, kein dicker Leerraum unten
+    -- 2x2 Grid, füllt komplette Höhe (kein dicker Abstand unten)
     local layout = {
         LeftTop = {
             Pos  = UDim2.new(0, 0, 0, 0),
@@ -460,7 +462,7 @@ function Tab:CreateSection(title, slot)
     })
     win:_track(head, "TextColor3", "Accent")
 
-    -- Inner jetzt ScrollingFrame, damit man in der Section scrollen kann
+    -- Scrollable Inner
     local inner = New("ScrollingFrame", {
         BorderSizePixel = 0,
         BackgroundTransparency = 1,
@@ -486,7 +488,6 @@ function Tab:CreateSection(title, slot)
         Parent = inner,
     })
 
-    -- CanvasSize der Section automatisch an Content anpassen
     list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         inner.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 16)
     end)
@@ -556,6 +557,7 @@ function Section:CreateSlider(cfg)
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Right,
         Parent = row,
+        TextScaled = true, -- schrumpft bei langem Text
     })
     win:_track(valueText, "TextColor3", "Accent")
 
@@ -653,6 +655,14 @@ function Section:CreateSlider(cfg)
     track.InputBegan:Connect(function(input)
         if IsMouse(input.UserInputType) or IsTouch(input.UserInputType) then
             begin(input)
+        end
+    end)
+
+    -- WICHTIG: damit der Slider auf PC/Maus sauber draggt
+    track.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            activeInput = input
         end
     end)
 
@@ -1039,6 +1049,7 @@ function Section:CreateDropdown(cfg)
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Right,
         Parent = head,
+        TextScaled = true, -- schrumpft, wenn Auswahlname zu lang ist
     })
     win:_track(valLbl, "TextColor3", "Text")
 
@@ -1283,7 +1294,7 @@ function Vanith:CreateWindow(opts)
     })
     New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = glass})
 
-    -- top bar (gleiche Farbe wie Rest)
+    -- top bar
     local top = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 54),
@@ -1325,12 +1336,12 @@ function Vanith:CreateWindow(opts)
     self:_track(brandLabel, "TextColor3", "Accent")
 
     ------------------------------------------------------------------
-    -- top weapon-tab strip
+    -- top weapon-tab strip (mittig)
     ------------------------------------------------------------------
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
-        Size = UDim2.new(1, -220, 0, 34),
+        Size = UDim2.new(1, -260, 0, 34), -- etwas kleiner wegen breiterer Control-Box rechts
         Parent = top,
         ZIndex = 2,
     })
@@ -1358,30 +1369,62 @@ function Vanith:CreateWindow(opts)
     topLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
     ------------------------------------------------------------------
-    -- gear box
+    -- control box: Minimize + Close
     ------------------------------------------------------------------
-    local gearBox = New("Frame", {
+    local controlBox = New("Frame", {
         BorderSizePixel = 0,
-        Position = UDim2.new(1, -46, 0, 10),
-        Size = UDim2.fromOffset(34, 34),
+        Position = UDim2.new(1, -96, 0, 10),
+        Size = UDim2.fromOffset(84, 34),
         Parent = top,
         ZIndex = 3,
     })
-    self:_track(gearBox, "BackgroundColor3", "BG2")
-    New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = gearBox})
-    local gStroke = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = gearBox})
-    self:_track(gStroke, "Color", "Stroke")
+    self:_track(controlBox, "BackgroundColor3", "BG2")
+    New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = controlBox})
+    local cbStroke = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = controlBox})
+    self:_track(cbStroke, "Color", "Stroke")
 
-    local gear = New("TextLabel", {
+    local minimizeBtn = New("TextButton", {
+        AutoButtonColor = false,
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 1, 0),
+        Size = UDim2.new(0.5, 0, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
         Font = Enum.Font.GothamBold,
-        Text = "⚙",
-        TextSize = 18,
-        Parent = gearBox,
+        Text = "-",
+        TextSize = 16,
+        Parent = controlBox,
         ZIndex = 4,
     })
-    self:_track(gear, "TextColor3", "Accent")
+    self:_track(minimizeBtn, "TextColor3", "Accent")
+
+    local closeBtn = New("TextButton", {
+        AutoButtonColor = false,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.5, 0, 1, 0),
+        Position = UDim2.new(0.5, 0, 0, 0),
+        Font = Enum.Font.GothamBold,
+        Text = "X",
+        TextSize = 16,
+        Parent = controlBox,
+        ZIndex = 4,
+    })
+    self:_track(closeBtn, "TextColor3", "Accent")
+
+    -- Minimize: nur Optik (kein Verhalten), kleine Klick-Animation
+    minimizeBtn.MouseButton1Click:Connect(function()
+        PlayTween(minimizeBtn, {TextColor3 = self.Theme.Muted}, 0.08)
+        task.delay(0.08, function()
+            if minimizeBtn.Parent then
+                minimizeBtn.TextColor3 = self.Theme.Accent
+            end
+        end)
+    end)
+
+    -- Close: UI schließen
+    closeBtn.MouseButton1Click:Connect(function()
+        if self.Gui then
+            self.Gui:Destroy()
+        end
+    end)
 
     ------------------------------------------------------------------
     -- sidebar + pages
@@ -1448,21 +1491,20 @@ function Vanith:CreateWindow(opts)
     end
 
     ------------------------------------------------------------------
-    -- mobile autoscale (fix: mobile = 50% Größe)
+    -- mobile autoscale (Mobile = 50% der Original-Größe)
     ------------------------------------------------------------------
     local scale = New("UIScale", {Parent = main})
     local cam   = workspace.CurrentCamera
 
-    -- echtes Mobile-Device erkennen: Touch an, aber keine Maus/Tastatur
     local isMobile = UserInputService.TouchEnabled
         and not UserInputService.KeyboardEnabled
         and not UserInputService.MouseEnabled
 
     if isMobile then
-        -- 50% der Originalgröße
+        -- fest 50% auf echtem Handy/Tablet ohne Tastatur/Maus
         scale.Scale = 0.5
     elseif cam then
-        -- PC / Tablet: optional leichte Anpassung bei sehr kleinen Screens
+        -- PC/Tablet: leichte Anpassung bei sehr kleiner Auflösung
         local vp = cam.ViewportSize
         if vp.X < 900 then
             scale.Scale = math.clamp(vp.X / 900, 0.75, 1)
@@ -1480,3 +1522,4 @@ end
 Vanith.Createwindow = Vanith.CreateWindow
 
 return Vanith
+
