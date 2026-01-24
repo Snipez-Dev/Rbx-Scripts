@@ -1,4 +1,4 @@
-local Vanith = loadstring(game:HttpGet("https://raw.githubusercontent.com/Snipez-Dev/Rbx-Scripts/refs/heads/main/UI5"))()
+local Vanith = loadstring(game:HttpGet("https://raw.githubusercontent.com/Snipez-Dev/Rbx-Scripts/refs/heads/main/UI6"))()
 
 -- Window (nutzt jetzt StartSize, wird auch als MinSize benutzt)
 local Window = Vanith:CreateWindow({
