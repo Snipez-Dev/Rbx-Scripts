@@ -409,7 +409,6 @@ function Tab:CreateSection(title, slot)
     local win  = self.Window
     local page = self.Page
 
-    -- Layout
     local layout = {
         LeftTop = {
             Pos  = UDim2.new(0, 0, 0, 0),
@@ -486,7 +485,6 @@ function Tab:CreateSection(title, slot)
         Parent = inner,
     })
 
-    -- zusätzlich CanvasSize setzen (sicher für Mobile)
     list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         inner.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 16)
     end)
@@ -982,7 +980,7 @@ function Section:CreateTextbox(cfg)
     return obj
 end
 
---------------------------------------------------------------------- -- DROPDOWN (fix: alle Optionen, wenig Platz, UI macht Platz)
+--------------------------------------------------------------------- -- DROPDOWN (fix: kein großer Abstand, alle Optionen sichtbar)
 --------------------------------------------------------------------- 
 
 function Section:CreateDropdown(cfg)
@@ -1005,7 +1003,9 @@ function Section:CreateDropdown(cfg)
 
     local current   = defaultSelection
     local open      = false
+    local maxHeight = c.MaxHeight -- optional
 
+    -- Wrap: im zugeklappten Zustand nur 24px hoch
     local wrap = New("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 24),
@@ -1125,7 +1125,7 @@ function Section:CreateDropdown(cfg)
             b.MouseButton1Click:Connect(function()
                 applySelectionForCurrentProfile(opt, true)
                 rebuild()
-                -- beim Klick direkt wieder schließen
+                -- nach Wahl wieder zuklappen
                 open = false
                 PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
                 arrow.Text = "▾"
@@ -1135,14 +1135,19 @@ function Section:CreateDropdown(cfg)
 
     rebuild()
 
-    -- wenn sich die Inhalte ändern, Höhe nachziehen (wichtig für Mobile)
-    local function updateHeight()
+    -- Höhe bei offenem Dropdown exakt nach Inhalt (inkl. Mobile + UIScale)
+    local function updateOpenHeight()
         if not open then return end
-        local contentHeight = list.AbsoluteContentSize.Y + 8 -- Padding oben/unten
-        PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, contentHeight)}, 0.14)
+        local h = listBg.AbsoluteSize.Y
+        if maxHeight and maxHeight > 0 then
+            h = math.min(h, maxHeight)
+        end
+        -- kleines Polster gegen Rundungsfehler
+        h = h + 2
+        PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, h)}, 0.14)
     end
 
-    list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateHeight)
+    listBg:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateOpenHeight)
 
     local function syncProfile()
         local key = getProfileKey()
@@ -1162,16 +1167,12 @@ function Section:CreateDropdown(cfg)
         if state == open then return end
         open = state
         if open then
-            -- nach einem Frame Höhe anhand Layout berechnen
-            task.defer(function()
-                local contentHeight = list.AbsoluteContentSize.Y + 8
-                listWrap.Size = UDim2.new(1, 0, 0, 0)
-                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, contentHeight)}, 0.14)
-            end)
             arrow.Text = "▴"
+            -- einen Frame warten, damit das Layout steht, dann Höhe holen
+            task.defer(updateOpenHeight)
         else
-            PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
             arrow.Text = "▾"
+            PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
         end
     end
 
@@ -1350,7 +1351,7 @@ function Vanith:CreateWindow(opts)
     brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
     fitTitle()
 
-    -- Tab-Strip mit Auto-Scroll, zentriert solange alles reinpasst
+    -- Tab-Strip oben, zentriert solange alle Tabs reinpassen
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
