@@ -1,12 +1,3 @@
--- Vanith UI Library (Eternesus-style)
--- Usage:
--- local Vanith = loadstring(game:HttpGet("URL_TO_THIS_FILE"))()
--- local Window = Vanith:CreateWindow({
---     Title     = "Vanith",
---     StartSize = Vector2.new(820, 460),
---     Theme     = { Accent = Color3.fromRGB(170, 90, 255) }
--- })
-
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
@@ -395,6 +386,19 @@ function Tab:SetTopTab(tt)
             TextColor3 = active and win.Theme.Accent or win.Theme.DimText
         }, 0.12)
     end
+
+    -- beim Wechsel oben alle Controls dieses Tabs auf ihr "Profil" syncen
+    if self._sections then
+        for _, sec in ipairs(self._sections) do
+            if sec._controls then
+                for _, ctrl in ipairs(sec._controls) do
+                    if ctrl._syncProfile then
+                        ctrl:_syncProfile()
+                    end
+                end
+            end
+        end
+    end
 end
 
 function Tab:GetActiveTopTabName()
@@ -406,23 +410,23 @@ function Tab:CreateSection(title, slot)
     local win  = self.Window
     local page = self.Page
 
-    -- leicht höher, um den leeren Bereich unten zu reduzieren
+    -- 2x2 Grid, nutzt die komplette Höhe der Page, kein dicker Leerraum unten
     local layout = {
         LeftTop = {
             Pos  = UDim2.new(0, 0, 0, 0),
-            Size = UDim2.new(0.68, -6, 0, 200),
+            Size = UDim2.new(0.68, -6, 0.5, -6),
         },
         LeftBottom = {
-            Pos  = UDim2.new(0, 0, 0, 214),
-            Size = UDim2.new(0.68, -6, 0, 150),
+            Pos  = UDim2.new(0, 0, 0.5, 6),
+            Size = UDim2.new(0.68, -6, 0.5, -6),
         },
         RightTop = {
             Pos  = UDim2.new(0.7, 6, 0, 0),
-            Size = UDim2.new(0.3, -6, 0, 200),
+            Size = UDim2.new(0.3, -6, 0.5, -6),
         },
         RightBottom = {
-            Pos  = UDim2.new(0.7, 6, 0, 214),
-            Size = UDim2.new(0.3, -6, 0, 150),
+            Pos  = UDim2.new(0.7, 6, 0.5, 6),
+            Size = UDim2.new(0.3, -6, 0.5, -6),
         },
     }
 
@@ -456,10 +460,16 @@ function Tab:CreateSection(title, slot)
     })
     win:_track(head, "TextColor3", "Accent")
 
-    local inner = New("Frame", {
+    -- Inner jetzt ScrollingFrame, damit man in der Section scrollen kann
+    local inner = New("ScrollingFrame", {
+        BorderSizePixel = 0,
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(0, 34),
         Size = UDim2.new(1, 0, 1, -34),
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        ScrollBarThickness = 3,
+        ScrollBarImageTransparency = 0.3,
+        ScrollBarImageColor3 = win.Theme.Accent,
         Parent = frame,
     })
 
@@ -476,14 +486,21 @@ function Tab:CreateSection(title, slot)
         Parent = inner,
     })
 
-    table.insert(self._sections, frame)
+    -- CanvasSize der Section automatisch an Content anpassen
+    list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        inner.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 16)
+    end)
 
     local sec = setmetatable({
-        Window = win,
-        Frame  = frame,
-        Inner  = inner,
-        List   = list,
+        Window    = win,
+        Tab       = self,
+        Frame     = frame,
+        Inner     = inner,
+        List      = list,
+        _controls = {},
     }, Section)
+
+    table.insert(self._sections, sec)
 
     return sec
 end
@@ -494,12 +511,25 @@ end
 function Section:CreateSlider(cfg)
     local win   = self.Window
     local inner = self.Inner
+    local tab   = self.Tab
     local c     = cfg or {}
 
     local minv  = c.Min or 0
     local maxv  = c.Max or 100
     local step  = c.Step or 1
-    local value = RoundStep(math.clamp(c.Default or minv, minv, maxv), minv, step)
+
+    local function getProfileKey()
+        if tab and tab._activeTopTab then
+            return tab._activeTopTab
+        end
+        return "__default"
+    end
+
+    local valuesByProfile = {}
+
+    local defaultValue = RoundStep(math.clamp(c.Default or minv, minv, maxv), minv, step)
+    local value        = defaultValue
+    valuesByProfile[getProfileKey()] = defaultValue
 
     local row = New("Frame", {
         BackgroundTransparency = 1,
@@ -573,16 +603,28 @@ function Section:CreateSlider(cfg)
         valueText.Text = text
     end
 
+    local function syncProfile()
+        local key = getProfileKey()
+        local v   = valuesByProfile[key]
+        if v == nil then
+            v = defaultValue
+            valuesByProfile[key] = v
+        end
+        value = v
+        setVisual(v, false)
+    end
+
     local function setValue(v, fromUser)
         v = RoundStep(math.clamp(v, minv, maxv), minv, step)
         value = v
+        valuesByProfile[getProfileKey()] = v
         setVisual(v, true)
         if fromUser and c.Callback then
             task.spawn(c.Callback, v)
         end
     end
 
-    setVisual(value, false)
+    syncProfile()
 
     local dragging
     local activeInput
@@ -621,8 +663,23 @@ function Section:CreateSlider(cfg)
     end)
 
     local obj = {}
-    function obj:Set(v) setValue(v, false) end
-    function obj:Get() return value end
+    function obj:Set(v)
+        v = RoundStep(math.clamp(v, minv, maxv), minv, step)
+        value = v
+        valuesByProfile[getProfileKey()] = v
+        setVisual(v, false)
+    end
+    function obj:Get()
+        return value
+    end
+
+    function obj:_syncProfile()
+        syncProfile()
+    end
+    obj._profileValues = valuesByProfile
+
+    table.insert(self._controls, obj)
+
     return obj
 end
 
@@ -630,9 +687,21 @@ end
 function Section:CreateToggle(cfg)
     local win   = self.Window
     local inner = self.Inner
+    local tab   = self.Tab
     local c     = cfg or {}
 
-    local state = c.Default and true or false
+    local function getProfileKey()
+        if tab and tab._activeTopTab then
+            return tab._activeTopTab
+        end
+        return "__default"
+    end
+
+    local stateByProfile = {}
+    local defaultState   = c.Default and true or false
+    stateByProfile[getProfileKey()] = defaultState
+    local state = defaultState
+
     local small = c.Small or false
 
     local row = New("TextButton", {
@@ -653,6 +722,8 @@ function Section:CreateToggle(cfg)
         Parent = row,
     })
     win:_track(label, "TextColor3", "Text")
+
+    local obj = {}
 
     if small then
         local box = New("Frame", {
@@ -683,15 +754,40 @@ function Section:CreateToggle(cfg)
             end
         end
 
-        render(false)
+        local function syncProfile()
+            local key = getProfileKey()
+            local s   = stateByProfile[key]
+            if s == nil then
+                s = defaultState
+                stateByProfile[key] = s
+            end
+            state = s
+            render(false)
+        end
+
+        syncProfile()
 
         row.MouseButton1Click:Connect(function()
             state = not state
+            stateByProfile[getProfileKey()] = state
             render(true)
             if c.Callback then
                 task.spawn(c.Callback, state)
             end
         end)
+
+        function obj:Set(v)
+            state = v and true or false
+            stateByProfile[getProfileKey()] = state
+            render(false)
+        end
+        function obj:Get()
+            return state
+        end
+        function obj:_syncProfile()
+            syncProfile()
+        end
+        obj._profileValues = stateByProfile
     else
         local sw = New("Frame", {
             BorderSizePixel = 0,
@@ -736,20 +832,43 @@ function Section:CreateToggle(cfg)
             end
         end
 
-        render(false)
+        local function syncProfile()
+            local key = getProfileKey()
+            local s   = stateByProfile[key]
+            if s == nil then
+                s = defaultState
+                stateByProfile[key] = s
+            end
+            state = s
+            render(false)
+        end
+
+        syncProfile()
 
         row.MouseButton1Click:Connect(function()
             state = not state
+            stateByProfile[getProfileKey()] = state
             render(true)
             if c.Callback then
                 task.spawn(c.Callback, state)
             end
         end)
+
+        function obj:Set(v)
+            state = v and true or false
+            stateByProfile[getProfileKey()] = state
+            render(false)
+        end
+        function obj:Get()
+            return state
+        end
+        function obj:_syncProfile()
+            syncProfile()
+        end
+        obj._profileValues = stateByProfile
     end
 
-    local obj = {}
-    function obj:Set(v) state = v and true or false end
-    function obj:Get() return state end
+    table.insert(self._controls, obj)
     return obj
 end
 
@@ -789,13 +908,25 @@ end
 function Section:CreateTextbox(cfg)
     local win   = self.Window
     local inner = self.Inner
+    local tab   = self.Tab
     local c     = cfg or {}
+
+    local function getProfileKey()
+        if tab and tab._activeTopTab then
+            return tab._activeTopTab
+        end
+        return "__default"
+    end
+
+    local valuesByProfile = {}
+    local defaultText     = c.Default or ""
+    valuesByProfile[getProfileKey()] = defaultText
 
     local box = New("TextBox", {
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 24),
         Font = Enum.Font.Gotham,
-        Text = c.Default or "",
+        Text = defaultText,
         PlaceholderText = c.Placeholder or "Enter text here",
         TextSize = 12,
         ClearTextOnFocus = false,
@@ -808,15 +939,40 @@ function Section:CreateTextbox(cfg)
     local st = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = box})
     win:_track(st, "Color", "Stroke")
 
+    local function syncProfile()
+        local key = getProfileKey()
+        local t   = valuesByProfile[key]
+        if t == nil then
+            t = defaultText
+            valuesByProfile[key] = t
+        end
+        box.Text = t
+    end
+
+    syncProfile()
+
     box.FocusLost:Connect(function(enterPressed)
+        valuesByProfile[getProfileKey()] = box.Text
         if c.Callback then
             task.spawn(c.Callback, box.Text, enterPressed)
         end
     end)
 
     local obj = {}
-    function obj:SetText(t) box.Text = t end
-    function obj:GetText() return box.Text end
+    function obj:SetText(t)
+        t = t or ""
+        valuesByProfile[getProfileKey()] = t
+        box.Text = t
+    end
+    function obj:GetText()
+        return box.Text
+    end
+    function obj:_syncProfile()
+        syncProfile()
+    end
+    obj._profileValues = valuesByProfile
+
+    table.insert(self._controls, obj)
     return obj
 end
 
@@ -824,10 +980,22 @@ end
 function Section:CreateDropdown(cfg)
     local win   = self.Window
     local inner = self.Inner
+    local tab   = self.Tab
     local c     = cfg or {}
 
-    local options   = c.Options or {}
-    local current   = c.Default or options[1] or "None"
+    local function getProfileKey()
+        if tab and tab._activeTopTab then
+            return tab._activeTopTab
+        end
+        return "__default"
+    end
+
+    local options          = c.Options or {}
+    local defaultSelection = c.Default or options[1] or "None"
+    local selectedByProfile = {}
+    selectedByProfile[getProfileKey()] = defaultSelection
+
+    local current   = defaultSelection
     local open      = false
     local maxHeight = c.MaxHeight or 120
 
@@ -921,6 +1089,15 @@ function Section:CreateDropdown(cfg)
         Parent        = listBg,
     })
 
+    local function applySelectionForCurrentProfile(sel, callCallback)
+        current = sel
+        selectedByProfile[getProfileKey()] = sel
+        valLbl.Text = tostring(current)
+        if callCallback and c.Callback then
+            task.spawn(c.Callback, current)
+        end
+    end
+
     local function rebuild()
         for _, child in ipairs(listBg:GetChildren()) do
             if child:IsA("TextButton") then
@@ -942,11 +1119,7 @@ function Section:CreateDropdown(cfg)
             b.TextColor3 = (opt == current) and win.Theme.Accent or win.Theme.Text
 
             b.MouseButton1Click:Connect(function()
-                current = opt
-                valLbl.Text = tostring(current)
-                if c.Callback then
-                    task.spawn(c.Callback, current)
-                end
+                applySelectionForCurrentProfile(opt, true)
                 rebuild()
                 open = false
                 PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
@@ -961,7 +1134,19 @@ function Section:CreateDropdown(cfg)
         end)
     end
 
-    rebuild()
+    local function syncProfile()
+        local key = getProfileKey()
+        local sel = selectedByProfile[key]
+        if sel == nil then
+            sel = defaultSelection
+            selectedByProfile[key] = sel
+        end
+        current = sel
+        valLbl.Text = tostring(current)
+        rebuild()
+    end
+
+    syncProfile()
 
     local function setOpen(state)
         open = state
@@ -989,6 +1174,7 @@ function Section:CreateDropdown(cfg)
         options = opts or {}
         if not table.find(options, current) then
             current = options[1] or "None"
+            selectedByProfile[getProfileKey()] = current
             valLbl.Text = tostring(current)
         end
         rebuild()
@@ -996,12 +1182,19 @@ function Section:CreateDropdown(cfg)
     end
     function obj:Set(v)
         if table.find(options, v) then
-            current = v
-            valLbl.Text = tostring(current)
+            applySelectionForCurrentProfile(v, false)
             rebuild()
         end
     end
-    function obj:Get() return current end
+    function obj:Get()
+        return current
+    end
+    function obj:_syncProfile()
+        syncProfile()
+    end
+    obj._profileValues = selectedByProfile
+
+    table.insert(self._controls, obj)
     return obj
 end
 
@@ -1036,7 +1229,7 @@ function Vanith:CreateWindow(opts)
         end
     end
 
-    -- StartSize (Vector2 or UDim2)
+    -- StartSize (Vector2 oder UDim2)
     local sizeOpt = opts.StartSize or opts.Size
     local initialSize
     if typeof(sizeOpt) == "Vector2" then
@@ -1158,7 +1351,7 @@ function Vanith:CreateWindow(opts)
     local topLayout = New("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
         SortOrder     = Enum.SortOrder.LayoutOrder,
-        Padding       = UDim.new(0, 26),  -- etwas kleiner als vorher, damit bei großer UI nicht so „leer“
+        Padding       = UDim.new(0, 26),
         Parent        = tabsHolder,
     })
     topLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
@@ -1220,7 +1413,6 @@ function Vanith:CreateWindow(opts)
     })
     sideLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 
-    -- Seitenbereich etwas höher, damit unten weniger Luft ist
     local pages = New("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(146, 66),
