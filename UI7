@@ -410,7 +410,7 @@ function Tab:CreateSection(title, slot)
     local page = self.Page
 
     ------------------------------------------------------------------
-    -- NEUES LAYOUT: linker & rechter Rand gleich, in der Mitte 12px Gap
+    -- Layout: linker & rechter Rand gleich, in der Mitte 12px Gap
     ------------------------------------------------------------------
     local layout = {
         LeftTop = {
@@ -470,6 +470,7 @@ function Tab:CreateSection(title, slot)
         ScrollBarThickness = 3,
         ScrollBarImageTransparency = 0.3,
         ScrollBarImageColor3 = win.Theme.Accent,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
         Parent = frame,
     })
 
@@ -901,7 +902,9 @@ function Section:CreateButton(cfg)
             task.spawn(c.Callback)
         end
         task.delay(0.08, function()
-            PlayTween(btn, {BackgroundColor3 = win.Theme.Field}, 0.12)
+            if btn.Parent then
+                PlayTween(btn, {BackgroundColor3 = win.Theme.Field}, 0.12)
+            end
         end)
     end)
 
@@ -999,7 +1002,7 @@ function Section:CreateDropdown(cfg)
 
     local current   = defaultSelection
     local open      = false
-    local maxHeight = c.MaxHeight or 120
+    local maxHeight = c.MaxHeight or nil -- optional, aber wir priorisieren "alles sichtbar"
 
     local wrap = New("Frame", {
         BackgroundTransparency = 1,
@@ -1063,15 +1066,12 @@ function Section:CreateDropdown(cfg)
         Parent = wrap,
     })
 
-    local listBg = New("ScrollingFrame", {
-        BorderSizePixel            = 0,
-        Size                       = UDim2.new(1, 0, 0, 0),
-        CanvasSize                 = UDim2.new(0, 0, 0, 0),
-        ScrollBarThickness         = 3,
-        ScrollBarImageTransparency = 0.3,
-        ScrollBarImageColor3       = win.Theme.Accent,
-        BackgroundTransparency     = 0,
-        Parent = listWrap,
+    -- WICHTIG: kein ScrollingFrame hier, damit Mobile keine verschachtelten Scrollbars hat.
+    local listBg = New("Frame", {
+        BorderSizePixel        = 0,
+        Size                   = UDim2.new(1, 0, 0, 0),
+        BackgroundTransparency = 0,
+        Parent                 = listWrap,
     })
     win:_track(listBg, "BackgroundColor3", "Field")
     New("UICorner", {CornerRadius = UDim.new(0, 3), Parent = listBg})
@@ -1100,6 +1100,8 @@ function Section:CreateDropdown(cfg)
         end
     end
 
+    local setOpen -- forward declaration
+
     local function rebuild()
         for _, child in ipairs(listBg:GetChildren()) do
             if child:IsA("TextButton") then
@@ -1123,16 +1125,20 @@ function Section:CreateDropdown(cfg)
             b.MouseButton1Click:Connect(function()
                 applySelectionForCurrentProfile(opt, true)
                 rebuild()
-                open = false
-                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
-                PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
-                arrow.Text = "▾"
+                setOpen(false)
             end)
         end
 
         task.defer(function()
             local contentHeight = list.AbsoluteContentSize.Y + 16
-            listBg.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
+            listBg.Size = UDim2.new(1, 0, 0, contentHeight)
+            if open then
+                local h = contentHeight
+                if maxHeight then
+                    h = math.min(h, maxHeight)
+                end
+                listWrap.Size = UDim2.new(1, 0, 0, h)
+            end
         end)
     end
 
@@ -1150,15 +1156,18 @@ function Section:CreateDropdown(cfg)
 
     syncProfile()
 
-    local function setOpen(state)
+    setOpen = function(state)
         open = state
         if open then
-            task.wait()
-            local contentHeight = list.AbsoluteContentSize.Y + 16
-            local h = math.min(contentHeight, maxHeight)
-            PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, h)}, 0.14)
-            PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, h)}, 0.14)
-            listBg.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
+            task.defer(function()
+                local contentHeight = list.AbsoluteContentSize.Y + 16
+                local h = contentHeight
+                if maxHeight then
+                    h = math.min(h, maxHeight)
+                end
+                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, h)}, 0.14)
+                PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, contentHeight)}, 0.14)
+            end)
             arrow.Text = "▴"
         else
             PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
@@ -1244,12 +1253,17 @@ function Vanith:CreateWindow(opts)
     local baseHeight  = initialSize.Y.Offset > 0 and initialSize.Y.Offset or 417
     local minSizeVec  = Vector2.new(baseWidth, baseHeight)
 
+    local isMobile = UserInputService.TouchEnabled
+        and not UserInputService.KeyboardEnabled
+        and not UserInputService.MouseEnabled
+
     local self = setmetatable({
         Theme          = theme,
         _themeBindings = {},
         Tabs           = {},
         TopTabs        = {},
         MinSize        = minSizeVec,
+        IsMobile       = isMobile,
     }, Window)
 
     local gui = New("ScreenGui", {
@@ -1337,7 +1351,7 @@ function Vanith:CreateWindow(opts)
     brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
     fitTitle()
 
-    -- Tab-Strip mit etwas Luft zu den Buttons rechts
+    -- Tab-Strip mit Scroll (fix für Mobile: Tabs werden nicht gequetscht, sondern horizontal scrollbar)
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
@@ -1350,12 +1364,16 @@ function Vanith:CreateWindow(opts)
     local sStroke = New("UIStroke", {Thickness = 1, Transparency = 0.5, Parent = strip})
     self:_track(sStroke, "Color", "Stroke")
 
-    local tabsHolder = New("Frame", {
+    local tabsHolder = New("ScrollingFrame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(8, 0),
         Size = UDim2.new(1, -16, 1, 0),
         Parent = strip,
         ZIndex = 3,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        ScrollBarThickness = 2,
+        ScrollBarImageTransparency = 1,
+        ScrollingDirection = Enum.ScrollingDirection.X,
     })
     self.TopTabsHolder = tabsHolder
 
@@ -1366,7 +1384,11 @@ function Vanith:CreateWindow(opts)
         Parent        = tabsHolder,
     })
     topLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
-    topLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    topLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+
+    topLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        tabsHolder.CanvasSize = UDim2.new(0, topLayout.AbsoluteContentSize.X + 8, 0, 0)
+    end)
 
     -- Minimize / Close Box
     local controlBox = New("Frame", {
@@ -1483,12 +1505,9 @@ function Vanith:CreateWindow(opts)
     local scale = New("UIScale", {Parent = main})
     local cam   = workspace.CurrentCamera
 
-    local isMobile = UserInputService.TouchEnabled
-        and not UserInputService.KeyboardEnabled
-        and not UserInputService.MouseEnabled
-
+    -- leicht höheres Scale für Mobile, damit Scroll-Bereiche leichter zu treffen sind
     if isMobile then
-        scale.Scale = 0.60
+        scale.Scale = 0.70
     elseif cam then
         local vp = cam.ViewportSize
         if vp.X < 900 then
