@@ -1,9 +1,10 @@
 -- Vanith UI Library (Eternesus-style)
 -- Usage:
--- local Vanith = loadstring(game:HttpGet("YOUR_URL_HERE"))()
+-- local Vanith = loadstring(game:HttpGet("URL_TO_THIS_FILE"))()
 -- local Window = Vanith:CreateWindow({
 --     Title     = "Vanith",
---     StartSize = Vector2.new(649, 417), -- optional Startgröße
+--     StartSize = Vector2.new(820, 460),
+--     Theme     = { Accent = Color3.fromRGB(170, 90, 255) }
 -- })
 
 local Players          = game:GetService("Players")
@@ -65,7 +66,7 @@ local DEFAULT_THEME = {
     Accent  = Color3.fromRGB(170, 90, 255),
     BG0     = Color3.fromRGB(4, 4, 6),
     BG1     = Color3.fromRGB(10, 10, 14),
-    BG2     = Color3.fromRGB(14, 14, 18),
+    BG2     = Color3.fromRGB(10, 10, 14), -- gleiche Farbe wie BG1 -> kein Farbbruch oben
     Stroke  = Color3.fromRGB(40, 40, 50),
     Text    = Color3.fromRGB(230, 230, 238),
     Muted   = Color3.fromRGB(140, 140, 150),
@@ -170,7 +171,7 @@ function Window:_enableDrag(handle, target)
     end)
 end
 
--- resize bottom right, minSize = Erstellungsgröße
+-- resize bottom right, minSize = creation size
 function Window:_enableResize(handle, target)
     local minSize = self.MinSize or Vector2.new(649, 417)
 
@@ -396,27 +397,32 @@ function Tab:SetTopTab(tt)
     end
 end
 
+function Tab:GetActiveTopTabName()
+    return self._activeTopTab and self._activeTopTab.Label.Text or nil
+end
+
 -- slot: "LeftTop", "LeftBottom", "RightTop", "RightBottom"
 function Tab:CreateSection(title, slot)
     local win  = self.Window
     local page = self.Page
 
+    -- leicht höher, um den leeren Bereich unten zu reduzieren
     local layout = {
         LeftTop = {
             Pos  = UDim2.new(0, 0, 0, 0),
-            Size = UDim2.new(0.68, -6, 0, 190),
+            Size = UDim2.new(0.68, -6, 0, 200),
         },
         LeftBottom = {
-            Pos  = UDim2.new(0, 0, 0, 204),
-            Size = UDim2.new(0.68, -6, 0, 133),
+            Pos  = UDim2.new(0, 0, 0, 214),
+            Size = UDim2.new(0.68, -6, 0, 150),
         },
         RightTop = {
             Pos  = UDim2.new(0.7, 6, 0, 0),
-            Size = UDim2.new(0.3, -6, 0, 190),
+            Size = UDim2.new(0.3, -6, 0, 200),
         },
         RightBottom = {
-            Pos  = UDim2.new(0.7, 6, 0, 204),
-            Size = UDim2.new(0.3, -6, 0, 133),
+            Pos  = UDim2.new(0.7, 6, 0, 214),
+            Size = UDim2.new(0.3, -6, 0, 150),
         },
     }
 
@@ -482,7 +488,7 @@ function Tab:CreateSection(title, slot)
     return sec
 end
 
---------------------------------------------------------------------- -- section controls
+--------------------------------------------------------------------- -- section controls (Slider / Toggle / Button / Textbox / Dropdown)
 --------------------------------------------------------------------- 
 
 function Section:CreateSlider(cfg)
@@ -814,7 +820,7 @@ function Section:CreateTextbox(cfg)
     return obj
 end
 
--- Dropdown mit Scrollen bei vielen Einträgen
+-- Dropdown with scrolling if there are many options
 function Section:CreateDropdown(cfg)
     local win   = self.Window
     local inner = self.Inner
@@ -823,7 +829,7 @@ function Section:CreateDropdown(cfg)
     local options   = c.Options or {}
     local current   = c.Default or options[1] or "None"
     local open      = false
-    local maxHeight = c.MaxHeight or 120 -- maximale Anzeigehöhe bevor Scrollbar
+    local maxHeight = c.MaxHeight or 120
 
     local wrap = New("Frame", {
         BackgroundTransparency = 1,
@@ -887,16 +893,15 @@ function Section:CreateDropdown(cfg)
         Parent = wrap,
     })
 
-    -- SCROLLINGFRAME für Optionen
     local listBg = New("ScrollingFrame", {
-        BorderSizePixel       = 0,
-        Size                  = UDim2.new(1, 0, 0, 0),
-        CanvasSize            = UDim2.new(0, 0, 0, 0),
-        ScrollBarThickness    = 3,
-        ScrollBarImageColor3  = win.Theme.Accent,
+        BorderSizePixel            = 0,
+        Size                       = UDim2.new(1, 0, 0, 0),
+        CanvasSize                 = UDim2.new(0, 0, 0, 0),
+        ScrollBarThickness         = 3,
         ScrollBarImageTransparency = 0.3,
-        BackgroundTransparency = 0,
-        Parent                = listWrap,
+        ScrollBarImageColor3       = win.Theme.Accent,
+        BackgroundTransparency     = 0,
+        Parent = listWrap,
     })
     win:_track(listBg, "BackgroundColor3", "Field")
     New("UICorner", {CornerRadius = UDim.new(0, 3), Parent = listBg})
@@ -950,7 +955,6 @@ function Section:CreateDropdown(cfg)
             end)
         end
 
-        -- CanvasSize für Scrollbar
         task.defer(function()
             local contentHeight = list.AbsoluteContentSize.Y + 16
             listBg.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
@@ -965,10 +969,8 @@ function Section:CreateDropdown(cfg)
             task.wait()
             local contentHeight = list.AbsoluteContentSize.Y + 16
             local h = math.min(contentHeight, maxHeight)
-
             PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, h)}, 0.14)
             PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, h)}, 0.14)
-
             listBg.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
             arrow.Text = "▴"
         else
@@ -1017,7 +1019,7 @@ function Vanith:CreateWindow(opts)
         theme[k] = v
     end
 
-    -- parent (CoreGui preferred)
+    -- parent
     local parent
     do
         local ok, cg = pcall(function()
@@ -1034,7 +1036,7 @@ function Vanith:CreateWindow(opts)
         end
     end
 
-    -- Startgröße: StartSize (Vector2 oder UDim2) oder Size fallback
+    -- StartSize (Vector2 or UDim2)
     local sizeOpt = opts.StartSize or opts.Size
     local initialSize
     if typeof(sizeOpt) == "Vector2" then
@@ -1088,7 +1090,7 @@ function Vanith:CreateWindow(opts)
     })
     New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = glass})
 
-    -- top bar (gleiche „dunkle“ Farbe, kein helleres Band mehr)
+    -- top bar (gleiche Farbe wie Rest)
     local top = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 54),
@@ -1096,11 +1098,11 @@ function Vanith:CreateWindow(opts)
         ZIndex = 2,
     })
     self.TopBar = top
-    self:_track(top, "BackgroundColor3", "BG1") -- gleich wie Panels
+    self:_track(top, "BackgroundColor3", "BG2")
     New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = top})
 
     ------------------------------------------------------------------
-    -- left brand box (Title), zentriert
+    -- left brand box (Title, centered)
     ------------------------------------------------------------------
     local brand = New("Frame", {
         BorderSizePixel = 0,
@@ -1109,7 +1111,7 @@ function Vanith:CreateWindow(opts)
         Parent = top,
         ZIndex = 3,
     })
-    self:_track(brand, "BackgroundColor3", "BG1")
+    self:_track(brand, "BackgroundColor3", "BG2")
     New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = brand})
     local bStroke = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = brand})
     self:_track(bStroke, "Color", "Stroke")
@@ -1123,7 +1125,7 @@ function Vanith:CreateWindow(opts)
         Font = Enum.Font.GothamBold,
         Text = windowTitle,
         TextSize = 15,
-        TextXAlignment = Enum.TextXAlignment.Center, -- mittig
+        TextXAlignment = Enum.TextXAlignment.Center,
         Parent = brand,
         ZIndex = 4,
     })
@@ -1139,7 +1141,7 @@ function Vanith:CreateWindow(opts)
         Parent = top,
         ZIndex = 2,
     })
-    self:_track(strip, "BackgroundColor3", "BG1")
+    self:_track(strip, "BackgroundColor3", "BG2")
     New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = strip})
     local sStroke = New("UIStroke", {Thickness = 1, Transparency = 0.5, Parent = strip})
     self:_track(sStroke, "Color", "Stroke")
@@ -1156,7 +1158,7 @@ function Vanith:CreateWindow(opts)
     local topLayout = New("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
         SortOrder     = Enum.SortOrder.LayoutOrder,
-        Padding       = UDim.new(0, 32), -- mehr Abstand
+        Padding       = UDim.new(0, 26),  -- etwas kleiner als vorher, damit bei großer UI nicht so „leer“
         Parent        = tabsHolder,
     })
     topLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
@@ -1172,7 +1174,7 @@ function Vanith:CreateWindow(opts)
         Parent = top,
         ZIndex = 3,
     })
-    self:_track(gearBox, "BackgroundColor3", "BG1")
+    self:_track(gearBox, "BackgroundColor3", "BG2")
     New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = gearBox})
     local gStroke = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = gearBox})
     self:_track(gStroke, "Color", "Stroke")
@@ -1193,8 +1195,8 @@ function Vanith:CreateWindow(opts)
     ------------------------------------------------------------------
     local sidebar = New("Frame", {
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(12, 68),
-        Size = UDim2.new(0, 120, 1, -80),
+        Position = UDim2.fromOffset(12, 66),
+        Size = UDim2.new(0, 120, 1, -78),
         Parent = main,
         ZIndex = 1,
     })
@@ -1218,10 +1220,11 @@ function Vanith:CreateWindow(opts)
     })
     sideLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 
+    -- Seitenbereich etwas höher, damit unten weniger Luft ist
     local pages = New("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(146, 68),
-        Size = UDim2.new(1, -158, 1, -80),
+        Position = UDim2.fromOffset(146, 66),
+        Size = UDim2.new(1, -158, 1, -78),
         Parent = main,
     })
     self.Pages = pages
@@ -1252,7 +1255,7 @@ function Vanith:CreateWindow(opts)
         self:_enableDrag(top, main)
     end
 
-    -- simple mobile autoscale
+    -- mobile autoscale
     local scale = New("UIScale", {Parent = main})
     local cam = workspace.CurrentCamera
     if cam then
@@ -1265,7 +1268,7 @@ function Vanith:CreateWindow(opts)
     return self
 end
 
--- alias (klein geschrieben)
+-- alias
 Vanith.Createwindow = Vanith.CreateWindow
 
 return Vanith
