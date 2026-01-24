@@ -1,0 +1,1200 @@
+-- Vanith UI Library (CoreGui, animated, resizable)
+
+local Players           = game:GetService("Players")
+local UserInputService  = game:GetService("UserInputService")
+local TweenService      = game:GetService("TweenService")
+
+local Vanith = {}
+
+local function new(class, props)
+    local inst = Instance.new(class)
+    if props then
+        for k, v in pairs(props) do
+            inst[k] = v
+        end
+    end
+    return inst
+end
+
+local function isMouse(t)
+    return t == Enum.UserInputType.MouseButton1
+        or t == Enum.UserInputType.MouseButton2
+        or t == Enum.UserInputType.MouseButton3
+end
+
+local function isTouch(t)
+    return t == Enum.UserInputType.Touch
+end
+
+local function clamp01(x)
+    return math.clamp(x, 0, 1)
+end
+
+local function roundStep(v, minv, step)
+    if not step or step <= 0 then return v end
+    local n = (v - minv) / step
+    return (math.floor(n + 0.5) * step) + minv
+end
+
+local function tween(inst, props, t)
+    if not inst then return end
+    t = t or 0.15
+    local ok, tw = pcall(TweenService.Create, TweenService, inst, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)
+    if ok and tw then tw:Play() end
+end
+
+-- dunkles Theme
+local DEFAULT_THEME = {
+    Accent  = Color3.fromRGB(170, 90, 255),
+    BG0     = Color3.fromRGB(4, 4, 6),
+    BG1     = Color3.fromRGB(10, 10, 14),
+    BG2     = Color3.fromRGB(14, 14, 18),
+    Stroke  = Color3.fromRGB(40, 40, 50),
+    Text    = Color3.fromRGB(230, 230, 238),
+    Muted   = Color3.fromRGB(140, 140, 150),
+    DimText = Color3.fromRGB(95, 95, 110),
+    Track   = Color3.fromRGB(22, 22, 28),
+    Field   = Color3.fromRGB(16, 16, 20),
+}
+
+local Window = {}
+Window.__index = Window
+
+local Tab = {}
+Tab.__index = Tab
+
+local Section = {}
+Section.__index = Section
+
+------------------------------------------------------------
+-- Window helpers
+------------------------------------------------------------
+
+function Window:_track(inst, prop, key)
+    table.insert(self._themeBindings, {inst = inst, prop = prop, key = key})
+    inst[prop] = self.Theme[key]
+    return inst
+end
+
+function Window:ApplyTheme()
+    for _, b in ipairs(self._themeBindings) do
+        if b.inst and b.inst.Parent then
+            b.inst[b.prop] = self.Theme[b.key]
+        end
+    end
+end
+
+function Window:SetTheme(t)
+    for k, v in pairs(t or {}) do
+        self.Theme[k] = v
+    end
+    self:ApplyTheme()
+end
+
+function Window:SetAccent(c)
+    self.Theme.Accent = c
+    self:ApplyTheme()
+end
+
+function Window:SetVisible(state)
+    if self.Main then
+        self.Main.Visible = state and true or false
+    end
+end
+
+function Window:Destroy()
+    if self.Gui then
+        self.Gui:Destroy()
+    end
+end
+
+function Window:_enableDrag(handle, target)
+    local dragging, startPos, dragStart, active
+
+    local function update(input)
+        if not dragging then return end
+        local delta = input.Position - dragStart
+        target.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+
+    handle.InputBegan:Connect(function(input)
+        if isMouse(input.UserInputType) or isTouch(input.UserInputType) then
+            dragging  = true
+            active    = input
+            dragStart = input.Position
+            startPos  = target.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    active   = nil
+                end
+            end)
+        end
+    end)
+
+    handle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            active = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == active then
+            update(input)
+        end
+    end)
+end
+
+function Window:_enableResize(handle, target)
+    local minSize = Vector2.new(520, 320)
+    local resizing, startSize, dragStart, active
+
+    local function update(input)
+        if not resizing then return end
+        local delta = input.Position - dragStart
+        local newSize = Vector2.new(
+            math.max(minSize.X, startSize.X + delta.X),
+            math.max(minSize.Y, startSize.Y + delta.Y)
+        )
+        target.Size = UDim2.fromOffset(newSize.X, newSize.Y)
+    end
+
+    handle.InputBegan:Connect(function(input)
+        if isMouse(input.UserInputType) or isTouch(input.UserInputType) then
+            resizing  = true
+            active    = input
+            dragStart = input.Position
+            startSize = Vector2.new(target.AbsoluteSize.X, target.AbsoluteSize.Y)
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    resizing = false
+                    active   = nil
+                end
+            end)
+        end
+    end)
+
+    handle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            active = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == active then
+            update(input)
+        end
+    end)
+end
+
+-- interner Helper: Top-Tab Button
+function Window:_makeTopTabButton(text)
+    local holder = self.TopTabsHolder
+
+    local btn = new("TextButton", {
+        AutoButtonColor = false,
+        BackgroundTransparency = 1,
+        Text = "",
+        Size = UDim2.fromOffset(72, 34),
+        Parent = holder,
+        ZIndex = 3,
+    })
+
+    local label = new("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        Font = Enum.Font.GothamBold,
+        Text = text,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        Parent = btn,
+        ZIndex = 3,
+        TextColor3 = self.Theme.DimText,
+    })
+
+    local underline = new("Frame", {
+        BorderSizePixel = 0,
+        Size = UDim2.new(0.7, 0, 0, 2),
+        Position = UDim2.new(0.15, 0, 1, -3),
+        Parent = btn,
+        Visible = false,
+        ZIndex = 2,
+        BackgroundColor3 = self.Theme.Accent,
+    })
+
+    local t = {Button = btn, Label = label, Underline = underline, Tab = nil}
+    table.insert(self.TopTabs, t)
+    return t
+end
+
+------------------------------------------------------------
+-- Tabs (links)
+------------------------------------------------------------
+
+function Window:CreateTab(name)
+    local row = new("TextButton", {
+        AutoButtonColor = false,
+        BackgroundTransparency = 1,
+        Text = "",
+        Size = UDim2.new(1, -20, 0, 38),
+        Parent = self.SideList,
+        ZIndex = 2,
+    })
+
+    local bg = new("Frame", {
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 1, 0),
+        Parent = row,
+        ZIndex = 1,
+    })
+    self:_track(bg, "BackgroundColor3", "BG2")
+
+    local accent = new("Frame", {
+        BorderSizePixel = 0,
+        Size = UDim2.new(0, 2, 0.6, 0),
+        Position = UDim2.new(0, 0, 0.2, 0),
+        Parent = row,
+        Visible = false,
+        ZIndex = 2,
+    })
+    self:_track(accent, "BackgroundColor3", "Accent")
+
+    local label = new("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(10, 8),
+        Size = UDim2.new(1, -20, 0, 22),
+        Font = Enum.Font.GothamBold,
+        Text = name,
+        TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = row,
+        ZIndex = 3,
+    })
+    self:_track(label, "TextColor3", "Muted")
+
+    local page = new("Frame", {
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 1, 0),
+        Visible = false,
+        Parent = self.Pages,
+        ZIndex = 1,
+    })
+
+    local tab = setmetatable({
+        Window        = self,
+        Name          = name,
+        Row           = row,
+        Label         = label,
+        Accent        = accent,
+        Bg            = bg,
+        Page          = page,
+        _sections     = {},
+        _topTabs      = {},
+        _activeTopTab = nil,
+    }, Tab)
+
+    row.MouseButton1Click:Connect(function()
+        self:SelectTab(tab)
+    end)
+
+    table.insert(self.Tabs, tab)
+    if #self.Tabs == 1 then
+        self:SelectTab(tab)
+    end
+
+    return tab
+end
+
+function Window:SelectTab(tab)
+    self.ActiveTab = tab
+
+    for _, t in ipairs(self.Tabs) do
+        local active = (t == tab)
+
+        t.Page.Visible = active
+
+        tween(t.Bg, {BackgroundTransparency = active and 0 or 1}, 0.12)
+        t.Accent.Visible = active
+        tween(t.Label, {TextColor3 = active and self.Theme.Text or self.Theme.Muted}, 0.12)
+
+        for _, tt in ipairs(t._topTabs) do
+            tt.Button.Visible = active
+        end
+    end
+
+    if tab._activeTopTab then
+        tab:SetTopTab(tab._activeTopTab)
+    end
+end
+
+------------------------------------------------------------
+-- Tab methods (Top-Tabs + Sections)
+------------------------------------------------------------
+
+function Tab:CreateTopTab(name)
+    local window = self.Window
+    local tt = window:_makeTopTabButton(name)
+    tt.Tab = self
+    table.insert(self._topTabs, tt)
+
+    tt.Button.Visible = (window.ActiveTab == self)
+
+    tt.Button.MouseButton1Click:Connect(function()
+        self:SetTopTab(tt)
+    end)
+
+    if not self._activeTopTab then
+        self:SetTopTab(tt)
+    end
+
+    return tt
+end
+
+function Tab:SetTopTab(tt)
+    self._activeTopTab = tt
+    local win = self.Window
+
+    for _, other in ipairs(self._topTabs) do
+        local active = (other == tt)
+        other.Underline.Visible = active and (win.ActiveTab == self)
+        tween(other.Label, {
+            TextColor3 = active and win.Theme.Accent or win.Theme.DimText
+        }, 0.12)
+    end
+end
+
+-- slot: "LeftTop", "LeftBottom", "RightTop", "RightBottom"
+function Tab:CreateSection(title, slot)
+    local win   = self.Window
+    local page  = self.Page
+
+    local layout = {
+        LeftTop = {Pos = UDim2.fromOffset(0, 0),     Size = UDim2.fromOffset(330, 190)},
+        LeftBottom = {Pos = UDim2.fromOffset(0, 204), Size = UDim2.fromOffset(330, 133)},
+        RightTop = {Pos = UDim2.fromOffset(344, 0),   Size = UDim2.fromOffset(147, 190)},
+        RightBottom = {Pos = UDim2.fromOffset(344, 204), Size = UDim2.fromOffset(147, 133)},
+    }
+
+    local info   = layout[slot or ""]
+    local props  = {BorderSizePixel = 0, Parent = page, ClipsDescendants = true}
+    if info then
+        props.Position = info.Pos
+        props.Size     = info.Size
+    else
+        local idx = #self._sections
+        props.Position = UDim2.fromOffset(0, idx * 196)
+        props.Size     = UDim2.new(1, 0, 0, 180)
+    end
+
+    local frame = new("Frame", props)
+    win:_track(frame, "BackgroundColor3", "BG1")
+    new("UICorner", {CornerRadius = UDim.new(0, 8), Parent = frame})
+    local str = new("UIStroke", {Thickness = 1, Transparency = 0.25, Parent = frame})
+    win:_track(str, "Color", "Stroke")
+
+    local head = new("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(12, 10),
+        Size = UDim2.new(1, -24, 0, 18),
+        Font = Enum.Font.GothamBold,
+        Text = title,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = frame,
+    })
+    win:_track(head, "TextColor3", "Accent")
+
+    local inner = new("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(0, 34),
+        Size = UDim2.new(1, 0, 1, -34),
+        Parent = frame,
+    })
+
+    local list = new("UIListLayout", {
+        Padding = UDim.new(0, 10),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = inner,
+    })
+    new("UIPadding", {
+        PaddingTop = UDim.new(0, 6),
+        PaddingLeft = UDim.new(0, 12),
+        PaddingRight = UDim.new(0, 12),
+        PaddingBottom = UDim.new(0, 10),
+        Parent = inner,
+    })
+
+    table.insert(self._sections, frame)
+
+    local sec = setmetatable({
+        Window = win,
+        Frame  = frame,
+        Inner  = inner,
+        List   = list,
+    }, Section)
+
+    return sec
+end
+
+------------------------------------------------------------
+-- Section controls
+------------------------------------------------------------
+
+function Section:CreateSlider(config)
+    local win   = self.Window
+    local inner = self.Inner
+    local c     = config or {}
+
+    local minv  = c.Min or 0
+    local maxv  = c.Max or 100
+    local step  = c.Step or 1
+    local value = roundStep(math.clamp(c.Default or minv, minv, maxv), minv, step)
+
+    local row = new("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 54),
+        Parent = inner,
+    })
+
+    local label = new("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.6, 0, 0, 18),
+        Font = Enum.Font.Gotham,
+        Text = c.Name or "Slider",
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = row,
+    })
+    win:_track(label, "TextColor3", "DimText")
+
+    local valueText = new("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0.6, 0, 0, 0),
+        Size = UDim2.new(0.4, 0, 0, 18),
+        Font = Enum.Font.GothamBold,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        Parent = row,
+    })
+    win:_track(valueText, "TextColor3", "Accent")
+
+    local track = new("Frame", {
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(0, 26),
+        Size = UDim2.new(1, 0, 0, 4),
+        Parent = row,
+    })
+    win:_track(track, "BackgroundColor3", "Track")
+    new("UICorner", {CornerRadius = UDim.new(0, 2), Parent = track})
+
+    local fill = new("Frame", {
+        BorderSizePixel = 0,
+        Size = UDim2.new(0, 0, 1, 0),
+        Parent = track,
+    })
+    win:_track(fill, "BackgroundColor3", "Accent")
+    new("UICorner", {CornerRadius = UDim.new(0, 2), Parent = fill})
+
+    local knob = new("Frame", {
+        BorderSizePixel = 0,
+        Size = UDim2.fromOffset(10, 10),
+        Parent = track,
+    })
+    win:_track(knob, "BackgroundColor3", "Muted")
+    new("UICorner", {CornerRadius = UDim.new(0, 2), Parent = knob})
+
+    local function setVisual(v, animate)
+        local t = (v - minv) / (maxv - minv)
+        t = clamp01(t)
+        local fillSize = UDim2.new(t, 0, 1, 0)
+        local knobPos  = UDim2.new(t, -5, 0.5, -5)
+
+        if animate then
+            tween(fill, {Size = fillSize}, 0.12)
+            tween(knob, {Position = knobPos}, 0.12)
+        else
+            fill.Size     = fillSize
+            knob.Position = knobPos
+        end
+
+        local txt = c.Format and c.Format(v) or tostring(v)
+        valueText.Text = txt
+    end
+
+    local function setValue(v, fromUser)
+        v = roundStep(math.clamp(v, minv, maxv), minv, step)
+        value = v
+        setVisual(v, true)
+        if fromUser and c.Callback then
+            task.spawn(c.Callback, v)
+        end
+    end
+
+    setVisual(value, false)
+
+    local dragging, startInput
+
+    local function valueFromInput(input)
+        local x = input.Position.X - track.AbsolutePosition.X
+        local ratio = clamp01(x / math.max(track.AbsoluteSize.X, 1))
+        return minv + ratio * (maxv - minv)
+    end
+
+    local function begin(input)
+        dragging   = true
+        startInput = input
+        tween(knob, {BackgroundColor3 = win.Theme.Accent}, 0.1)
+        setValue(valueFromInput(input), true)
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+                startInput = nil
+                tween(knob, {BackgroundColor3 = win.Theme.Muted}, 0.1)
+            end
+        end)
+    end
+
+    track.InputBegan:Connect(function(input)
+        if isMouse(input.UserInputType) or isTouch(input.UserInputType) then
+            begin(input)
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input == startInput then
+            setValue(valueFromInput(input), true)
+        end
+    end)
+
+    local obj = {}
+    function obj:Set(v) setValue(v, false) end
+    function obj:Get() return value end
+    return obj
+end
+
+-- nicer Toggle: großes Pill + animierter Knopf
+-- Small = true => kleines Quadrat (für Rechts-Aimbot 0/1/2/3)
+function Section:CreateToggle(config)
+    local win   = self.Window
+    local inner = self.Inner
+    local c     = config or {}
+
+    local state = c.Default and true or false
+    local small = c.Small or false
+
+    local row = new("TextButton", {
+        AutoButtonColor = false,
+        BackgroundTransparency = 1,
+        Text = "",
+        Size = UDim2.new(1, 0, 0, 24),
+        Parent = inner,
+    })
+
+    local label = new("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -70, 1, 0),
+        Font = Enum.Font.Gotham,
+        Text = c.Name or "Toggle",
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = row,
+    })
+    win:_track(label, "TextColor3", "Text")
+
+    if small then
+        local box = new("Frame", {
+            BorderSizePixel = 0,
+            Size = UDim2.fromOffset(16, 16),
+            Position = UDim2.new(1, -24, 0.5, -8),
+            Parent = row,
+        })
+        win:_track(box, "BackgroundColor3", "Field")
+        new("UICorner", {CornerRadius = UDim.new(0, 3), Parent = box})
+        local st = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = box})
+        win:_track(st, "Color", "Stroke")
+
+        local fill = new("Frame", {
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, -4, 1, -4),
+            Position = UDim2.fromOffset(2, 2),
+            Parent = box,
+        })
+        new("UICorner", {CornerRadius = UDim.new(0, 2), Parent = fill})
+
+        local function render(animate)
+            local col = state and win.Theme.Accent or win.Theme.Track
+            if animate then
+                tween(fill, {BackgroundColor3 = col}, 0.12)
+            else
+                fill.BackgroundColor3 = col
+            end
+        end
+
+        render(false)
+
+        row.MouseButton1Click:Connect(function()
+            state = not state
+            render(true)
+            if c.Callback then
+                task.spawn(c.Callback, state)
+            end
+        end)
+
+    else
+        local sw = new("Frame", {
+            BorderSizePixel = 0,
+            Size = UDim2.fromOffset(28, 18),
+            Position = UDim2.new(1, -36, 0.5, -9),
+            Parent = row,
+        })
+        win:_track(sw, "BackgroundColor3", "Field")
+        new("UICorner", {CornerRadius = UDim.new(0, 10), Parent = sw})
+        local st = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = sw})
+        win:_track(st, "Color", "Stroke")
+
+        local fill = new("Frame", {
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, -4, 1, -4),
+            Position = UDim2.fromOffset(2, 2),
+            Parent = sw,
+        })
+        new("UICorner", {CornerRadius = UDim.new(0, 10), Parent = fill})
+
+        local knob = new("Frame", {
+            BorderSizePixel = 0,
+            Size = UDim2.fromOffset(12, 12),
+            Parent = sw,
+        })
+        new("UICorner", {CornerRadius = UDim.new(1, 0), Parent = knob})
+
+        local function render(animate)
+            local onCol  = win.Theme.Accent
+            local offCol = win.Theme.Track
+            local knobOn = UDim2.fromOffset(13, 3)
+            local knobOff= UDim2.fromOffset(3, 3)
+            local fillCol= state and onCol or offCol
+
+            if animate then
+                tween(fill, {BackgroundColor3 = fillCol}, 0.12)
+                tween(knob, {Position = state and knobOn or knobOff, BackgroundColor3 = Color3.new(1,1,1)}, 0.12)
+            else
+                fill.BackgroundColor3 = fillCol
+                knob.Position         = state and knobOn or knobOff
+                knob.BackgroundColor3 = Color3.new(1,1,1)
+            end
+        end
+
+        render(false)
+
+        row.MouseButton1Click:Connect(function()
+            state = not state
+            render(true)
+            if c.Callback then
+                task.spawn(c.Callback, state)
+            end
+        end)
+    end
+
+    local obj = {}
+    function obj:Set(v) state = v and true or false end
+    function obj:Get() return state end
+    return obj
+end
+
+function Section:CreateButton(config)
+    local win   = self.Window
+    local inner = self.Inner
+    local c     = config or {}
+
+    local btn = new("TextButton", {
+        AutoButtonColor = false,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 24),
+        Font = Enum.Font.GothamBold,
+        Text = c.Name or "Button",
+        TextSize = 12,
+        Parent = inner,
+    })
+    win:_track(btn, "BackgroundColor3", "Field")
+    win:_track(btn, "TextColor3", "Text")
+    new("UICorner", {CornerRadius = UDim.new(0, 3), Parent = btn})
+    local st = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = btn})
+    win:_track(st, "Color", "Stroke")
+
+    btn.MouseButton1Click:Connect(function()
+        tween(btn, {BackgroundColor3 = win.Theme.Track}, 0.08)
+        if c.Callback then
+            task.spawn(c.Callback)
+        end
+        task.delay(0.08, function()
+            tween(btn, {BackgroundColor3 = win.Theme.Field}, 0.12)
+        end)
+    end)
+
+    return btn
+end
+
+function Section:CreateTextbox(config)
+    local win   = self.Window
+    local inner = self.Inner
+    local c     = config or {}
+
+    local box = new("TextBox", {
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 24),
+        Font = Enum.Font.Gotham,
+        Text = c.Default or "",
+        PlaceholderText = c.Placeholder or "Enter text here",
+        TextSize = 12,
+        ClearTextOnFocus = false,
+        Parent = inner,
+    })
+    win:_track(box, "BackgroundColor3", "Field")
+    win:_track(box, "TextColor3", "Text")
+    box.PlaceholderColor3 = win.Theme.Muted
+    new("UICorner", {CornerRadius = UDim.new(0, 3), Parent = box})
+    local st = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = box})
+    win:_track(st, "Color", "Stroke")
+
+    box.FocusLost:Connect(function(enter)
+        if c.Callback then
+            task.spawn(c.Callback, box.Text, enter)
+        end
+    end)
+
+    local obj = {}
+    function obj:SetText(t) box.Text = t end
+    function obj:GetText() return box.Text end
+    return obj
+end
+
+function Section:CreateDropdown(config)
+    local win   = self.Window
+    local inner = self.Inner
+    local c     = config or {}
+
+    local options = c.Options or {}
+    local current = c.Default or options[1] or "None"
+    local open    = false
+
+    local wrap = new("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 30),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Parent = inner,
+    })
+
+    local head = new("TextButton", {
+        AutoButtonColor = false,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 24),
+        Text = "",
+        Parent = wrap,
+    })
+    win:_track(head, "BackgroundColor3", "Field")
+    new("UICorner", {CornerRadius = UDim.new(0, 3), Parent = head})
+    local st = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = head})
+    win:_track(st, "Color", "Stroke")
+
+    local nameLbl = new("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(10, 0),
+        Size = UDim2.new(0.6, -10, 1, 0),
+        Font = Enum.Font.Gotham,
+        Text = c.Name or "Dropdown",
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = head,
+    })
+    win:_track(nameLbl, "TextColor3", "DimText")
+
+    local valLbl = new("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0.6, 0, 0, 0),
+        Size = UDim2.new(0.4, -26, 1, 0),
+        Font = Enum.Font.GothamBold,
+        Text = tostring(current),
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        Parent = head,
+    })
+    win:_track(valLbl, "TextColor3", "Text")
+
+    local arrow = new("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -22, 0, 0),
+        Size = UDim2.fromOffset(20, 24),
+        Font = Enum.Font.GothamBold,
+        Text = "▾",
+        TextSize = 14,
+        Parent = head,
+    })
+    win:_track(arrow, "TextColor3", "Muted")
+
+    local listWrap = new("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(0, 28),
+        Size = UDim2.new(1, 0, 0, 0),
+        ClipsDescendants = true,
+        Parent = wrap,
+    })
+
+    local listBg = new("Frame", {
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 0),
+        Parent = listWrap,
+    })
+    win:_track(listBg, "BackgroundColor3", "Field")
+    new("UICorner", {CornerRadius = UDim.new(0, 3), Parent = listBg})
+    local st2 = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = listBg})
+    win:_track(st2, "Color", "Stroke")
+
+    local list = new("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 6),
+        Parent = listBg,
+    })
+    new("UIPadding", {
+        PaddingTop = UDim.new(0, 8),
+        PaddingLeft = UDim.new(0, 10),
+        PaddingRight = UDim.new(0, 10),
+        PaddingBottom = UDim.new(0, 8),
+        Parent = listBg,
+    })
+
+    local function rebuild()
+        for _, child in ipairs(listBg:GetChildren()) do
+            if child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+
+        for _, opt in ipairs(options) do
+            local b = new("TextButton", {
+                AutoButtonColor = false,
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 20),
+                Font = Enum.Font.Gotham,
+                Text = tostring(opt),
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = listBg,
+            })
+            b.TextColor3 = (opt == current) and win.Theme.Accent or win.Theme.Text
+
+            b.MouseButton1Click:Connect(function()
+                current = opt
+                valLbl.Text = tostring(current)
+                if c.Callback then
+                    task.spawn(c.Callback, current)
+                end
+                rebuild()
+                open = false
+                tween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
+                tween(listBg,   {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
+                arrow.Text = "▾"
+            end)
+        end
+    end
+
+    rebuild()
+
+    local function setOpen(state)
+        open = state
+        if open then
+            task.wait()
+            local h = list.AbsoluteContentSize.Y + 16
+            tween(listWrap, {Size = UDim2.new(1, 0, 0, h)}, 0.14)
+            tween(listBg,   {Size = UDim2.new(1, 0, 0, h)}, 0.14)
+            arrow.Text = "▴"
+        else
+            tween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
+            tween(listBg,   {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
+            arrow.Text = "▾"
+        end
+    end
+
+    head.MouseButton1Click:Connect(function()
+        setOpen(not open)
+    end)
+
+    local obj = {}
+    function obj:SetOptions(opts)
+        options = opts or {}
+        if not table.find(options, current) then
+            current = options[1] or "None"
+            valLbl.Text = tostring(current)
+        end
+        rebuild()
+        setOpen(false)
+    end
+
+    function obj:Set(v)
+        if table.find(options, v) then
+            current = v
+            valLbl.Text = tostring(current)
+            rebuild()
+        end
+    end
+
+    function obj:Get()
+        return current
+    end
+
+    return obj
+end
+
+------------------------------------------------------------
+-- Vanith:CreateWindow
+------------------------------------------------------------
+
+function Vanith:CreateWindow(opt)
+    opt = opt or {}
+
+    local theme = {}
+    for k, v in pairs(DEFAULT_THEME) do
+        theme[k] = v
+    end
+    for k, v in pairs(opt.Theme or {}) do
+        theme[k] = v
+    end
+
+    local parent
+    do
+        local ok, cg = pcall(function()
+            if gethui then
+                return gethui()
+            end
+            return game:GetService("CoreGui")
+        end)
+        if ok and cg then
+            parent = cg
+        else
+            local lp = Players.LocalPlayer
+            parent = lp and lp:WaitForChild("PlayerGui") or nil
+        end
+    end
+
+    local self = setmetatable({
+        Theme          = theme,
+        _themeBindings = {},
+        Tabs           = {},
+        TopTabs        = {},
+    }, Window)
+
+    local gui = new("ScreenGui", {
+        Name = opt.Name or "VanithUI",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        Parent = parent,
+    })
+    self.Gui = gui
+
+    local main = new("Frame", {
+        Size = opt.Size or UDim2.fromOffset(649, 417),
+        Position = opt.Position or UDim2.fromScale(0.5, 0.5),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BorderSizePixel = 0,
+        Parent = gui,
+    })
+    self.Main = main
+    self:_track(main, "BackgroundColor3", "BG0")
+    new("UICorner", {CornerRadius = UDim.new(0, 10), Parent = main})
+    local ms = new("UIStroke", {Thickness = 1, Transparency = 0.2, Parent = main})
+    self:_track(ms, "Color", "Stroke")
+
+    local glass = new("Frame", {
+        BackgroundColor3 = Color3.new(1,1,1),
+        BackgroundTransparency = 0.97,
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1,1),
+        Parent = main,
+    })
+    new("UICorner", {CornerRadius = UDim.new(0,10), Parent = glass})
+
+    -- Top bar
+    local top = new("Frame", {
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 54),
+        Parent = main,
+        ZIndex = 2,
+    })
+    self.TopBar = top
+    self:_track(top, "BackgroundColor3", "BG2")
+    new("UICorner", {CornerRadius = UDim.new(0, 10), Parent = top})
+
+    new("Frame", {
+        BackgroundColor3 = theme.BG2,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0, 44),
+        Size = UDim2.new(1, 0, 0, 20),
+        Parent = top,
+        ZIndex = 1,
+    })
+
+    -- Brand Box (leicht breiter als Name)
+    local brand = new("Frame", {
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(12, 10),
+        Size = UDim2.fromOffset(140, 34),
+        Parent = top,
+        ZIndex = 3,
+    })
+    self:_track(brand, "BackgroundColor3", "BG1")
+    new("UICorner", {CornerRadius = UDim.new(0, 8), Parent = brand})
+    local bstr = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = brand})
+    self:_track(bstr, "Color", "Stroke")
+
+    local brandLbl = new("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -16, 1, 0),
+        Position = UDim2.fromOffset(8, 0),
+        Font = Enum.Font.GothamBold,
+        Text = opt.Title or "Vanith",
+        TextSize = 15,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = brand,
+    })
+    self:_track(brandLbl, "TextColor3", "Accent")
+
+    -- Long top tab strip (breiter, damit GLOCK-17 passt)
+    local strip = new("Frame", {
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(160, 10),
+        Size = UDim2.new(1, -220, 0, 34),
+        Parent = top,
+        ZIndex = 2,
+    })
+    self:_track(strip, "BackgroundColor3", "BG1")
+    new("UICorner", {CornerRadius = UDim.new(0,8), Parent = strip})
+    local sstr = new("UIStroke", {Thickness = 1, Transparency = 0.5, Parent = strip})
+    self:_track(sstr, "Color", "Stroke")
+
+    local tabsHolder = new("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(8, 0),
+        Size = UDim2.new(1, -16, 1, 0),
+        Parent = strip,
+        ZIndex = 2,
+    })
+    self.TopTabsHolder = tabsHolder
+    local layout = new("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 16),
+        Parent = tabsHolder,
+    })
+    layout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+    -- small gear box
+    local gearBox = new("Frame", {
+        BorderSizePixel = 0,
+        Position = UDim2.new(1, -46, 0, 10),
+        Size = UDim2.fromOffset(34, 34),
+        Parent = top,
+        ZIndex = 3,
+    })
+    self:_track(gearBox, "BackgroundColor3", "BG1")
+    new("UICorner", {CornerRadius = UDim.new(0, 8), Parent = gearBox})
+    local gstr = new("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = gearBox})
+    self:_track(gstr, "Color", "Stroke")
+
+    local gear = new("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        Font = Enum.Font.GothamBold,
+        Text = "⚙",
+        TextSize = 18,
+        Parent = gearBox,
+        ZIndex = 4,
+    })
+    self:_track(gear, "TextColor3", "Accent")
+
+    -- Sidebar
+    local sidebar = new("Frame", {
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(12, 68),
+        Size = UDim2.new(0, 120, 1, -80),
+        Parent = main,
+        ZIndex = 1,
+    })
+    self.Sidebar = sidebar
+    self:_track(sidebar, "BackgroundColor3", "BG2")
+    new("UICorner", {CornerRadius = UDim.new(0, 8), Parent = sidebar})
+    local sbs = new("UIStroke", {Thickness = 1, Transparency = 0.25, Parent = sidebar})
+    self:_track(sbs, "Color", "Stroke")
+
+    local sideList = new("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(10, 14),
+        Size = UDim2.new(1, -20, 1, -24),
+        Parent = sidebar,
+    })
+    self.SideList = sideList
+    local sideLayout = new("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 6),
+        Parent = sideList,
+    })
+    sideLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+
+    -- Pages
+    local pages = new("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(146, 68),
+        Size = UDim2.new(1, -158, 1, -80),
+        Parent = main,
+    })
+    self.Pages = pages
+
+    -- resize arrow bottom right
+    local resize = new("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.fromOffset(16, 16),
+        Position = UDim2.new(1, -18, 1, -18),
+        Parent = main,
+        ZIndex = 5,
+    })
+    local resizeLbl = new("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        Font = Enum.Font.GothamBold,
+        Text = "↘",
+        TextSize = 14,
+        Parent = resize,
+    })
+    self:_track(resizeLbl, "TextColor3", "Accent")
+
+    self:_enableResize(resize, main)
+
+    if opt.Draggable ~= false then
+        self:_enableDrag(top, main)
+    end
+
+    -- leichte Autoscale für Mobile
+    local scale = new("UIScale", {Parent = main})
+    local cam = workspace.CurrentCamera
+    if cam then
+        local vp = cam.ViewportSize
+        if vp.X < 900 then
+            scale.Scale = math.clamp(vp.X / 900, 0.75, 1)
+        end
+    end
+
+    return self
+end
+
+-- alias falls du klein schreiben willst
+Vanith.Createwindow = Vanith.CreateWindow
+
+return Vanith
