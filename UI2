@@ -1,7 +1,10 @@
 -- Vanith UI Library (Eternesus-style)
 -- Usage:
 -- local Vanith = loadstring(game:HttpGet("YOUR_URL_HERE"))()
--- local Window = Vanith:CreateWindow({ Title = "Vanith" })
+-- local Window = Vanith:CreateWindow({
+--     Title = "Vanith",
+--     Theme = { Accent = Color3.fromRGB(170,90,255) }
+-- })
 
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -9,7 +12,8 @@ local TweenService     = game:GetService("TweenService")
 
 local Vanith = {}
 
--- small helpers
+--------------------------------------------------------------------- -- helpers
+--------------------------------------------------------------------- 
 
 local function New(className, props)
     local inst = Instance.new(className)
@@ -54,7 +58,9 @@ local function PlayTween(inst, props, time)
     if ok and tween then tween:Play() end
 end
 
--- default theme (dark, purple)
+--------------------------------------------------------------------- -- theme
+--------------------------------------------------------------------- 
+
 local DEFAULT_THEME = {
     Accent  = Color3.fromRGB(170, 90, 255),
     BG0     = Color3.fromRGB(4, 4, 6),
@@ -77,9 +83,8 @@ Tab.__index   = Tab
 local Section = {}
 Section.__index = Section
 
----------------------------------------------------------------------
--- window helpers
----------------------------------------------------------------------
+--------------------------------------------------------------------- -- window helpers
+--------------------------------------------------------------------- 
 
 function Window:_track(inst, prop, key)
     table.insert(self._themeBindings, {inst = inst, prop = prop, key = key})
@@ -214,7 +219,7 @@ function Window:_enableResize(handle, target)
     end)
 end
 
--- internal: create a top-tab button (used per Tab)
+-- internal: top weapon-tab button
 function Window:_makeTopTabButton(text)
     local holder = self.TopTabsHolder
 
@@ -225,7 +230,7 @@ function Window:_makeTopTabButton(text)
         Size = UDim2.new(0, 0, 1, 0),
         AutomaticSize = Enum.AutomaticSize.X,
         Parent = holder,
-        ZIndex = 3,
+        ZIndex = 4,
     })
 
     local label = New("TextLabel", {
@@ -236,7 +241,7 @@ function Window:_makeTopTabButton(text)
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Center,
         Parent = btn,
-        ZIndex = 3,
+        ZIndex = 5,
         TextColor3 = self.Theme.DimText,
     })
 
@@ -246,7 +251,7 @@ function Window:_makeTopTabButton(text)
         Position = UDim2.new(0.15, 0, 1, -3),
         Parent = btn,
         Visible = false,
-        ZIndex = 2,
+        ZIndex = 4,
         BackgroundColor3 = self.Theme.Accent,
     })
 
@@ -255,9 +260,8 @@ function Window:_makeTopTabButton(text)
     return t
 end
 
----------------------------------------------------------------------
--- left side tabs
----------------------------------------------------------------------
+--------------------------------------------------------------------- -- left nav tabs
+--------------------------------------------------------------------- 
 
 function Window:CreateTab(name)
     local row = New("TextButton", {
@@ -357,9 +361,8 @@ function Window:SelectTab(tab)
     end
 end
 
----------------------------------------------------------------------
--- tab methods (top-tabs + sections)
----------------------------------------------------------------------
+--------------------------------------------------------------------- -- tab methods (weapon tabs + sections)
+--------------------------------------------------------------------- 
 
 function Tab:CreateTopTab(name)
     local win = self.Window
@@ -479,9 +482,8 @@ function Tab:CreateSection(title, slot)
     return sec
 end
 
----------------------------------------------------------------------
--- section controls
----------------------------------------------------------------------
+--------------------------------------------------------------------- -- section controls (Slider / Toggle / Button / Textbox / Dropdown)
+--------------------------------------------------------------------- 
 
 function Section:CreateSlider(cfg)
     local win   = self.Window
@@ -619,7 +621,6 @@ function Section:CreateSlider(cfg)
 end
 
 -- nicer toggle
--- cfg.Small = true ==> kleines Quadrat (für rechte AIMBOT-Liste)
 function Section:CreateToggle(cfg)
     local win   = self.Window
     local inner = self.Inner
@@ -984,9 +985,8 @@ function Section:CreateDropdown(cfg)
     return obj
 end
 
----------------------------------------------------------------------
--- Vanith:CreateWindow
----------------------------------------------------------------------
+--------------------------------------------------------------------- -- CreateWindow
+--------------------------------------------------------------------- 
 
 function Vanith:CreateWindow(opts)
     opts = opts or {}
@@ -999,7 +999,7 @@ function Vanith:CreateWindow(opts)
         theme[k] = v
     end
 
-    -- choose parent (CoreGui preferred)
+    -- parent (CoreGui preferred)
     local parent
     do
         local ok, cg = pcall(function()
@@ -1016,7 +1016,6 @@ function Vanith:CreateWindow(opts)
         end
     end
 
-    -- size + minSize from creation size
     local initialSize = opts.Size or UDim2.fromOffset(649, 417)
     local baseWidth   = initialSize.X.Offset > 0 and initialSize.X.Offset or 649
     local baseHeight  = initialSize.Y.Offset > 0 and initialSize.Y.Offset or 417
@@ -1057,6 +1056,7 @@ function Vanith:CreateWindow(opts)
         BorderSizePixel = 0,
         Size = UDim2.fromScale(1, 1),
         Parent = main,
+        ZIndex = 0,
     })
     New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = glass})
 
@@ -1077,10 +1077,12 @@ function Vanith:CreateWindow(opts)
         Position = UDim2.new(0, 0, 0, 44),
         Size = UDim2.new(1, 0, 0, 20),
         Parent = top,
-        ZIndex = 1,
+        ZIndex = 2,
     })
 
-    -- brand box (Vanith)
+    ------------------------------------------------------------------
+    -- left brand box (Title)
+    ------------------------------------------------------------------
     local brand = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(12, 10),
@@ -1093,19 +1095,24 @@ function Vanith:CreateWindow(opts)
     local bStroke = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = brand})
     self:_track(bStroke, "Color", "Stroke")
 
+    local windowTitle = (type(opts.Title) == "string" and opts.Title) or "Vanith"
+
     local brandLabel = New("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, -16, 1, 0),
         Position = UDim2.fromOffset(8, 0),
         Font = Enum.Font.GothamBold,
-        Text = opts.Title or "Vanith",
+        Text = windowTitle,
         TextSize = 15,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = brand,
+        ZIndex = 4, -- über allem in der Box
     })
     self:_track(brandLabel, "TextColor3", "Accent")
 
-    -- top tab strip
+    ------------------------------------------------------------------
+    -- top weapon-tab strip
+    ------------------------------------------------------------------
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
@@ -1123,19 +1130,22 @@ function Vanith:CreateWindow(opts)
         Position = UDim2.fromOffset(8, 0),
         Size = UDim2.new(1, -16, 1, 0),
         Parent = strip,
-        ZIndex = 2,
+        ZIndex = 3,
     })
     self.TopTabsHolder = tabsHolder
 
     local topLayout = New("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 24), -- mehr Abstand zwischen Waffen-Tabs
+        Padding = UDim.new(0, 32), -- MEHR ABSTAND zwischen AK-47, M4A1,...
         Parent = tabsHolder,
     })
-    topLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    topLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
+    topLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
+    ------------------------------------------------------------------
     -- gear box
+    ------------------------------------------------------------------
     local gearBox = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.new(1, -46, 0, 10),
@@ -1159,7 +1169,9 @@ function Vanith:CreateWindow(opts)
     })
     self:_track(gear, "TextColor3", "Accent")
 
-    -- sidebar
+    ------------------------------------------------------------------
+    -- sidebar + pages
+    ------------------------------------------------------------------
     local sidebar = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(12, 68),
@@ -1187,7 +1199,6 @@ function Vanith:CreateWindow(opts)
     })
     sideLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 
-    -- pages
     local pages = New("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(146, 68),
@@ -1196,7 +1207,9 @@ function Vanith:CreateWindow(opts)
     })
     self.Pages = pages
 
+    ------------------------------------------------------------------
     -- resize arrow bottom right
+    ------------------------------------------------------------------
     local resize = New("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.fromOffset(16, 16),
