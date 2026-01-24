@@ -50,11 +50,25 @@ local function PlayTween(inst, props, time)
     if ok and tween then tween:Play() end
 end
 
+local function GetRootParent()
+    local ok, cg = pcall(function()
+        if gethui then
+            return gethui()
+        end
+        return game:GetService("CoreGui")
+    end)
+    if ok and cg then
+        return cg
+    end
+
+    local lp = Players.LocalPlayer
+    return lp and lp:FindFirstChildOfClass("PlayerGui") or nil
+end
+
 --------------------------------------------------------------------- -- theme (dunkler)
 --------------------------------------------------------------------- 
 
 local DEFAULT_THEME = {
- 
     Accent  = Color3.fromRGB(165, 105, 255),
 
     BG0     = Color3.fromRGB(4, 4, 6),
@@ -71,7 +85,6 @@ local DEFAULT_THEME = {
     Field   = Color3.fromRGB(16, 16, 20),
 }
 
-
 local Window  = {}
 Window.__index = Window
 
@@ -80,6 +93,171 @@ Tab.__index   = Tab
 
 local Section = {}
 Section.__index = Section
+
+--------------------------------------------------------------------- -- NOTIFY (Window:Notify / Vanith:Notify)
+--------------------------------------------------------------------- 
+
+local notifyState = {
+    Gui    = nil,
+    Holder = nil,
+    Scale  = nil,
+}
+
+local function ensureNotifyRoot()
+    if notifyState.Gui and notifyState.Gui.Parent then
+        return notifyState
+    end
+
+    local parent = GetRootParent()
+    if not parent then
+        return notifyState
+    end
+
+    local gui = New("ScreenGui", {
+        Name = "VanithNotify",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        Parent = parent,
+    })
+
+    local holder = New("Frame", {
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 0, 20),
+        Size = UDim2.new(1, -40, 0, 200),
+        Parent = gui,
+        ZIndex = 40,
+    })
+
+    local scale = New("UIScale", {Parent = holder})
+    local cam = workspace.CurrentCamera
+    if cam then
+        local vp = cam.ViewportSize
+        if vp.X < 900 then
+            scale.Scale = math.clamp(vp.X / 900, 0.8, 1)
+        else
+            scale.Scale = 1
+        end
+    else
+        scale.Scale = 1
+    end
+
+    local layout = New("UIListLayout", {
+        FillDirection = Enum.FillDirection.Vertical,
+        SortOrder     = Enum.SortOrder.LayoutOrder,
+        Padding       = UDim.new(0, 8),
+        Parent        = holder,
+    })
+    layout.VerticalAlignment   = Enum.VerticalAlignment.Top
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+    notifyState.Gui    = gui
+    notifyState.Holder = holder
+    notifyState.Scale  = scale
+
+    return notifyState
+end
+
+local function notifyImpl(theme, cfg)
+    cfg = cfg or {}
+    local state = ensureNotifyRoot()
+    if not state.Holder then
+        return
+    end
+
+    local title    = cfg.Title or "Vanith"
+    local message  = cfg.Text or cfg.Message or ""
+    local duration = tonumber(cfg.Duration) or 4
+
+    local accent   = cfg.AccentColor     or (theme and theme.Accent) or DEFAULT_THEME.Accent
+    local bg       = cfg.BackgroundColor or (theme and theme.BG1)    or DEFAULT_THEME.BG1
+    local textCol  = cfg.TextColor       or (theme and theme.Text)   or DEFAULT_THEME.Text
+    local mutedCol = cfg.MutedColor      or (theme and theme.Muted)  or DEFAULT_THEME.Muted
+
+    local card = New("Frame", {
+        BackgroundColor3       = bg,
+        BackgroundTransparency = 1,
+        Size                   = UDim2.new(0, 320, 0, 0),
+        AutomaticSize          = Enum.AutomaticSize.Y,
+        Parent                 = state.Holder,
+        ZIndex                 = 41,
+    })
+    New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = card})
+    local st = New("UIStroke", {Thickness = 1, Transparency = 0.25, Parent = card})
+    st.Color = accent
+
+    New("UIPadding", {
+        PaddingTop    = UDim.new(0, 8),
+        PaddingBottom = UDim.new(0, 8),
+        PaddingLeft   = UDim.new(0, 10),
+        PaddingRight  = UDim.new(0, 10),
+        Parent        = card,
+    })
+
+    local titleLbl = New("TextLabel", {
+        BackgroundTransparency = 1,
+        Font                   = Enum.Font.GothamBold,
+        Text                   = title,
+        TextSize               = 12,
+        TextXAlignment         = Enum.TextXAlignment.Left,
+        Size                   = UDim2.new(1, 0, 0, 16),
+        Parent                 = card,
+        ZIndex                 = 42,
+    })
+    titleLbl.TextColor3 = accent
+
+    local msgLbl = New("TextLabel", {
+        BackgroundTransparency = 1,
+        Font                   = Enum.Font.Gotham,
+        Text                   = message,
+        TextSize               = 11,
+        TextWrapped            = true,
+        TextXAlignment         = Enum.TextXAlignment.Left,
+        TextYAlignment         = Enum.TextYAlignment.Top,
+        Position               = UDim2.new(0, 0, 0, 18),
+        Size                   = UDim2.new(1, 0, 0, 0),
+        AutomaticSize          = Enum.AutomaticSize.Y,
+        Parent                 = card,
+        ZIndex                 = 42,
+    })
+    msgLbl.TextColor3 = textCol
+
+    card.BackgroundTransparency   = 1
+    titleLbl.TextTransparency     = 1
+    msgLbl.TextTransparency       = 1
+
+    PlayTween(card,     {BackgroundTransparency = 0}, 0.2)
+    PlayTween(titleLbl, {TextTransparency = 0}, 0.2)
+    PlayTween(msgLbl,   {TextTransparency = 0}, 0.2)
+
+    local closed = false
+    local function close()
+        if closed or not card.Parent then return end
+        closed = true
+        PlayTween(card,     {BackgroundTransparency = 1}, 0.2)
+        PlayTween(titleLbl, {TextTransparency = 1}, 0.2)
+        PlayTween(msgLbl,   {TextTransparency = 1}, 0.2)
+        task.delay(0.22, function()
+            if card.Parent then
+                card:Destroy()
+            end
+        end)
+    end
+
+    task.delay(duration, close)
+
+    card.InputBegan:Connect(function(input)
+        if IsMouse(input.UserInputType) or IsTouch(input.UserInputType) then
+            close()
+        end
+    end)
+
+    return close
+end
+
+function Vanith:Notify(cfg)
+    return notifyImpl(nil, cfg)
+end
 
 --------------------------------------------------------------------- -- window helpers
 --------------------------------------------------------------------- 
@@ -111,9 +289,23 @@ function Window:SetAccent(color)
 end
 
 function Window:SetVisible(state)
+    state = state and true or false
+    self.IsMinimized = not state
+
     if self.Main then
-        self.Main.Visible = state and true or false
+        self.Main.Visible = state
     end
+    if self.MiniButton then
+        self.MiniButton.Visible = not state
+    end
+end
+
+function Window:Minimize()
+    self:SetVisible(false)
+end
+
+function Window:Restore()
+    self:SetVisible(true)
 end
 
 function Window:Destroy()
@@ -381,7 +573,6 @@ function Tab:CreateTopTab(name)
     return tt
 end
 
--- Helper: per Name umschalten (falls du beim Erstellen der Sections wechseln willst)
 function Tab:SetTopTabByName(name)
     for _, tt in ipairs(self._topTabs) do
         if tt.Label and tt.Label.Text == name then
@@ -403,9 +594,6 @@ function Tab:SetTopTab(tt)
         }, 0.12)
     end
 
-    -- NEU: Sections nach TopTab filtern
-    -- sec._topTab == nil  -> global, immer sichtbar
-    -- sec._topTab == tt   -> nur im aktiven TopTab sichtbar
     for _, sec in ipairs(self._sections) do
         if sec._topTab == nil then
             sec.Frame.Visible = true
@@ -414,7 +602,6 @@ function Tab:SetTopTab(tt)
         end
     end
 
-    -- Profile-Values der Controls syncen
     if self._sections then
         for _, sec in ipairs(self._sections) do
             if sec._controls then
@@ -433,14 +620,11 @@ function Tab:GetActiveTopTabName()
 end
 
 -- slot: "LeftTop", "LeftBottom", "RightTop", "RightBottom"
--- NEU: optional 3. Parameter topTabNameOrObj -> Section nur in diesem TopTab anzeigen
+-- optional 3. Parameter topTabNameOrObj -> Section nur in diesem TopTab anzeigen
 function Tab:CreateSection(title, slot, topTabNameOrObj)
     local win  = self.Window
     local page = self.Page
 
-    ------------------------------------------------------------------
-    -- linker & rechter Rand gleich, in der Mitte 12px Gap
-    ------------------------------------------------------------------
     local layout = {
         LeftTop = {
             Pos  = UDim2.new(0, 0, 0, 0),
@@ -521,7 +705,6 @@ function Tab:CreateSection(title, slot, topTabNameOrObj)
         inner.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 16)
     end)
 
-    -- zugehörigen TopTab suchen (optional)
     local associatedTopTab = nil
     if topTabNameOrObj ~= nil then
         if typeof(topTabNameOrObj) == "string" then
@@ -536,7 +719,6 @@ function Tab:CreateSection(title, slot, topTabNameOrObj)
         end
     end
 
-    -- Wenn eine Bindung existiert und dieser TopTab gerade NICHT aktiv ist -> Section erstmal verstecken
     if associatedTopTab and self._activeTopTab and self._activeTopTab ~= associatedTopTab then
         frame.Visible = false
     end
@@ -1033,7 +1215,7 @@ function Section:CreateTextbox(cfg)
     return obj
 end
 
---------------------------------------------------------------------- -- DROPDOWN (manuelle Höhe, kein fetter Abstand)
+--------------------------------------------------------------------- -- DROPDOWN
 --------------------------------------------------------------------- 
 
 function Section:CreateDropdown(cfg)
@@ -1056,12 +1238,12 @@ function Section:CreateDropdown(cfg)
 
     local current   = defaultSelection
     local open      = false
-    local maxHeight = c.MaxHeight -- optional limit
+    local maxHeight = c.MaxHeight
 
-    local ROW_HEIGHT   = 24       -- Höhe des Kopfes (geschlossen)
-    local ITEM_HEIGHT  = 20       -- Höhe eines Buttons
-    local ITEM_PADDING = 4        -- Abstand zwischen Buttons
-    local TOP_BOTTOM   = 8        -- Padding oben + unten
+    local ROW_HEIGHT   = 24
+    local ITEM_HEIGHT  = 20
+    local ITEM_PADDING = 4
+    local TOP_BOTTOM   = 8
 
     local function calcContentHeight()
         local count = #options
@@ -1269,6 +1451,10 @@ end
 --------------------------------------------------------------------- -- CreateWindow
 --------------------------------------------------------------------- 
 
+function Window:Notify(cfg)
+    return notifyImpl(self.Theme, cfg)
+end
+
 function Vanith:CreateWindow(opts)
     opts = opts or {}
 
@@ -1280,21 +1466,7 @@ function Vanith:CreateWindow(opts)
         theme[k] = v
     end
 
-    local parent
-    do
-        local ok, cg = pcall(function()
-            if gethui then
-                return gethui()
-            end
-            return game:GetService("CoreGui")
-        end)
-        if ok and cg then
-            parent = cg
-        else
-            local lp = Players.LocalPlayer
-            parent = lp and lp:FindFirstChildOfClass("PlayerGui") or nil
-        end
-    end
+    local parent = GetRootParent()
 
     local sizeOpt = opts.StartSize or opts.Size
     local initialSize
@@ -1321,6 +1493,8 @@ function Vanith:CreateWindow(opts)
         TopTabs        = {},
         MinSize        = minSizeVec,
         IsMobile       = isMobile,
+        IsMinimized    = false,
+        MiniButton     = nil,
     }, Window)
 
     local gui = New("ScreenGui", {
@@ -1378,6 +1552,18 @@ function Vanith:CreateWindow(opts)
 
     local windowTitle = (type(opts.Title) == "string" and opts.Title) or "Vanith"
 
+    -- Mini-Button Text aus Title ableiten, aber frei überschreibbar
+    local shortName = windowTitle
+    local barIndex = string.find(windowTitle, "|")
+    if barIndex then
+        shortName = string.sub(windowTitle, 1, barIndex - 1)
+        shortName = shortName:gsub("^%s+", ""):gsub("%s+$", "")
+        if shortName == "" then
+            shortName = windowTitle
+        end
+    end
+    local miniLabelText = opts.MinimizeText or ("Open " .. shortName)
+
     local brandLabel = New("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, -8, 1, 0),
@@ -1408,7 +1594,6 @@ function Vanith:CreateWindow(opts)
     brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
     fitTitle()
 
-    -- Tab-Strip mit Auto-Scroll (wenn viele Waffen), sonst zentriert
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
@@ -1467,7 +1652,6 @@ function Vanith:CreateWindow(opts)
     tabsHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTopTabsLayout)
     task.defer(updateTopTabsLayout)
 
-    -- Minimize / Close Box
     local controlBox = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.new(1, -96, 0, 10),
@@ -1507,6 +1691,8 @@ function Vanith:CreateWindow(opts)
     self:_track(closeBtn, "TextColor3", "Accent")
 
     minimizeBtn.MouseButton1Click:Connect(function()
+        self:Minimize()
+
         PlayTween(minimizeBtn, {TextColor3 = self.Theme.Muted}, 0.08)
         task.delay(0.08, function()
             if minimizeBtn.Parent then
@@ -1594,6 +1780,64 @@ function Vanith:CreateWindow(opts)
     else
         scale.Scale = 1
     end
+
+    ------------------------------------------------------------------
+    -- Kleiner "Open Vanith"-Button (mobile friendly, aber überall nutzbar)
+    ------------------------------------------------------------------
+
+    local miniButton = New("TextButton", {
+        Name = "VanithMini",
+        AutoButtonColor = false,
+        BackgroundTransparency = 0,
+        Size = UDim2.fromOffset(150, 34),
+        Position = UDim2.new(0, 20, 0, 90),
+        AnchorPoint = Vector2.new(0, 0),
+        Parent = gui,
+        Visible = false,
+        ZIndex = 10,
+        Text = "",
+    })
+    self:_track(miniButton, "BackgroundColor3", "BG2")
+    New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = miniButton})
+    local miniStroke = New("UIStroke", {Thickness = 1, Transparency = 0.3, Parent = miniButton})
+    self:_track(miniStroke, "Color", "Stroke")
+
+    local miniIcon = New("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.fromOffset(24, 34),
+        Position = UDim2.new(0, 8, 0, 0),
+        Font = Enum.Font.GothamBold,
+        Text = "⠿",
+        TextSize = 16,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        Parent = miniButton,
+        ZIndex = 11,
+    })
+    self:_track(miniIcon, "TextColor3", "Muted")
+
+    local miniLabel = New("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(32, 0),
+        Size = UDim2.new(1, -40, 1, 0),
+        Font = Enum.Font.Gotham,
+        Text = miniLabelText,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = miniButton,
+        ZIndex = 11,
+    })
+    self:_track(miniLabel, "TextColor3", "Text")
+
+    local miniScale = New("UIScale", {Parent = miniButton})
+    miniScale.Scale = scale.Scale
+
+    self.MiniButton = miniButton
+
+    self:_enableDrag(miniButton, miniButton)
+
+    miniButton.MouseButton1Click:Connect(function()
+        self:Restore()
+    end)
 
     return self
 end
