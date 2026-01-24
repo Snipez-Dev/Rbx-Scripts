@@ -446,7 +446,7 @@ function Tab:CreateSection(title, slot)
     local frame = New("Frame", props)
     win:_track(frame, "BackgroundColor3", "BG1")
     New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = frame})
-    local stroke = New("UIStroke", {Thickness = 1, Transparency = 0.25, Parent = frame})
+    local stroke = New("UIStroke", {Thickness = 1, Transparency = 1 - 0.75, Parent = frame})
     win:_track(stroke, "Color", "Stroke")
 
     local head = New("TextLabel", {
@@ -471,6 +471,7 @@ function Tab:CreateSection(title, slot)
         ScrollBarImageTransparency = 0.3,
         ScrollBarImageColor3 = win.Theme.Accent,
         ScrollingDirection = Enum.ScrollingDirection.Y,
+        AutomaticCanvasSize = Enum.AutomaticSize.Y, -- wichtig für Mobile
         Parent = frame,
     })
 
@@ -486,10 +487,6 @@ function Tab:CreateSection(title, slot)
         PaddingBottom = UDim.new(0, 10),
         Parent = inner,
     })
-
-    list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        inner.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 16)
-    end)
 
     local sec = setmetatable({
         Window    = win,
@@ -1069,6 +1066,7 @@ function Section:CreateDropdown(cfg)
     local listBg = New("Frame", {
         BorderSizePixel        = 0,
         Size                   = UDim2.new(1, 0, 0, 0),
+        AutomaticSize          = Enum.AutomaticSize.Y,
         BackgroundTransparency = 0,
         Parent                 = listWrap,
     })
@@ -1128,15 +1126,10 @@ function Section:CreateDropdown(cfg)
             end)
         end
 
+        -- nachdem Layout fertig ist, ggf. Höhe anpassen
         task.defer(function()
-            local contentHeight = list.AbsoluteContentSize.Y + 12
-            listBg.Size = UDim2.new(1, 0, 0, contentHeight)
             if open then
-                local h = contentHeight
-                if maxHeight then
-                    h = math.min(h, maxHeight)
-                end
-                listWrap.Size = UDim2.new(1, 0, 0, h)
+                setOpen(true)
             end
         end)
     end
@@ -1158,19 +1151,19 @@ function Section:CreateDropdown(cfg)
     setOpen = function(state)
         open = state
         if open then
+            listWrap.Visible = true
             task.defer(function()
-                local contentHeight = list.AbsoluteContentSize.Y + 12
-                local h = contentHeight
-                if maxHeight then
-                    h = math.min(h, maxHeight)
+                local contentH = listBg.AbsoluteSize.Y
+                local targetH  = contentH
+                if maxHeight and maxHeight > 0 then
+                    targetH = math.min(contentH, maxHeight)
                 end
-                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, h)}, 0.14)
-                PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, contentHeight)}, 0.14)
+                -- Dropdown soll nah dran sein -> kein riesiger Abstand
+                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, targetH)}, 0.14)
             end)
             arrow.Text = "▴"
         else
             PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
-            PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, 0)}, 0.14)
             arrow.Text = "▾"
         end
     end
@@ -1350,7 +1343,7 @@ function Vanith:CreateWindow(opts)
     brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
     fitTitle()
 
-    -- Tab-Strip mit dynamischem Layout (zentriert, solange kein Scroll nötig)
+    -- Tab-Strip mit dynamischem Layout (zentriert solange kein Scroll nötig)
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
@@ -1370,7 +1363,7 @@ function Vanith:CreateWindow(opts)
         Parent = strip,
         ZIndex = 3,
         CanvasSize = UDim2.new(0, 0, 0, 0),
-        ScrollBarThickness = 0, -- unsichtbar wenn nicht gebraucht
+        ScrollBarThickness = 0,
         ScrollBarImageTransparency = 0.3,
         ScrollBarImageColor3 = theme.Accent,
         ScrollingDirection = Enum.ScrollingDirection.X,
@@ -1391,15 +1384,13 @@ function Vanith:CreateWindow(opts)
         local contentW = topLayout.AbsoluteContentSize.X
         local viewW    = tabsHolder.AbsoluteSize.X
 
-        if contentW <= viewW then
-            -- alles passt rein -> Tabs mittig, kein Scroll
+        if contentW <= viewW or viewW == 0 then
             topLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
             tabsHolder.CanvasSize         = UDim2.new(0, viewW, 0, 0)
             tabsHolder.ScrollingEnabled   = false
             tabsHolder.ScrollBarThickness = 0
             tabsHolder.CanvasPosition     = Vector2.new(0, 0)
         else
-            -- zu viele Tabs -> links ausrichten + Scroll aktivieren
             topLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
             tabsHolder.CanvasSize         = UDim2.new(0, contentW + 16, 0, 0)
             tabsHolder.ScrollingEnabled   = true
