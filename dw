@@ -1,0 +1,102 @@
+local Vanith = loadstring(game:HttpGet("https://raw.githubusercontent.com/Snipez-Dev/Rbx-Scripts/refs/heads/main/UI2"))()
+
+-- Window (nutzt jetzt StartSize, wird auch als MinSize benutzt)
+local Window = Vanith:CreateWindow({
+    Title     = "Vanith",
+    StartSize = Vector2.new(820, 460), -- Start-/Mingröße der UI
+    Theme     = {
+        Accent = Color3.fromRGB(170, 90, 255),
+    },
+})
+
+-- Tabs links
+local AimbotTab   = Window:CreateTab("Aimbot")
+local VisualsTab  = Window:CreateTab("Visuals")
+local SkinsTab    = Window:CreateTab("Skins")
+local SettingsTab = Window:CreateTab("Settings")
+
+-- Aimbot: Weapon-Tabs (oben im langen Balken)
+AimbotTab:CreateTopTab("AK-47")
+AimbotTab:CreateTopTab("M4A1")
+AimbotTab:CreateTopTab("GALIL")
+AimbotTab:CreateTopTab("SCOUT")
+AimbotTab:CreateTopTab("GLOCK-17")
+
+-- Visuals: eigene Tabs (oben im Balken, wenn Visuals ausgewählt ist)
+VisualsTab:CreateTopTab("ESP")
+VisualsTab:CreateTopTab("WORLD")
+VisualsTab:CreateTopTab("MISC")
+
+-- Sections wie im Original
+local General   = AimbotTab:CreateSection("GENERAL",  "LeftTop")
+local Misc      = AimbotTab:CreateSection("MISC",     "LeftBottom")
+local AimRight  = AimbotTab:CreateSection("AIMBOT",   "RightTop")
+local SetRight  = AimbotTab:CreateSection("SETTINGS", "RightBottom")
+
+-- GENERAL
+General:CreateToggle({
+    Name    = "Enabled Aimbot",
+    Default = true,
+})
+
+General:CreateDropdown({
+    Name    = "Silent Aim",
+    Options = {"None", "Legit", "Rage"},
+    Default = "None",
+})
+
+General:CreateSlider({
+    Name    = "FOV",
+    Min     = 0,
+    Max     = 180,
+    Step    = 1,
+    Default = 90,
+})
+
+General:CreateSlider({
+    Name    = "Silent",
+    Min     = 0,
+    Max     = 10,
+    Step    = 0.05,
+    Default = 5,
+    Format  = function(v)
+        return string.format("%.2fF", v)
+    end,
+})
+
+-- MISC
+Misc:CreateDropdown({
+    Name    = "One",
+    Options = {"One", "Two", "Three"},
+    Default = "One",
+})
+
+Misc:CreateDropdown({
+    Name    = "Two, Three, Four",
+    Options = {"Two", "Three", "Four"},
+    Default = "Two",
+})
+
+-- AIMBOT (rechte kleine Toggles)
+for i = 0, 3 do
+    AimRight:CreateToggle({
+        Name    = tostring(i),
+        Small   = true,
+        Default = (i == 0),
+    })
+end
+
+-- SETTINGS (rechts unten)
+SetRight:CreateButton({
+    Name = "Button",
+})
+
+SetRight:CreateTextbox({
+    Placeholder = "Enter your text here",
+})
+
+SetRight:CreateDropdown({
+    Name    = "Keybind",
+    Options = {"None", "E", "F", "G"},
+    Default = "None",
+})
