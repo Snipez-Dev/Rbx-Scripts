@@ -1,8 +1,7 @@
--- Vanith UI Library (CoreGui, draggable, tabs, sliders, dropdowns, mobile support)
--- put this whole file on a raw URL and do:
+-- Vanith UI Library - Eternesus style
+-- host this file somewhere and load with:
 -- local Vanith = loadstring(game:HttpGet("https://your.url/vanith.lua"))()
 
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 
@@ -27,21 +26,17 @@ local function isMouse(t)
 		or t == Enum.UserInputType.MouseButton3
 end
 
-local function clamp01(x)
-	return math.clamp(x, 0, 1)
-end
+local function clamp01(x) return math.clamp(x, 0, 1) end
 
 local function roundStep(value, minv, step)
-	if not step or step <= 0 then
-		return value
-	end
+	if not step or step <= 0 then return value end
 	local n = (value - minv) / step
 	return (math.floor(n + 0.5) * step) + minv
 end
 
--- // Theme
+-- // Theme (DEFAULT = green like screenshot; override to purple via Theme/SetAccent)
 local DEFAULT_THEME = {
-	Accent  = Color3.fromRGB(170, 90, 255), -- purple
+	Accent  = Color3.fromRGB(90, 255, 120),  -- bright green
 	BG0     = Color3.fromRGB(12, 12, 14),
 	BG1     = Color3.fromRGB(16, 16, 19),
 	BG2     = Color3.fromRGB(20, 20, 24),
@@ -53,7 +48,7 @@ local DEFAULT_THEME = {
 	Field   = Color3.fromRGB(26, 26, 31),
 }
 
--- // Method tables
+-- Method tables
 local WindowMethods  = {}
 WindowMethods.__index = WindowMethods
 
@@ -63,9 +58,9 @@ TabMethods.__index   = TabMethods
 local SectionMethods = {}
 SectionMethods.__index = SectionMethods
 
--- ==========================
--- WindowMethods helpers
--- ==========================
+-- =========================================
+-- Window methods
+-- =========================================
 
 function WindowMethods:_bindTheme(inst, prop, key)
 	self._themeBindings[#self._themeBindings + 1] = {
@@ -97,18 +92,19 @@ function WindowMethods:SetAccent(color3)
 	self:ApplyTheme()
 end
 
-function WindowMethods:Destroy()
-	if self.Gui then
-		self.Gui:Destroy()
-	end
-end
-
 function WindowMethods:SetVisible(state)
 	if self.Main then
 		self.Main.Visible = state and true or false
 	end
 end
 
+function WindowMethods:Destroy()
+	if self.Gui then
+		self.Gui:Destroy()
+	end
+end
+
+-- drag (mouse + mobile)
 function WindowMethods:_enableDrag(dragHandle, dragTarget)
 	local dragging = false
 	local dragStart, startPos
@@ -153,7 +149,7 @@ function WindowMethods:_enableDrag(dragHandle, dragTarget)
 	end)
 end
 
--- Top weapon tabs (AK-47 / M4A1 ...)
+-- top weapon tabs (AK-47 etc.) – flat text + underline
 function WindowMethods:CreateTopTab(text)
 	local holder = self.TopTabsHolder
 
@@ -161,32 +157,17 @@ function WindowMethods:CreateTopTab(text)
 		AutoButtonColor = false,
 		BackgroundTransparency = 1,
 		Text = "",
-		Size = UDim2.fromOffset(74, 34),
+		Size = UDim2.fromOffset(70, 34),
 		Parent = holder,
 	})
 
-	local box = create("Frame", {
-		BackgroundColor3 = self.Theme.BG1,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 1, 0),
-		Parent = btn,
-	})
-	create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = box})
-	local st = create("UIStroke", {
-		Thickness = 1,
-		Transparency = 0.55,
-		Parent = box,
-	})
-	st.Color = self.Theme.Stroke
-
 	local label = create("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(8, 0),
-		Size = UDim2.new(1, -16, 1, 0),
+		Size = UDim2.new(1, 0, 1, 0),
 		Font = Enum.Font.GothamBold,
 		Text = text,
 		TextSize = 12,
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = btn,
 	})
 	label.TextColor3 = self.Theme.DimText
@@ -194,8 +175,8 @@ function WindowMethods:CreateTopTab(text)
 	local underline = create("Frame", {
 		BackgroundColor3 = self.Theme.Accent,
 		BorderSizePixel = 0,
-		Size = UDim2.new(0.25, 0, 0, 2),
-		Position = UDim2.new(0.18, 0, 1, -2),
+		Size = UDim2.new(0.6, 0, 0, 2),
+		Position = UDim2.new(0.2, 0, 1, -2),
 		Visible = false,
 		Parent = btn,
 	})
@@ -229,7 +210,7 @@ function WindowMethods:SetTopTab(tab)
 	end
 end
 
--- Sidebar tabs
+-- sidebar tabs (+ pages)
 function WindowMethods:CreateTab(name, iconText)
 	local btn = create("TextButton", {
 		AutoButtonColor = false,
@@ -271,34 +252,14 @@ function WindowMethods:CreateTab(name, iconText)
 	})
 	self:_bindTheme(activeBar, "BackgroundColor3", "Accent")
 
-	local page = create("ScrollingFrame", {
+	-- content page – fixed grid (no scrolling)
+	local page = create("Frame", {
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 1, 0),
-		CanvasSize = UDim2.new(0, 0, 0, 0),
-		ScrollBarThickness = 2,
-		ScrollingDirection = Enum.ScrollingDirection.Y,
 		Visible = false,
 		Parent = self.Pages,
 	})
-	self:_bindTheme(page, "ScrollBarImageColor3", "Accent")
-
-	local layout = create("UIListLayout", {
-		Padding = UDim.new(0, 12),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = page,
-	})
-	create("UIPadding", {
-		PaddingTop = UDim.new(0, 2),
-		PaddingLeft = UDim.new(0, 0),
-		PaddingRight = UDim.new(0, 0),
-		PaddingBottom = UDim.new(0, 14),
-		Parent = page,
-	})
-
-	layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-		page.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 10)
-	end)
 
 	local tab = setmetatable({
 		Window = self,
@@ -308,6 +269,7 @@ function WindowMethods:CreateTab(name, iconText)
 		Label = label,
 		ActiveBar = activeBar,
 		Page = page,
+		_sections = {},
 	}, TabMethods)
 
 	btn.MouseButton1Click:Connect(function()
@@ -334,24 +296,54 @@ function WindowMethods:SelectTab(tab)
 	end
 end
 
--- ==========================
--- TabMethods
--- ==========================
+-- =========================================
+-- Tab methods
+-- =========================================
 
 function TabMethods:Select()
 	self.Window:SelectTab(self)
 end
 
-function TabMethods:CreateSection(title)
+-- slot = "LeftTop" | "LeftBottom" | "RightTop" | "RightBottom"
+function TabMethods:CreateSection(title, slot)
 	local window = self.Window
 	local page = self.Page
 
-	local frame = create("Frame", {
+	local layout = {
+		LeftTop = {
+			Position = UDim2.fromOffset(0, 0),
+			Size     = UDim2.fromOffset(330, 190),
+		},
+		LeftBottom = {
+			Position = UDim2.fromOffset(0, 204),
+			Size     = UDim2.fromOffset(330, 133),
+		},
+		RightTop = {
+			Position = UDim2.fromOffset(344, 0),
+			Size     = UDim2.fromOffset(147, 190),
+		},
+		RightBottom = {
+			Position = UDim2.fromOffset(344, 204),
+			Size     = UDim2.fromOffset(147, 133),
+		},
+	}
+
+	local info = layout[slot or ""]
+	local frameProps = {
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, -0, 0, 180),
-		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = page,
-	})
+	}
+
+	if info then
+		frameProps.Position = info.Position
+		frameProps.Size = info.Size
+	else
+		local count = #self._sections
+		frameProps.Position = UDim2.fromOffset(0, count * 196)
+		frameProps.Size = UDim2.new(1, 0, 0, 180)
+	end
+
+	local frame = create("Frame", frameProps)
 	window:_bindTheme(frame, "BackgroundColor3", "BG1")
 	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = frame})
 	local st = create("UIStroke", {
@@ -377,7 +369,6 @@ function TabMethods:CreateSection(title)
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(0, 34),
 		Size = UDim2.new(1, 0, 1, -34),
-		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = frame,
 	})
 
@@ -394,6 +385,8 @@ function TabMethods:CreateSection(title)
 		Parent = inner,
 	})
 
+	table.insert(self._sections, frame)
+
 	local section = setmetatable({
 		Window = window,
 		Frame = frame,
@@ -404,9 +397,9 @@ function TabMethods:CreateSection(title)
 	return section
 end
 
--- ==========================
--- SectionMethods Controls
--- ==========================
+-- =========================================
+-- Section methods (controls)
+-- =========================================
 
 function SectionMethods:CreateSlider(cfg)
 	local window = self.Window
@@ -534,15 +527,8 @@ function SectionMethods:CreateSlider(cfg)
 	end)
 
 	local sliderObj = {}
-
-	function sliderObj:Set(v)
-		setValue(v, false)
-	end
-
-	function sliderObj:Get()
-		return value
-	end
-
+	function sliderObj:Set(v) setValue(v, false) end
+	function sliderObj:Get() return value end
 	return sliderObj
 end
 
@@ -676,8 +662,8 @@ function SectionMethods:CreateDropdown(cfg)
 				end
 				rebuild()
 				open = false
-				listWrap:TweenSize(UDim2.new(1, 0, 0, 0), "Out", "Quad", 0.14, true)
-				listBg:TweenSize(UDim2.new(1, 0, 0, 0), "Out", "Quad", 0.14, true)
+				listWrap:TweenSize(UDim2.new(1, 0, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.14, true)
+				listBg:TweenSize(UDim2.new(1, 0, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.14, true)
 				arrow.Text = "▾"
 			end)
 		end
@@ -690,12 +676,12 @@ function SectionMethods:CreateDropdown(cfg)
 		if open then
 			task.wait()
 			local h = list.AbsoluteContentSize.Y + 16
-			listWrap:TweenSize(UDim2.new(1, 0, 0, h), "Out", "Quad", 0.14, true)
-			listBg:TweenSize(UDim2.new(1, 0, 0, h), "Out", "Quad", 0.14, true)
+			listWrap:TweenSize(UDim2.new(1, 0, 0, h), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.14, true)
+			listBg:TweenSize(UDim2.new(1, 0, 0, h), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.14, true)
 			arrow.Text = "▴"
 		else
-			listWrap:TweenSize(UDim2.new(1, 0, 0, 0), "Out", "Quad", 0.14, true)
-			listBg:TweenSize(UDim2.new(1, 0, 0, 0), "Out", "Quad", 0.14, true)
+			listWrap:TweenSize(UDim2.new(1, 0, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.14, true)
+			listBg:TweenSize(UDim2.new(1, 0, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.14, true)
 			arrow.Text = "▾"
 		end
 	end
@@ -705,7 +691,6 @@ function SectionMethods:CreateDropdown(cfg)
 	end)
 
 	local ddObj = {}
-
 	function ddObj:SetOptions(newOptions)
 		options = newOptions or {}
 		if not table.find(options, current) then
@@ -867,19 +852,19 @@ function SectionMethods:CreateTextbox(cfg)
 	return box
 end
 
--- ==========================
--- Vanith:CreateWindow
--- ==========================
+-- =========================================
+-- Vanith:CreateWindow (main entry)
+-- =========================================
 
 function Vanith:CreateWindow(cfg)
 	cfg = cfg or {}
 
-	-- clone theme
+	-- theme clone + patch
 	local theme = {}
 	for k, v in pairs(DEFAULT_THEME) do theme[k] = v end
 	for k, v in pairs(cfg.Theme or {}) do theme[k] = v end
 
-	-- resolve parent (CoreGui by default)
+	-- parent (CoreGui if possible)
 	local parent = cfg.Parent
 	if not parent then
 		local ok, cg = pcall(function()
@@ -927,7 +912,17 @@ function Vanith:CreateWindow(cfg)
 	local ms = create("UIStroke", {Thickness = 1, Transparency = 0.2, Parent = main})
 	window:_bindTheme(ms, "Color", "Stroke")
 
-	-- Top bar
+	-- glass overlay for subtle shine
+	local glass = create("Frame", {
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = 0.97,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Parent = main,
+	})
+	create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = glass})
+
+	-- top bar
 	local top = create("Frame", {
 		Name = "TopBar",
 		BorderSizePixel = 0,
@@ -946,7 +941,7 @@ function Vanith:CreateWindow(cfg)
 		Parent = top,
 	})
 
-	-- left box (title)
+	-- left box "Eternesus"
 	local titleBox = create("Frame", {
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(12, 10),
@@ -973,41 +968,32 @@ function Vanith:CreateWindow(cfg)
 	-- weapon tabs holder
 	local tabsHolder = create("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(160, 10),
-		Size = UDim2.new(1, -240, 1, -20),
+		Position = UDim2.fromOffset(170, 10),
+		Size = UDim2.new(1, -260, 1, -20),
 		Parent = top,
 	})
 	window.TopTabsHolder = tabsHolder
-	create("UIListLayout", {
+	local tabsLayout = create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 8),
+		Padding = UDim.new(0, 12),
 		Parent = tabsHolder,
 	})
+	tabsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-	-- right gear box
-	local gearBox = create("Frame", {
-		BorderSizePixel = 0,
-		Position = UDim2.new(1, -52, 0, 10),
-		Size = UDim2.fromOffset(40, 34),
-		Parent = top,
-	})
-	window:_bindTheme(gearBox, "BackgroundColor3", "BG1")
-	create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = gearBox})
-	local gbs = create("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = gearBox})
-	window:_bindTheme(gbs, "Color", "Stroke")
-
+	-- gear icon (no heavy box)
 	local gear = create("TextLabel", {
 		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.new(1, -40, 0, 8),
+		Size = UDim2.fromOffset(32, 32),
 		Font = Enum.Font.GothamBold,
 		Text = "⚙",
-		TextSize = 18,
-		Parent = gearBox,
+		TextSize = 20,
+		Parent = top,
 	})
 	window:_bindTheme(gear, "TextColor3", "Accent")
 
-	-- Sidebar
+	-- sidebar
 	local side = create("Frame", {
 		Name = "Sidebar",
 		BorderSizePixel = 0,
@@ -1028,13 +1014,14 @@ function Vanith:CreateWindow(cfg)
 		Parent = side,
 	})
 	window.SideList = sideList
-	create("UIListLayout", {
+	local sideLayout = create("UIListLayout", {
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, 6),
 		Parent = sideList,
 	})
+	sideLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 
-	-- Content / pages
+	-- content area
 	local pages = create("Frame", {
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(146, 68),
@@ -1043,12 +1030,12 @@ function Vanith:CreateWindow(cfg)
 	})
 	window.Pages = pages
 
-	-- Drag
+	-- drag
 	if cfg.Draggable ~= false then
 		window:_enableDrag(top, main)
 	end
 
-	-- Basic mobile scaling
+	-- mobile scaling
 	local uiScale = create("UIScale", {Parent = main})
 	local cam = workspace.CurrentCamera
 	if cam then
