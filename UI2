@@ -990,8 +990,8 @@ function Section:CreateDropdown(cfg)
         return "__default"
     end
 
-    local options          = c.Options or {}
-    local defaultSelection = c.Default or options[1] or "None"
+    local options           = c.Options or {}
+    local defaultSelection  = c.Default or options[1] or "None"
     local selectedByProfile = {}
     selectedByProfile[getProfileKey()] = defaultSelection
 
@@ -1447,14 +1447,30 @@ function Vanith:CreateWindow(opts)
         self:_enableDrag(top, main)
     end
 
-    -- mobile autoscale
+    ------------------------------------------------------------------
+    -- mobile autoscale (fix: mobile = 50% Größe)
+    ------------------------------------------------------------------
     local scale = New("UIScale", {Parent = main})
-    local cam = workspace.CurrentCamera
-    if cam then
+    local cam   = workspace.CurrentCamera
+
+    -- echtes Mobile-Device erkennen: Touch an, aber keine Maus/Tastatur
+    local isMobile = UserInputService.TouchEnabled
+        and not UserInputService.KeyboardEnabled
+        and not UserInputService.MouseEnabled
+
+    if isMobile then
+        -- 50% der Originalgröße
+        scale.Scale = 0.5
+    elseif cam then
+        -- PC / Tablet: optional leichte Anpassung bei sehr kleinen Screens
         local vp = cam.ViewportSize
         if vp.X < 900 then
             scale.Scale = math.clamp(vp.X / 900, 0.75, 1)
+        else
+            scale.Scale = 1
         end
+    else
+        scale.Scale = 1
     end
 
     return self
