@@ -230,7 +230,7 @@ function Window:_makeTopTabButton(text)
         Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.GothamBold,
         Text = text,
-        TextSize = 12, -- fest, Tabs werden NICHT mehr skaliert
+        TextSize = 12, -- Tabs bleiben feste Größe
         TextXAlignment = Enum.TextXAlignment.Center,
         Parent = btn,
         ZIndex = 5,
@@ -290,7 +290,7 @@ function Window:CreateTab(name)
         Size = UDim2.new(1, -20, 0, 22),
         Font = Enum.Font.GothamBold,
         Text = name,
-        TextSize = 12, -- etwas kleiner
+        TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = row,
         ZIndex = 3,
@@ -387,6 +387,7 @@ function Tab:SetTopTab(tt)
         }, 0.12)
     end
 
+    -- Controls auf Profil (Weapon-Tab) synchronisieren
     if self._sections then
         for _, sec in ipairs(self._sections) do
             if sec._controls then
@@ -409,22 +410,23 @@ function Tab:CreateSection(title, slot)
     local win  = self.Window
     local page = self.Page
 
+    -- Layout mit kleinerem Abstand zwischen linkem und rechtem Panel
     local layout = {
         LeftTop = {
             Pos  = UDim2.new(0, 0, 0, 0),
-            Size = UDim2.new(0.68, -6, 0.5, -6),
+            Size = UDim2.new(0.7, -12, 0.5, -6),
         },
         LeftBottom = {
             Pos  = UDim2.new(0, 0, 0.5, 6),
-            Size = UDim2.new(0.68, -6, 0.5, -6),
+            Size = UDim2.new(0.7, -12, 0.5, -6),
         },
         RightTop = {
-            Pos  = UDim2.new(0.7, 6, 0, 0),
-            Size = UDim2.new(0.3, -6, 0.5, -6),
+            Pos  = UDim2.new(0.7, 0, 0, 0),
+            Size = UDim2.new(0.3, -12, 0.5, -6),
         },
         RightBottom = {
-            Pos  = UDim2.new(0.7, 6, 0.5, 6),
-            Size = UDim2.new(0.3, -6, 0.5, -6),
+            Pos  = UDim2.new(0.7, 0, 0.5, 6),
+            Size = UDim2.new(0.3, -12, 0.5, -6),
         },
     }
 
@@ -675,14 +677,12 @@ function Section:CreateSlider(cfg)
     function obj:Get()
         return value
     end
-
     function obj:_syncProfile()
         syncProfile()
     end
     obj._profileValues = valuesByProfile
 
     table.insert(self._controls, obj)
-
     return obj
 end
 
@@ -1325,7 +1325,7 @@ function Vanith:CreateWindow(opts)
     })
     self:_track(brandLabel, "TextColor3", "Accent")
 
-    -- Nur der Titel shrinkt, Tabs oben / Slider / Dropdown NICHT
+    -- Nur der Titel shrinkt
     local function fitTitle()
         local maxSize = 14
         local minSize = 10
@@ -1344,12 +1344,12 @@ function Vanith:CreateWindow(opts)
     fitTitle()
 
     ------------------------------------------------------------------
-    -- top weapon-tab strip
+    -- top weapon-tab strip (mittig) – schmaler, damit mehr Abstand zum Close
     ------------------------------------------------------------------
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
-        Size = UDim2.new(1, -260, 0, 34),
+        Size = UDim2.new(1, -320, 0, 34), -- vorher -260 -> jetzt mehr Abstand zur rechten Box
         Parent = top,
         ZIndex = 2,
     })
@@ -1497,7 +1497,7 @@ function Vanith:CreateWindow(opts)
     end
 
     ------------------------------------------------------------------
-    -- mobile autoscale (Mobile noch kleiner: 35% der Originalgröße)
+    -- mobile autoscale (Mobile noch kleiner: 35%)
     ------------------------------------------------------------------
     local scale = New("UIScale", {Parent = main})
     local cam   = workspace.CurrentCamera
@@ -1507,7 +1507,7 @@ function Vanith:CreateWindow(opts)
         and not UserInputService.MouseEnabled
 
     if isMobile then
-        scale.Scale = 0.35  -- vorher 0.5, jetzt deutlich kleiner
+        scale.Scale = 0.35
     elseif cam then
         local vp = cam.ViewportSize
         if vp.X < 900 then
