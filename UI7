@@ -54,17 +54,23 @@ end
 --------------------------------------------------------------------- 
 
 local DEFAULT_THEME = {
-    Accent  = Color3.fromRGB(160, 90, 255),
-    BG0     = Color3.fromRGB(2, 2, 4),
-    BG1     = Color3.fromRGB(6, 6, 10),
-    BG2     = Color3.fromRGB(8, 8, 12),
-    Stroke  = Color3.fromRGB(30, 30, 40),
-    Text    = Color3.fromRGB(220, 220, 235),
-    Muted   = Color3.fromRGB(130, 130, 145),
-    DimText = Color3.fromRGB(105, 105, 120),
-    Track   = Color3.fromRGB(14, 14, 20),
-    Field   = Color3.fromRGB(8, 8, 12),
+ 
+    Accent  = Color3.fromRGB(165, 105, 255),
+
+    BG0     = Color3.fromRGB(4, 4, 6),
+    BG1     = Color3.fromRGB(10, 10, 14),
+    BG2     = Color3.fromRGB(10, 10, 14),
+
+    Stroke  = Color3.fromRGB(40, 40, 50),
+
+    Text    = Color3.fromRGB(230, 230, 238),
+    Muted   = Color3.fromRGB(140, 140, 150),
+    DimText = Color3.fromRGB(95, 95, 110),
+
+    Track   = Color3.fromRGB(22, 22, 28),
+    Field   = Color3.fromRGB(16, 16, 20),
 }
+
 
 local Window  = {}
 Window.__index = Window
