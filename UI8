@@ -4,7 +4,7 @@ local TweenService     = game:GetService("TweenService")
 local HttpService      = game:GetService("HttpService")
 
 local Vanith = {}
-
+t
 local Window  = {}
 Window.__index = Window
 
@@ -1563,11 +1563,30 @@ function Vanith:CreateWindow(opts)
     self:_track(top, "BackgroundColor3", "BG2")
     New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = top})
 
+    -- row that holds brand, tabs-strip, control box (all same size)
+    local headerRow = New("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.96, 0, 0, 34),
+        Position = UDim2.new(0.5, 0, 0, 10),
+        AnchorPoint = Vector2.new(0.5, 0),
+        Parent = top,
+        ZIndex = 2,
+    })
+
+    local headerLayout = New("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        SortOrder     = Enum.SortOrder.LayoutOrder,
+        Padding       = UDim.new(0, 10),
+        Parent        = headerRow,
+    })
+    headerLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
+    headerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+    -- brand (left)
     local brand = New("Frame", {
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(12, 10),
-        Size = UDim2.fromOffset(140, 34),
-        Parent = top,
+        Size = UDim2.new(1/3, -8, 1, 0),
+        Parent = headerRow,
         ZIndex = 3,
     })
     self:_track(brand, "BackgroundColor3", "BG2")
@@ -1619,12 +1638,11 @@ function Vanith:CreateWindow(opts)
     brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
     fitTitle()
 
-    -- top tab strip (fixed spacing to control box)
+    -- middle: top tabs strip
     local strip = New("Frame", {
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(160, 10),
-        Size = UDim2.new(1, -280, 0, 34), -- more margin so it doesn't touch control box
-        Parent = top,
+        Size = UDim2.new(1/3, -8, 1, 0),
+        Parent = headerRow,
         ZIndex = 2,
     })
     self:_track(strip, "BackgroundColor3", "BG2")
@@ -1678,13 +1696,11 @@ function Vanith:CreateWindow(opts)
     tabsHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTopTabsLayout)
     task.defer(updateTopTabsLayout)
 
-    -- control box (minimize + close)
-
+    -- right: control box (minimize / close)
     local controlBox = New("Frame", {
         BorderSizePixel = 0,
-        Position = UDim2.new(1, -108, 0, 10),
-        Size = UDim2.fromOffset(96, 36),
-        Parent = top,
+        Size = UDim2.new(1/3, -8, 1, 0),
+        Parent = headerRow,
         ZIndex = 3,
     })
     self:_track(controlBox, "BackgroundColor3", "BG2")
@@ -1742,6 +1758,7 @@ function Vanith:CreateWindow(opts)
         PlayTween(closeBtn, {TextColor3 = self.Theme.Accent}, 0.1)
     end)
 
+    -- sidebar / pages
     local sidebar = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(12, 66),
@@ -1816,8 +1833,7 @@ function Vanith:CreateWindow(opts)
         scale.Scale = 1
     end
 
-    -- small floating "open" bar
-
+    -- mini open bar
     local miniButton = New("Frame", {
         Name = "VanithMini",
         BackgroundTransparency = 0,
@@ -1926,6 +1942,7 @@ function Vanith:CreateWindow(opts)
 end
 
 Vanith.Createwindow = Vanith.CreateWindow
+
 
 ----------------------------------------------------------------------
 -- config helpers
