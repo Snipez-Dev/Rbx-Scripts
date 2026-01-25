@@ -1802,15 +1802,15 @@ function Vanith:CreateWindow(opts)
 
     local miniGradient = New("UIGradient", {
         Rotation = 90,
-        Color = ColorSequence.new(
+        Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-            ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1))
-        ),
-        Transparency = NumberSequence.new{
+            ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
+        }),
+        Transparency = NumberSequence.new({
             NumberSequenceKeypoint.new(0, 0.9),
             NumberSequenceKeypoint.new(0.5, 1),
-            NumberSequenceKeypoint.new(1, 0.9)
-        },
+            NumberSequenceKeypoint.new(1, 0.9),
+        }),
         Parent = miniButton,
     })
 
