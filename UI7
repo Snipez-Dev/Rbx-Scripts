@@ -5,8 +5,16 @@ local HttpService      = game:GetService("HttpService")
 
 local Vanith = {}
 
---------------------------------------------------------------------- -- helpers
---------------------------------------------------------------------- 
+local Window  = {}
+Window.__index = Window
+
+local Tab     = {}
+Tab.__index   = Tab
+
+local Section = {}
+Section.__index = Section
+
+-- basic helpers
 
 local function New(className, props)
     local inst = Instance.new(className)
@@ -66,8 +74,7 @@ local function GetRootParent()
     return lp and lp:FindFirstChildOfClass("PlayerGui") or nil
 end
 
---------------------------------------------------------------------- -- theme
---------------------------------------------------------------------- 
+-- theme
 
 local DEFAULT_THEME = {
     Accent  = Color3.fromRGB(165, 105, 255),
@@ -86,17 +93,9 @@ local DEFAULT_THEME = {
     Field   = Color3.fromRGB(16, 16, 20),
 }
 
-local Window  = {}
-Window.__index = Window
-
-local Tab     = {}
-Tab.__index   = Tab
-
-local Section = {}
-Section.__index = Section
-
---------------------------------------------------------------------- -- NOTIFY (Window:Notify / Vanith:Notify), unten rechts
---------------------------------------------------------------------- 
+----------------------------------------------------------------------
+-- notify
+----------------------------------------------------------------------
 
 local notifyState = {
     Gui    = nil,
@@ -104,7 +103,7 @@ local notifyState = {
     Scale  = nil,
 }
 
-local function ensureNotifyRoot()
+local function EnsureNotifyRoot()
     if notifyState.Gui and notifyState.Gui.Parent then
         return notifyState
     end
@@ -121,7 +120,6 @@ local function ensureNotifyRoot()
         Parent = parent,
     })
 
-    -- unten rechts, etwas größer
     local holder = New("Frame", {
         BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(1, 1),
@@ -160,9 +158,10 @@ local function ensureNotifyRoot()
     return notifyState
 end
 
-local function notifyImpl(theme, cfg)
+local function DoNotify(theme, cfg)
     cfg = cfg or {}
-    local state = ensureNotifyRoot()
+
+    local state = EnsureNotifyRoot()
     if not state.Holder then
         return
     end
@@ -258,11 +257,12 @@ local function notifyImpl(theme, cfg)
 end
 
 function Vanith:Notify(cfg)
-    return notifyImpl(nil, cfg)
+    return DoNotify(nil, cfg)
 end
 
---------------------------------------------------------------------- -- window helpers
---------------------------------------------------------------------- 
+----------------------------------------------------------------------
+-- window helpers
+----------------------------------------------------------------------
 
 function Window:_track(inst, prop, key)
     table.insert(self._themeBindings, {inst = inst, prop = prop, key = key})
@@ -317,10 +317,11 @@ function Window:Destroy()
 end
 
 function Window:Notify(cfg)
-    return notifyImpl(self.Theme, cfg)
+    return DoNotify(self.Theme, cfg)
 end
 
--- drag helper
+-- drag
+
 function Window:_enableDrag(handle, target)
     local dragging
     local dragStart
@@ -329,10 +330,10 @@ function Window:_enableDrag(handle, target)
 
     local function update(input)
         if not dragging then return end
-        local posDelta = input.Position - dragStart
+        local delta = input.Position - dragStart
         target.Position = UDim2.new(
-            startPos.X.Scale, startPos.X.Offset + posDelta.X,
-            startPos.Y.Scale, startPos.Y.Offset + posDelta.Y
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
         )
     end
 
@@ -354,7 +355,7 @@ function Window:_enableDrag(handle, target)
 
     handle.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch then
+        or input.UserInputType == Enum.UserInputType.Touch then
             activeInput = input
         end
     end)
@@ -366,7 +367,8 @@ function Window:_enableDrag(handle, target)
     end)
 end
 
--- resize helper
+-- resize
+
 function Window:_enableResize(handle, target)
     local minSize = self.MinSize or Vector2.new(649, 417)
 
@@ -403,7 +405,7 @@ function Window:_enableResize(handle, target)
 
     handle.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch then
+        or input.UserInputType == Enum.UserInputType.Touch then
             activeInput = input
         end
     end)
@@ -415,7 +417,8 @@ function Window:_enableResize(handle, target)
     end)
 end
 
--- internal: top weapon-tab button
+-- top tabs (strip in the title bar)
+
 function Window:_makeTopTabButton(text)
     local holder = self.TopTabsHolder
 
@@ -456,8 +459,9 @@ function Window:_makeTopTabButton(text)
     return t
 end
 
---------------------------------------------------------------------- -- left nav tabs
---------------------------------------------------------------------- 
+----------------------------------------------------------------------
+-- left side tabs
+----------------------------------------------------------------------
 
 function Window:CreateTab(name)
     local row = New("TextButton", {
@@ -542,7 +546,6 @@ function Window:SelectTab(tab)
         local active = (t == tab)
 
         t.Page.Visible = active
-
         PlayTween(t.Bg, {BackgroundTransparency = active and 0 or 1}, 0.12)
         t.Accent.Visible = active
         PlayTween(t.Label, {TextColor3 = active and self.Theme.Text or self.Theme.Muted}, 0.12)
@@ -557,8 +560,9 @@ function Window:SelectTab(tab)
     end
 end
 
---------------------------------------------------------------------- -- tab methods (top tabs + sections)
---------------------------------------------------------------------- 
+----------------------------------------------------------------------
+-- tab methods (top tabs + sections)
+----------------------------------------------------------------------
 
 function Tab:CreateTopTab(name)
     local win = self.Window
@@ -608,13 +612,11 @@ function Tab:SetTopTab(tt)
         end
     end
 
-    if self._sections then
-        for _, sec in ipairs(self._sections) do
-            if sec._controls then
-                for _, ctrl in ipairs(sec._controls) do
-                    if ctrl._syncProfile then
-                        ctrl:_syncProfile()
-                    end
+    for _, sec in ipairs(self._sections) do
+        if sec._controls then
+            for _, ctrl in ipairs(sec._controls) do
+                if ctrl._syncProfile then
+                    ctrl:_syncProfile()
                 end
             end
         end
@@ -625,7 +627,8 @@ function Tab:GetActiveTopTabName()
     return self._activeTopTab and self._activeTopTab.Label.Text or nil
 end
 
--- slot: "LeftTop", "LeftBottom", "RightTop", "RightBottom"
+-- section slots: "LeftTop", "LeftBottom", "RightTop", "RightBottom"
+
 function Tab:CreateSection(title, slot, topTabNameOrObj)
     local win  = self.Window
     local page = self.Page
@@ -743,8 +746,9 @@ function Tab:CreateSection(title, slot, topTabNameOrObj)
     return sec
 end
 
---------------------------------------------------------------------- -- section controls
---------------------------------------------------------------------- 
+----------------------------------------------------------------------
+-- controls: slider
+----------------------------------------------------------------------
 
 function Section:CreateSlider(cfg)
     local win   = self.Window
@@ -896,7 +900,7 @@ function Section:CreateSlider(cfg)
 
     track.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch then
+        or input.UserInputType == Enum.UserInputType.Touch then
             activeInput = input
         end
     end)
@@ -925,6 +929,10 @@ function Section:CreateSlider(cfg)
     table.insert(self._controls, obj)
     return obj
 end
+
+----------------------------------------------------------------------
+-- controls: toggle
+----------------------------------------------------------------------
 
 function Section:CreateToggle(cfg)
     local win   = self.Window
@@ -1114,6 +1122,10 @@ function Section:CreateToggle(cfg)
     return obj
 end
 
+----------------------------------------------------------------------
+-- controls: button
+----------------------------------------------------------------------
+
 function Section:CreateButton(cfg)
     local win   = self.Window
     local inner = self.Inner
@@ -1149,6 +1161,10 @@ function Section:CreateButton(cfg)
     return btn
 end
 
+----------------------------------------------------------------------
+-- controls: textbox
+----------------------------------------------------------------------
+
 function Section:CreateTextbox(cfg)
     local win   = self.Window
     local inner = self.Inner
@@ -1171,7 +1187,7 @@ function Section:CreateTextbox(cfg)
         Size = UDim2.new(1, 0, 0, 24),
         Font = Enum.Font.Gotham,
         Text = defaultText,
-        PlaceholderText = c.Placeholder or "Enter text here",
+        PlaceholderText = c.Placeholder or "Enter text",
         TextSize = 11,
         ClearTextOnFocus = false,
         Parent = inner,
@@ -1220,8 +1236,9 @@ function Section:CreateTextbox(cfg)
     return obj
 end
 
---------------------------------------------------------------------- -- DROPDOWN
---------------------------------------------------------------------- 
+----------------------------------------------------------------------
+-- controls: dropdown
+----------------------------------------------------------------------
 
 function Section:CreateDropdown(cfg)
     local win   = self.Window
@@ -1453,8 +1470,9 @@ function Section:CreateDropdown(cfg)
     return obj
 end
 
---------------------------------------------------------------------- -- CreateWindow
---------------------------------------------------------------------- 
+----------------------------------------------------------------------
+-- window create
+----------------------------------------------------------------------
 
 function Vanith:CreateWindow(opts)
     opts = opts or {}
@@ -1497,13 +1515,12 @@ function Vanith:CreateWindow(opts)
         IsMinimized        = false,
         MiniButton         = nil,
         ConfigFolder       = opts.ConfigFolder or opts.ConfigFolderName or "VanithConfigs",
-        ConfigExtension    = opts.ConfigExtension or "json",
+        ConfigExtension    = (opts.ConfigExtension or "json"):gsub("^%.+", ""),
         DefaultConfigName  = opts.ConfigName or opts.DefaultConfig or "default",
         ConfigName         = nil,
     }, Window)
 
-    self.ConfigExtension = (self.ConfigExtension or "json"):gsub("^%.+", "")
-    self.ConfigName      = self.DefaultConfigName
+    self.ConfigName = self.DefaultConfigName
 
     local gui = New("ScreenGui", {
         Name = opts.Name or "VanithUI",
@@ -1561,7 +1578,6 @@ function Vanith:CreateWindow(opts)
     local windowTitle = (type(opts.Title) == "string" and opts.Title) or "Vanith"
     self.Title = windowTitle
 
-    -- Mini-Button Text aus Title ableiten, aber per MinimizeText überschreibbar
     local shortName = windowTitle
     local barIndex = string.find(windowTitle, "|")
     if barIndex then
@@ -1603,10 +1619,11 @@ function Vanith:CreateWindow(opts)
     brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
     fitTitle()
 
+    -- top tab strip (fixed spacing to control box)
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
-        Size = UDim2.new(1, -264, 0, 34),
+        Size = UDim2.new(1, -280, 0, 34), -- more margin so it doesn't touch control box
         Parent = top,
         ZIndex = 2,
     })
@@ -1661,7 +1678,8 @@ function Vanith:CreateWindow(opts)
     tabsHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTopTabsLayout)
     task.defer(updateTopTabsLayout)
 
-    -- ControlBox: etwas größer & nicer
+    -- control box (minimize + close)
+
     local controlBox = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.new(1, -108, 0, 10),
@@ -1693,7 +1711,7 @@ function Vanith:CreateWindow(opts)
         Size = UDim2.new(0.5, 0, 1, 0),
         Position = UDim2.new(0.5, 0, 0, 0),
         Font = Enum.Font.GothamBold,
-        Text = "X",
+        Text = "✕",
         TextSize = 16,
         Parent = controlBox,
         ZIndex = 4,
@@ -1702,13 +1720,6 @@ function Vanith:CreateWindow(opts)
 
     minimizeBtn.MouseButton1Click:Connect(function()
         self:Minimize()
-
-        PlayTween(minimizeBtn, {TextColor3 = self.Theme.Muted}, 0.08)
-        task.delay(0.08, function()
-            if minimizeBtn.Parent then
-                minimizeBtn.TextColor3 = self.Theme.Accent
-            end
-        end)
     end)
 
     closeBtn.MouseButton1Click:Connect(function()
@@ -1805,9 +1816,7 @@ function Vanith:CreateWindow(opts)
         scale.Scale = 1
     end
 
-    ------------------------------------------------------------------
-    -- "Open Vanith"-Button (Dock mit Grip), größer & cleaner
-    ------------------------------------------------------------------
+    -- small floating "open" bar
 
     local miniButton = New("Frame", {
         Name = "VanithMini",
@@ -1838,7 +1847,6 @@ function Vanith:CreateWindow(opts)
         Parent = miniButton,
     })
 
-    -- linker Grip zum Draggen
     local grip = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.new(0, 42, 1, 0),
@@ -1892,14 +1900,12 @@ function Vanith:CreateWindow(opts)
 
     self.MiniButton = miniButton
 
-    -- Drag nur über Grip (wie ein Handle)
     self:_enableDrag(grip, miniButton)
 
     clickArea.MouseButton1Click:Connect(function()
         self:Restore()
     end)
 
-    -- Hover (PC)
     miniButton.MouseEnter:Connect(function()
         PlayTween(miniButton, {BackgroundColor3 = self.Theme.BG1}, 0.12)
     end)
@@ -1907,7 +1913,6 @@ function Vanith:CreateWindow(opts)
         PlayTween(miniButton, {BackgroundColor3 = self.Theme.BG2}, 0.12)
     end)
 
-    -- optional: Auto-Load Default Config
     local autoLoad = opts.AutoLoadConfig or opts.AutoloadConfig
     if autoLoad then
         task.defer(function()
@@ -1922,18 +1927,16 @@ end
 
 Vanith.Createwindow = Vanith.CreateWindow
 
---------------------------------------------------------------------- -- CONFIG SYSTEM (filesystem + UI-Helper Vanith:Config)
---------------------------------------------------------------------- 
+----------------------------------------------------------------------
+-- config helpers
+----------------------------------------------------------------------
 
--- interner Helper: Config-Ordner
 function Window:_ensureConfigFolder()
     local folder = self.ConfigFolder or "VanithConfigs"
     if isfolder and makefolder then
         local ok, exists = pcall(isfolder, folder)
         if ok and not exists then
             pcall(makefolder, folder)
-        elseif not ok then
-            -- ignore
         end
     end
     return folder
@@ -1968,7 +1971,6 @@ function Window:ListConfigs()
     return result
 end
 
--- sammelt alle Control-Values (inkl. TopTabs) in einer reinen Lua-Tabelle
 function Window:_buildConfigData()
     local data = {
         _meta = {
@@ -2044,7 +2046,6 @@ function Window:_applyConfigData(data)
                                 if profName == "__default" then
                                     key = "__default"
                                 else
-                                    -- passenden TopTab anhand des Namens suchen
                                     for _, tt in ipairs(tab._topTabs or {}) do
                                         if tt.Label and tt.Label.Text == profName then
                                             key = tt
@@ -2073,7 +2074,7 @@ function Window:SaveConfig(name)
     self.ConfigName = cfgName
 
     if not writefile or not HttpService then
-        return false, "Filesystem oder HttpService nicht verfügbar."
+        return false, "filesystem or HttpService missing"
     end
 
     local ok, dataOrErr = pcall(function()
@@ -2105,20 +2106,20 @@ function Window:LoadConfig(name)
     self.ConfigName = cfgName
 
     if not readfile or not HttpService then
-        return false, "Filesystem oder HttpService nicht verfügbar."
+        return false, "filesystem or HttpService missing"
     end
 
     local path = self:_getConfigPath(cfgName)
     local okRead, content = pcall(readfile, path)
     if not okRead then
-        return false, "Config '" .. cfgName .. "' konnte nicht gelesen werden."
+        return false, "config '" .. cfgName .. "' could not be read"
     end
 
     local okDecode, data = pcall(function()
         return HttpService:JSONDecode(content)
     end)
     if not okDecode or type(data) ~= "table" then
-        return false, "Config '" .. cfgName .. "' ist beschädigt."
+        return false, "config '" .. cfgName .. "' is broken"
     end
 
     self:_applyConfigData(data)
@@ -2129,7 +2130,7 @@ function Window:DeleteConfig(name)
     local cfgName = name or self.ConfigName or self.DefaultConfigName or "default"
 
     if not delfile then
-        return false, "delfile nicht verfügbar."
+        return false, "delfile missing"
     end
 
     local path = self:_getConfigPath(cfgName)
@@ -2145,14 +2146,10 @@ function Window:DeleteConfig(name)
     return true
 end
 
--- Vanith:Config -> baut dir ein fertiges Config-UI in einer Section
--- cfg = {
---   Window  = window,         -- (Pflicht)
---   Tab     = someTab,        -- optional, wenn Section nicht direkt angegeben wird
---   Section = someSection,    -- optional; wenn nil, wird über Tab + Slot erstellt
---   Slot    = "RightBottom",  -- optional Slot beim Erstellen über Tab
---   Title   = "CONFIGS",      -- optional Section-Titel
--- }
+----------------------------------------------------------------------
+-- Vanith:Config helper (builds config UI in a section)
+----------------------------------------------------------------------
+
 function Vanith:Config(cfg)
     cfg = cfg or {}
     local window  = cfg.Window
@@ -2160,14 +2157,14 @@ function Vanith:Config(cfg)
     local section = cfg.Section
 
     if not window then
-        error("Vanith:Config -> cfg.Window fehlt")
+        error("Vanith:Config -> cfg.Window is required")
     end
 
     if not section then
         if not tab then
-            error("Vanith:Config -> entweder cfg.Tab oder cfg.Section angeben")
+            error("Vanith:Config -> cfg.Tab or cfg.Section is required")
         end
-        section = tab:CreateSection(cfg.Title or "CONFIGS", cfg.Slot or "RightBottom")
+        section = tab:CreateSection(cfg.Title or "Configs", cfg.Slot or "RightBottom")
     end
 
     local function listConfigs()
@@ -2182,11 +2179,11 @@ function Vanith:Config(cfg)
 
     local nameBox = section:CreateTextbox({
         Default     = defaultName,
-        Placeholder = "Config Name",
+        Placeholder = "config name",
     })
 
     local dropdown = section:CreateDropdown({
-        Name    = "Configs",
+        Name    = "Config list",
         Options = (#existing > 0) and existing or {defaultName},
         Default = defaultName,
     })
@@ -2203,13 +2200,13 @@ function Vanith:Config(cfg)
     end
 
     section:CreateButton({
-        Name = "Save Config",
+        Name = "Save",
         Callback = function()
             local name = nameBox:GetText()
             if not name or name == "" then
                 window:Notify({
                     Title = "Config",
-                    Text  = "Bitte einen Config-Namen eingeben.",
+                    Text  = "Enter a config name first.",
                     Duration = 3,
                 })
                 return
@@ -2218,7 +2215,7 @@ function Vanith:Config(cfg)
             local ok, err = window:SaveConfig(name)
             if not ok then
                 window:Notify({
-                    Title = "Config - Fehler",
+                    Title = "Config error",
                     Text  = tostring(err),
                     Duration = 4,
                 })
@@ -2227,7 +2224,7 @@ function Vanith:Config(cfg)
 
             window:Notify({
                 Title = "Config",
-                Text  = "Config '" .. name .. "' gespeichert.",
+                Text  = "Saved '" .. name .. "'.",
                 Duration = 3,
             })
 
@@ -2236,13 +2233,13 @@ function Vanith:Config(cfg)
     })
 
     section:CreateButton({
-        Name = "Load Config",
+        Name = "Load",
         Callback = function()
             local name = dropdown:Get()
             if not name or name == "" then
                 window:Notify({
                     Title = "Config",
-                    Text  = "Bitte eine Config aus dem Dropdown wählen.",
+                    Text  = "Select a config first.",
                     Duration = 3,
                 })
                 return
@@ -2251,7 +2248,7 @@ function Vanith:Config(cfg)
             local ok, err = window:LoadConfig(name)
             if not ok then
                 window:Notify({
-                    Title = "Config - Fehler",
+                    Title = "Config error",
                     Text  = tostring(err),
                     Duration = 4,
                 })
@@ -2262,20 +2259,20 @@ function Vanith:Config(cfg)
 
             window:Notify({
                 Title = "Config",
-                Text  = "Config '" .. name .. "' geladen.",
+                Text  = "Loaded '" .. name .. "'.",
                 Duration = 3,
             })
         end
     })
 
     section:CreateButton({
-        Name = "Delete Config",
+        Name = "Delete",
         Callback = function()
             local name = dropdown:Get()
             if not name or name == "" then
                 window:Notify({
                     Title = "Config",
-                    Text  = "Bitte eine Config zum Löschen auswählen.",
+                    Text  = "Select a config to delete.",
                     Duration = 3,
                 })
                 return
@@ -2284,7 +2281,7 @@ function Vanith:Config(cfg)
             local ok, err = window:DeleteConfig(name)
             if not ok then
                 window:Notify({
-                    Title = "Config - Fehler",
+                    Title = "Config error",
                     Text  = tostring(err),
                     Duration = 4,
                 })
@@ -2293,7 +2290,7 @@ function Vanith:Config(cfg)
 
             window:Notify({
                 Title = "Config",
-                Text  = "Config '" .. name .. "' gelöscht.",
+                Text  = "Deleted '" .. name .. "'.",
                 Duration = 3,
             })
 
