@@ -1,10 +1,12 @@
+-- Vanith UI Library (full)
+
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
 local HttpService      = game:GetService("HttpService")
 
 local Vanith = {}
-t
+
 local Window  = {}
 Window.__index = Window
 
@@ -14,7 +16,7 @@ Tab.__index   = Tab
 local Section = {}
 Section.__index = Section
 
--- basic helpers
+-- helpers
 
 local function New(className, props)
     local inst = Instance.new(className)
@@ -260,6 +262,10 @@ function Vanith:Notify(cfg)
     return DoNotify(nil, cfg)
 end
 
+function Window:Notify(cfg)
+    return DoNotify(self.Theme, cfg)
+end
+
 ----------------------------------------------------------------------
 -- window helpers
 ----------------------------------------------------------------------
@@ -314,10 +320,6 @@ function Window:Destroy()
     if self.Gui then
         self.Gui:Destroy()
     end
-end
-
-function Window:Notify(cfg)
-    return DoNotify(self.Theme, cfg)
 end
 
 -- drag
@@ -417,7 +419,7 @@ function Window:_enableResize(handle, target)
     end)
 end
 
--- top tabs (strip in the title bar)
+-- top tab button
 
 function Window:_makeTopTabButton(text)
     local holder = self.TopTabsHolder
@@ -561,7 +563,7 @@ function Window:SelectTab(tab)
 end
 
 ----------------------------------------------------------------------
--- tab methods (top tabs + sections)
+-- tab methods / sections
 ----------------------------------------------------------------------
 
 function Tab:CreateTopTab(name)
@@ -627,7 +629,7 @@ function Tab:GetActiveTopTabName()
     return self._activeTopTab and self._activeTopTab.Label.Text or nil
 end
 
--- section slots: "LeftTop", "LeftBottom", "RightTop", "RightBottom"
+-- slot: "LeftTop", "LeftBottom", "RightTop", "RightBottom"
 
 function Tab:CreateSection(title, slot, topTabNameOrObj)
     local win  = self.Window
@@ -1471,7 +1473,7 @@ function Section:CreateDropdown(cfg)
 end
 
 ----------------------------------------------------------------------
--- window create
+-- CreateWindow (equal top bar blocks)
 ----------------------------------------------------------------------
 
 function Vanith:CreateWindow(opts)
@@ -1563,7 +1565,7 @@ function Vanith:CreateWindow(opts)
     self:_track(top, "BackgroundColor3", "BG2")
     New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = top})
 
-    -- row that holds brand, tabs-strip, control box (all same size)
+    -- top row: brand / tabs / controls (same size, same spacing)
     local headerRow = New("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(0.96, 0, 0, 34),
@@ -1582,18 +1584,6 @@ function Vanith:CreateWindow(opts)
     headerLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
     headerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
-    -- brand (left)
-    local brand = New("Frame", {
-        BorderSizePixel = 0,
-        Size = UDim2.new(1/3, -8, 1, 0),
-        Parent = headerRow,
-        ZIndex = 3,
-    })
-    self:_track(brand, "BackgroundColor3", "BG2")
-    New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = brand})
-    local bStroke = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = brand})
-    self:_track(bStroke, "Color", "Stroke")
-
     local windowTitle = (type(opts.Title) == "string" and opts.Title) or "Vanith"
     self.Title = windowTitle
 
@@ -1607,6 +1597,18 @@ function Vanith:CreateWindow(opts)
         end
     end
     local miniLabelText = opts.MinimizeText or ("Open " .. shortName)
+
+    -- left: brand
+    local brand = New("Frame", {
+        BorderSizePixel = 0,
+        Size = UDim2.new(1/3, -8, 1, 0),
+        Parent = headerRow,
+        ZIndex = 3,
+    })
+    self:_track(brand, "BackgroundColor3", "BG2")
+    New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = brand})
+    local bStroke = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = brand})
+    self:_track(bStroke, "Color", "Stroke")
 
     local brandLabel = New("TextLabel", {
         BackgroundTransparency = 1,
@@ -1638,7 +1640,7 @@ function Vanith:CreateWindow(opts)
     brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
     fitTitle()
 
-    -- middle: top tabs strip
+    -- middle: tabs strip
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.new(1/3, -8, 1, 0),
@@ -1696,7 +1698,7 @@ function Vanith:CreateWindow(opts)
     tabsHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTopTabsLayout)
     task.defer(updateTopTabsLayout)
 
-    -- right: control box (minimize / close)
+    -- right: control box
     local controlBox = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.new(1/3, -8, 1, 0),
@@ -1759,6 +1761,7 @@ function Vanith:CreateWindow(opts)
     end)
 
     -- sidebar / pages
+
     local sidebar = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(12, 66),
@@ -1834,6 +1837,7 @@ function Vanith:CreateWindow(opts)
     end
 
     -- mini open bar
+
     local miniButton = New("Frame", {
         Name = "VanithMini",
         BackgroundTransparency = 0,
@@ -1942,7 +1946,6 @@ function Vanith:CreateWindow(opts)
 end
 
 Vanith.Createwindow = Vanith.CreateWindow
-
 
 ----------------------------------------------------------------------
 -- config helpers
@@ -2164,7 +2167,7 @@ function Window:DeleteConfig(name)
 end
 
 ----------------------------------------------------------------------
--- Vanith:Config helper (builds config UI in a section)
+-- Vanith:Config  (builds config UI in a section)
 ----------------------------------------------------------------------
 
 function Vanith:Config(cfg)
