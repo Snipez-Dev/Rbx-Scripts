@@ -65,7 +65,7 @@ local function GetRootParent()
     return lp and lp:FindFirstChildOfClass("PlayerGui") or nil
 end
 
---------------------------------------------------------------------- -- theme (dunkler)
+--------------------------------------------------------------------- -- theme
 --------------------------------------------------------------------- 
 
 local DEFAULT_THEME = {
@@ -94,7 +94,7 @@ Tab.__index   = Tab
 local Section = {}
 Section.__index = Section
 
---------------------------------------------------------------------- -- NOTIFY (Window:Notify / Vanith:Notify)
+--------------------------------------------------------------------- -- NOTIFY (Window:Notify / Vanith:Notify), unten rechts
 --------------------------------------------------------------------- 
 
 local notifyState = {
@@ -120,11 +120,12 @@ local function ensureNotifyRoot()
         Parent = parent,
     })
 
+    -- unten rechts
     local holder = New("Frame", {
         BackgroundTransparency = 1,
-        AnchorPoint = Vector2.new(0.5, 0),
-        Position = UDim2.new(0.5, 0, 0, 20),
-        Size = UDim2.new(1, -40, 0, 200),
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.new(1, -20, 1, -20),
+        Size = UDim2.new(0, 320, 0, 260),
         Parent = gui,
         ZIndex = 40,
     })
@@ -148,8 +149,8 @@ local function ensureNotifyRoot()
         Padding       = UDim.new(0, 8),
         Parent        = holder,
     })
-    layout.VerticalAlignment   = Enum.VerticalAlignment.Top
-    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.VerticalAlignment   = Enum.VerticalAlignment.Bottom
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 
     notifyState.Gui    = gui
     notifyState.Holder = holder
@@ -177,7 +178,7 @@ local function notifyImpl(theme, cfg)
     local card = New("Frame", {
         BackgroundColor3       = bg,
         BackgroundTransparency = 1,
-        Size                   = UDim2.new(0, 320, 0, 0),
+        Size                   = UDim2.new(1, 0, 0, 0),
         AutomaticSize          = Enum.AutomaticSize.Y,
         Parent                 = state.Holder,
         ZIndex                 = 41,
@@ -314,7 +315,11 @@ function Window:Destroy()
     end
 end
 
--- drag top bar
+function Window:Notify(cfg)
+    return notifyImpl(self.Theme, cfg)
+end
+
+-- drag helper
 function Window:_enableDrag(handle, target)
     local dragging
     local dragStart
@@ -360,7 +365,7 @@ function Window:_enableDrag(handle, target)
     end)
 end
 
--- resize bottom right, minSize = creation size
+-- resize helper
 function Window:_enableResize(handle, target)
     local minSize = self.MinSize or Vector2.new(649, 417)
 
@@ -551,7 +556,7 @@ function Window:SelectTab(tab)
     end
 end
 
---------------------------------------------------------------------- -- tab methods (weapon tabs + sections)
+--------------------------------------------------------------------- -- tab methods (top tabs + sections)
 --------------------------------------------------------------------- 
 
 function Tab:CreateTopTab(name)
@@ -620,7 +625,6 @@ function Tab:GetActiveTopTabName()
 end
 
 -- slot: "LeftTop", "LeftBottom", "RightTop", "RightBottom"
--- optional 3. Parameter topTabNameOrObj -> Section nur in diesem TopTab anzeigen
 function Tab:CreateSection(title, slot, topTabNameOrObj)
     local win  = self.Window
     local page = self.Page
@@ -730,7 +734,7 @@ function Tab:CreateSection(title, slot, topTabNameOrObj)
         Inner     = inner,
         List      = list,
         _controls = {},
-        _topTab   = associatedTopTab, -- nil = global
+        _topTab   = associatedTopTab,
     }, Section)
 
     table.insert(self._sections, sec)
@@ -1451,10 +1455,6 @@ end
 --------------------------------------------------------------------- -- CreateWindow
 --------------------------------------------------------------------- 
 
-function Window:Notify(cfg)
-    return notifyImpl(self.Theme, cfg)
-end
-
 function Vanith:CreateWindow(opts)
     opts = opts or {}
 
@@ -1552,7 +1552,7 @@ function Vanith:CreateWindow(opts)
 
     local windowTitle = (type(opts.Title) == "string" and opts.Title) or "Vanith"
 
-    -- Mini-Button Text aus Title ableiten, aber frei überschreibbar
+    -- Mini-Button Text aus Title ableiten, aber per MinimizeText überschreibbar
     local shortName = windowTitle
     local barIndex = string.find(windowTitle, "|")
     if barIndex then
@@ -1782,61 +1782,105 @@ function Vanith:CreateWindow(opts)
     end
 
     ------------------------------------------------------------------
-    -- Kleiner "Open Vanith"-Button (mobile friendly, aber überall nutzbar)
+    -- Schöner, mobiler "Open Vanith"-Button (Dock mit Grip)
     ------------------------------------------------------------------
 
-    local miniButton = New("TextButton", {
+    local miniButton = New("Frame", {
         Name = "VanithMini",
-        AutoButtonColor = false,
         BackgroundTransparency = 0,
-        Size = UDim2.fromOffset(150, 34),
+        Size = UDim2.fromOffset(190, 40),
         Position = UDim2.new(0, 20, 0, 90),
         AnchorPoint = Vector2.new(0, 0),
         Parent = gui,
         Visible = false,
         ZIndex = 10,
-        Text = "",
     })
     self:_track(miniButton, "BackgroundColor3", "BG2")
-    New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = miniButton})
-    local miniStroke = New("UIStroke", {Thickness = 1, Transparency = 0.3, Parent = miniButton})
+    New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = miniButton})
+    local miniStroke = New("UIStroke", {Thickness = 1.2, Transparency = 0.35, Parent = miniButton})
     self:_track(miniStroke, "Color", "Stroke")
 
-    local miniIcon = New("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.fromOffset(24, 34),
-        Position = UDim2.new(0, 8, 0, 0),
-        Font = Enum.Font.GothamBold,
-        Text = "⠿",
-        TextSize = 16,
-        TextXAlignment = Enum.TextXAlignment.Center,
+    local miniGradient = New("UIGradient", {
+        Rotation = 90,
+        Color = ColorSequence.new(
+            ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+            ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1))
+        ),
+        Transparency = NumberSequence.new{
+            NumberSequenceKeypoint.new(0, 0.9),
+            NumberSequenceKeypoint.new(0.5, 1),
+            NumberSequenceKeypoint.new(1, 0.9)
+        },
+        Parent = miniButton,
+    })
+
+    -- linker Grip zum Draggen
+    local grip = New("Frame", {
+        BorderSizePixel = 0,
+        Size = UDim2.new(0, 36, 1, 0),
         Parent = miniButton,
         ZIndex = 11,
     })
-    self:_track(miniIcon, "TextColor3", "Muted")
+    self:_track(grip, "BackgroundColor3", "BG1")
+    New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = grip})
+    local gripStroke = New("UIStroke", {Thickness = 1, Transparency = 0.4, Parent = grip})
+    self:_track(gripStroke, "Color", "Stroke")
+
+    local gripIcon = New("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        Font = Enum.Font.GothamBold,
+        Text = "✥",
+        TextSize = 16,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        Parent = grip,
+        ZIndex = 12,
+    })
+    self:_track(gripIcon, "TextColor3", "Muted")
 
     local miniLabel = New("TextLabel", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(32, 0),
-        Size = UDim2.new(1, -40, 1, 0),
+        Position = UDim2.new(0, 44, 0, 0),
+        Size = UDim2.new(1, -54, 1, 0),
         Font = Enum.Font.Gotham,
         Text = miniLabelText,
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
         Parent = miniButton,
         ZIndex = 11,
     })
     self:_track(miniLabel, "TextColor3", "Text")
+
+    local clickArea = New("TextButton", {
+        AutoButtonColor = false,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -36, 1, 0),
+        Position = UDim2.new(0, 36, 0, 0),
+        Text = "",
+        Parent = miniButton,
+        ZIndex = 13,
+    })
 
     local miniScale = New("UIScale", {Parent = miniButton})
     miniScale.Scale = scale.Scale
 
     self.MiniButton = miniButton
 
-    self:_enableDrag(miniButton, miniButton)
+    -- Drag nur über Grip (wie ein Handle)
+    self:_enableDrag(grip, miniButton)
 
-    miniButton.MouseButton1Click:Connect(function()
+    clickArea.MouseButton1Click:Connect(function()
         self:Restore()
+    end)
+
+    -- Hover (PC)
+    miniButton.MouseEnter:Connect(function()
+        PlayTween(miniButton, {BackgroundColor3 = self.Theme.BG1}, 0.12)
+    end)
+    miniButton.MouseLeave:Connect(function()
+        PlayTween(miniButton, {BackgroundColor3 = self.Theme.BG2}, 0.12)
     end)
 
     return self
