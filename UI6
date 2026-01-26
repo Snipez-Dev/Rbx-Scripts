@@ -1822,52 +1822,50 @@ function Vanith:CreateWindow(opts)
 
     -- mini open bar
 
+     -- mini open bar (cleaner, kleiner, nicht transparent)
     local miniButton = New("Frame", {
         Name = "VanithMini",
         BackgroundTransparency = 0,
-        Size = UDim2.fromOffset(220, 46),
-        Position = UDim2.new(0, 20, 0, 100),
+        Size = UDim2.fromOffset(190, 40), -- kleiner
+        Position = UDim2.new(0, 24, 0, 120),
         AnchorPoint = Vector2.new(0, 0),
         Parent = gui,
         Visible = false,
         ZIndex = 10,
     })
     self:_track(miniButton, "BackgroundColor3", "BG2")
-    New("UICorner", {CornerRadius = UDim.new(0, 12), Parent = miniButton})
-    local miniStroke = New("UIStroke", {Thickness = 1.3, Transparency = 0.3, Parent = miniButton})
-    self:_track(miniStroke, "Color", "Stroke")
-
-    local miniGradient = New("UIGradient", {
-        Rotation = 90,
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-            ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
-        }),
-        Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.9),
-            NumberSequenceKeypoint.new(0.5, 1),
-            NumberSequenceKeypoint.new(1, 0.9),
-        }),
+    New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = miniButton})
+    local miniStroke = New("UIStroke", {
+        Thickness = 1.3,
+        Transparency = 0.15,
         Parent = miniButton,
     })
+    self:_track(miniStroke, "Color", "Stroke")
+
+    -- KEIN Gradient mehr -> nicht durchsichtig
+    -- (den alten UIGradient-Block komplett entfernen)
 
     local grip = New("Frame", {
         BorderSizePixel = 0,
-        Size = UDim2.new(0, 42, 1, 0),
+        Size = UDim2.new(0, 40, 1, 0),
         Parent = miniButton,
         ZIndex = 11,
     })
     self:_track(grip, "BackgroundColor3", "BG1")
-    New("UICorner", {CornerRadius = UDim.new(0, 12), Parent = grip})
-    local gripStroke = New("UIStroke", {Thickness = 1, Transparency = 0.4, Parent = grip})
+    New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = grip})
+    local gripStroke = New("UIStroke", {
+        Thickness = 1,
+        Transparency = 0.35,
+        Parent = grip,
+    })
     self:_track(gripStroke, "Color", "Stroke")
 
     local gripIcon = New("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.GothamBold,
-        Text = "✥",
-        TextSize = 18,
+        Text = "▢",
+        TextSize = 16,
         TextXAlignment = Enum.TextXAlignment.Center,
         TextYAlignment = Enum.TextYAlignment.Center,
         Parent = grip,
@@ -1877,17 +1875,28 @@ function Vanith:CreateWindow(opts)
 
     local miniLabel = New("TextLabel", {
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 52, 0, 0),
-        Size = UDim2.new(1, -62, 1, 0),
+        Position = UDim2.new(0, 48, 0, 0),
+        Size = UDim2.new(1, -58, 1, 0),
         Font = Enum.Font.Gotham,
         Text = miniLabelText,
-        TextSize = 13,
+        TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
         Parent = miniButton,
         ZIndex = 11,
     })
     self:_track(miniLabel, "TextColor3", "Text")
+
+    local clickArea = New("TextButton", {
+        AutoButtonColor = false,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -40, 1, 0),
+        Position = UDim2.new(0, 40, 0, 0),
+        Text = "",
+        Parent = miniButton,
+        ZIndex = 13,
+    })
+
 
     local clickArea = New("TextButton", {
         AutoButtonColor = false,
