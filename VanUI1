@@ -20,6 +20,12 @@ Section.__index = Section
 
 local function New(className, props)
     local inst = Instance.new(className)
+
+    -- force all UI we create to NOT be auto localized by Roblox
+    pcall(function()
+        inst.AutoLocalize = false
+    end)
+
     if props then
         for k, v in pairs(props) do
             inst[k] = v
@@ -749,7 +755,7 @@ function Tab:CreateSection(title, slot, topTabNameOrObj)
 end
 
 ----------------------------------------------------------------------
--- controls: slider  (IMPROVED MOUSE DRAG)
+-- controls: slider
 ----------------------------------------------------------------------
 
 function Section:CreateSlider(cfg)
@@ -828,17 +834,6 @@ function Section:CreateSlider(cfg)
     win:_track(knob, "BackgroundColor3", "Muted")
     New("UICorner", {CornerRadius = UDim.new(0, 2), Parent = knob})
 
-    -- bigger invisible hitbox to make dragging easy on PC
-    local hitbox = New("TextButton", {
-        AutoButtonColor       = false,
-        BackgroundTransparency = 1,
-        Text                  = "",
-        Position              = UDim2.fromOffset(0, 18),
-        Size                  = UDim2.new(1, 0, 0, 32),
-        Parent                = row,
-        ZIndex                = 10,
-    })
-
     local function setVisual(v, tweenIt)
         local t = (v - minv) / (maxv - minv)
         t = Clamp01(t)
@@ -881,7 +876,8 @@ function Section:CreateSlider(cfg)
 
     syncProfile()
 
-    local dragging = false
+    local dragging
+    local activeInput
 
     local function valueFromInput(input)
         local x = input.Position.X - track.AbsolutePosition.X
@@ -889,38 +885,36 @@ function Section:CreateSlider(cfg)
         return minv + ratio * (maxv - minv)
     end
 
-    local function beginDrag(input)
-        if not (IsMouse(input.UserInputType) or IsTouch(input.UserInputType)) then
-            return
-        end
-
-        dragging = true
+    local function begin(input)
+        dragging    = true
+        activeInput = input
         PlayTween(knob, {BackgroundColor3 = win.Theme.Accent}, 0.1)
         setValue(valueFromInput(input), true)
 
-        local conn
-        conn = input.Changed:Connect(function()
+        input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
+                dragging    = false
+                activeInput = nil
                 PlayTween(knob, {BackgroundColor3 = win.Theme.Muted}, 0.1)
-                if conn then
-                    conn:Disconnect()
-                    conn = nil
-                end
             end
         end)
     end
 
-    -- start drag from hitbox, track or knob (all feel good on PC)
-    hitbox.InputBegan:Connect(beginDrag)
-    track.InputBegan:Connect(beginDrag)
-    knob.InputBegan:Connect(beginDrag)
+    track.InputBegan:Connect(function(input)
+        if IsMouse(input.UserInputType) or IsTouch(input.UserInputType) then
+            begin(input)
+        end
+    end)
 
-    -- follow mouse movement globally while dragging – no weird stopping when you leave the track
-    UserInputService.InputChanged:Connect(function(input)
-        if not dragging then return end
+    track.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement
         or input.UserInputType == Enum.UserInputType.Touch then
+            activeInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input == activeInput then
             setValue(valueFromInput(input), true)
         end
     end)
@@ -1331,13 +1325,12 @@ function Section:CreateDropdown(cfg)
     })
     win:_track(valLbl, "TextColor3", "Text")
 
-    -- "<" when closed, "v" when open
     local arrow = New("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.new(1, -22, 0, 0),
         Size = UDim2.fromOffset(20, ROW_HEIGHT),
         Font = Enum.Font.GothamBold,
-        Text = "<",
+        Text = "<", -- closed by default
         TextSize = 14,
         Parent = head,
     })
@@ -1635,7 +1628,7 @@ function Vanith:CreateWindow(opts)
     brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
     fitTitle()
 
-    -- center top strip with top tabs
+    -- middle strip with top tabs
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
@@ -1694,7 +1687,7 @@ function Vanith:CreateWindow(opts)
     tabsHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTopTabsLayout)
     task.defer(updateTopTabsLayout)
 
-    -- right control box (minimize / close)
+    -- right control box
     local controlBox = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.new(1, -96, 0, 10),
@@ -1833,8 +1826,7 @@ function Vanith:CreateWindow(opts)
         scale.Scale = 1
     end
 
-    -- mini open bar (for minimized window)
-
+    -- mini open bar (small, clean, opaque)
     local miniButton = New("Frame", {
         Name = "VanithMini",
         BackgroundTransparency = 0,
@@ -1936,10 +1928,10 @@ function Vanith:CreateWindow(opts)
     return self
 end
 
-Vanith.Createwindow = Vanith.CreateWindow -- alias
+Vanith.Createwindow = Vanith.CreateWindow
 
 ----------------------------------------------------------------------
--- config helpers (fixed in-place _profileValues update)
+-- config helpers
 ----------------------------------------------------------------------
 
 function Window:_ensureConfigFolder()
@@ -1960,6 +1952,7 @@ function Window:_getConfigPath(name)
     return string.format("%s/%s.%s", folder, cfgName, ext)
 end
 
+-- FIX: only list real config files (correct extension), ignore things like "assets"
 function Window:ListConfigs()
     local folder = self:_ensureConfigFolder()
     local result = {}
@@ -1969,10 +1962,23 @@ function Window:ListConfigs()
         if okExists and exists then
             local ok, files = pcall(listfiles, folder)
             if ok and type(files) == "table" then
+                local ext = (self.ConfigExtension or "json"):gsub("^%.+", "")
+                ext = ext:lower()
+
                 for _, fullPath in ipairs(files) do
-                    local fname = fullPath:match("[^/\\]+$") or fullPath
-                    fname = fname:gsub("%.%w+$", "")
-                    table.insert(result, fname)
+                    -- skip subfolders
+                    local isDir = false
+                    if isfolder then
+                        local okDir, dirResult = pcall(isfolder, fullPath)
+                        isDir = okDir and dirResult or false
+                    end
+                    if not isDir then
+                        local fname = fullPath:match("[^/\\]+$") or fullPath
+                        local base, fileExt = fname:match("^(.*)%.([%w]+)$")
+                        if fileExt and fileExt:lower() == ext then
+                            table.insert(result, (base and base ~= "") and base or fname)
+                        end
+                    end
                 end
             end
         end
@@ -2051,7 +2057,7 @@ function Window:_applyConfigData(data)
                     for ci, ctrl in ipairs(sec._controls or {}) do
                         local cEntry = sEntry.controls[ci]
                         if cEntry and type(cEntry.profiles) == "table" and ctrl._profileValues then
-                            local newPV  = {}
+                            local newPV = {}
                             for profName, val in pairs(cEntry.profiles) do
                                 local key
                                 if profName == "__default" then
@@ -2068,17 +2074,7 @@ function Window:_applyConfigData(data)
                                     newPV[key] = val
                                 end
                             end
-
-                            local existing = ctrl._profileValues
-                            if type(existing) == "table" then
-                                for k in pairs(existing) do
-                                    existing[k] = nil
-                                end
-                                for k, v in pairs(newPV) do
-                                    existing[k] = v
-                                end
-                            end
-
+                            ctrl._profileValues = newPV
                             if ctrl._syncProfile then
                                 ctrl:_syncProfile()
                             end
