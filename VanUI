@@ -1,4 +1,4 @@
-
+-- Vanith UI Library
 
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -749,7 +749,7 @@ function Tab:CreateSection(title, slot, topTabNameOrObj)
 end
 
 ----------------------------------------------------------------------
--- controls: slider
+-- controls: slider  (IMPROVED MOUSE DRAG)
 ----------------------------------------------------------------------
 
 function Section:CreateSlider(cfg)
@@ -828,6 +828,17 @@ function Section:CreateSlider(cfg)
     win:_track(knob, "BackgroundColor3", "Muted")
     New("UICorner", {CornerRadius = UDim.new(0, 2), Parent = knob})
 
+    -- bigger invisible hitbox to make dragging easy on PC
+    local hitbox = New("TextButton", {
+        AutoButtonColor       = false,
+        BackgroundTransparency = 1,
+        Text                  = "",
+        Position              = UDim2.fromOffset(0, 18),
+        Size                  = UDim2.new(1, 0, 0, 32),
+        Parent                = row,
+        ZIndex                = 10,
+    })
+
     local function setVisual(v, tweenIt)
         local t = (v - minv) / (maxv - minv)
         t = Clamp01(t)
@@ -870,8 +881,7 @@ function Section:CreateSlider(cfg)
 
     syncProfile()
 
-    local dragging
-    local activeInput
+    local dragging = false
 
     local function valueFromInput(input)
         local x = input.Position.X - track.AbsolutePosition.X
@@ -879,36 +889,38 @@ function Section:CreateSlider(cfg)
         return minv + ratio * (maxv - minv)
     end
 
-    local function begin(input)
-        dragging    = true
-        activeInput = input
+    local function beginDrag(input)
+        if not (IsMouse(input.UserInputType) or IsTouch(input.UserInputType)) then
+            return
+        end
+
+        dragging = true
         PlayTween(knob, {BackgroundColor3 = win.Theme.Accent}, 0.1)
         setValue(valueFromInput(input), true)
 
-        input.Changed:Connect(function()
+        local conn
+        conn = input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
-                dragging    = false
-                activeInput = nil
+                dragging = false
                 PlayTween(knob, {BackgroundColor3 = win.Theme.Muted}, 0.1)
+                if conn then
+                    conn:Disconnect()
+                    conn = nil
+                end
             end
         end)
     end
 
-    track.InputBegan:Connect(function(input)
-        if IsMouse(input.UserInputType) or IsTouch(input.UserInputType) then
-            begin(input)
-        end
-    end)
+    -- start drag from hitbox, track or knob (all feel good on PC)
+    hitbox.InputBegan:Connect(beginDrag)
+    track.InputBegan:Connect(beginDrag)
+    knob.InputBegan:Connect(beginDrag)
 
-    track.InputChanged:Connect(function(input)
+    -- follow mouse movement globally while dragging – no weird stopping when you leave the track
+    UserInputService.InputChanged:Connect(function(input)
+        if not dragging then return end
         if input.UserInputType == Enum.UserInputType.MouseMovement
         or input.UserInputType == Enum.UserInputType.Touch then
-            activeInput = input
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input == activeInput then
             setValue(valueFromInput(input), true)
         end
     end)
@@ -1319,13 +1331,13 @@ function Section:CreateDropdown(cfg)
     })
     win:_track(valLbl, "TextColor3", "Text")
 
-    -- user request: use "<" when closed and "v" when open
+    -- "<" when closed, "v" when open
     local arrow = New("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.new(1, -22, 0, 0),
         Size = UDim2.fromOffset(20, ROW_HEIGHT),
         Font = Enum.Font.GothamBold,
-        Text = "<", -- closed by default
+        Text = "<",
         TextSize = 14,
         Parent = head,
     })
@@ -1927,7 +1939,7 @@ end
 Vanith.Createwindow = Vanith.CreateWindow -- alias
 
 ----------------------------------------------------------------------
--- config helpers (FIXED: apply data into existing _profileValues tables)
+-- config helpers (fixed in-place _profileValues update)
 ----------------------------------------------------------------------
 
 function Window:_ensureConfigFolder()
@@ -2039,9 +2051,6 @@ function Window:_applyConfigData(data)
                     for ci, ctrl in ipairs(sec._controls or {}) do
                         local cEntry = sEntry.controls[ci]
                         if cEntry and type(cEntry.profiles) == "table" and ctrl._profileValues then
-                            -- IMPORTANT FIX:
-                            -- We update the existing _profileValues table in-place,
-                            -- so closures inside controls still see the correct data.
                             local newPV  = {}
                             for profName, val in pairs(cEntry.profiles) do
                                 local key
@@ -2062,11 +2071,9 @@ function Window:_applyConfigData(data)
 
                             local existing = ctrl._profileValues
                             if type(existing) == "table" then
-                                -- clear old keys
                                 for k in pairs(existing) do
                                     existing[k] = nil
                                 end
-                                -- copy new ones
                                 for k, v in pairs(newPV) do
                                     existing[k] = v
                                 end
