@@ -1826,17 +1826,21 @@ function Vanith:CreateWindow(opts)
         scale.Scale = 1
     end
 
-    -- mini open bar (small, clean, opaque)
+
     local miniButton = New("Frame", {
         Name = "VanithMini",
         BackgroundTransparency = 0,
         Size = UDim2.fromOffset(190, 40),
-        Position = UDim2.new(0, 24, 0, 120),
-        AnchorPoint = Vector2.new(0, 0),
-        Parent = gui,
+
+        -- immer oben in der Mitte starten
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position    = UDim2.new(0.5, 0, 0, 24),
+
+        Parent  = gui,
         Visible = false,
-        ZIndex = 10,
+        ZIndex  = 10,
     })
+
     self:_track(miniButton, "BackgroundColor3", "BG2")
     New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = miniButton})
     local miniStroke = New("UIStroke", {
