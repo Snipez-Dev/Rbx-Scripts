@@ -1,4 +1,4 @@
--- Vanith UI Library (Config + Dropdown Fix)
+
 
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
