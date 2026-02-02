@@ -867,7 +867,6 @@ function Section:CreateSlider(cfg)
     syncProfile()
 
     local dragging
-    local activeInput
 
     local function valueFromInput(input)
         local x = input.Position.X - track.AbsolutePosition.X
@@ -876,19 +875,24 @@ function Section:CreateSlider(cfg)
     end
 
     local function begin(input)
-        dragging    = true
-        activeInput = input
+        dragging = true
         PlayTween(knob, {BackgroundColor3 = win.Theme.Accent}, 0.1)
         setValue(valueFromInput(input), true)
 
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
-                dragging    = false
-                activeInput = nil
+                dragging = false
                 PlayTween(knob, {BackgroundColor3 = win.Theme.Muted}, 0.1)
             end
         end)
     end
+
+    -- Slider lässt sich jetzt über die ganze Reihe starten, nicht nur exakt auf dem Track
+    row.InputBegan:Connect(function(input)
+        if IsMouse(input.UserInputType) or IsTouch(input.UserInputType) then
+            begin(input)
+        end
+    end)
 
     track.InputBegan:Connect(function(input)
         if IsMouse(input.UserInputType) or IsTouch(input.UserInputType) then
@@ -896,15 +900,11 @@ function Section:CreateSlider(cfg)
         end
     end)
 
-    track.InputChanged:Connect(function(input)
+    -- stabileres Dragging: wir folgen einfach der Maus/Touch solange dragging == true
+    UserInputService.InputChanged:Connect(function(input)
+        if not dragging then return end
         if input.UserInputType == Enum.UserInputType.MouseMovement
         or input.UserInputType == Enum.UserInputType.Touch then
-            activeInput = input
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input == activeInput then
             setValue(valueFromInput(input), true)
         end
     end)
@@ -1385,15 +1385,11 @@ function Section:CreateDropdown(cfg)
             b.MouseButton1Click:Connect(function()
                 applySelectionForCurrentProfile(opt, true)
                 rebuild()
-                open = false
-                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.12)
-                PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT)}, 0.12)
-                arrow.Text = "<"
+                -- beim Auswählen schön zu-animieren
+                setOpen(false)
             end)
         end
     end
-
-    rebuild()
 
     local function setOpen(state)
         if state == open then return end
@@ -1406,18 +1402,36 @@ function Section:CreateDropdown(cfg)
                 contentHeight = math.min(contentHeight, maxHeight)
             end
 
-            listBg.Size   = UDim2.new(1, 0, 0, contentHeight)
-            listWrap.Size = UDim2.new(1, 0, 0, contentHeight)
-            wrap.Size     = UDim2.new(1, 0, 0, ROW_HEIGHT + contentHeight)
+            local targetSize = UDim2.new(1, 0, 0, contentHeight)
+
+            -- animiertes Aufklappen
+            PlayTween(listBg,   {Size = targetSize}, 0.12)
+            PlayTween(listWrap, {Size = targetSize}, 0.12)
+            PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT + contentHeight)}, 0.12)
+            PlayTween(arrow,    {Rotation = 90}, 0.12)
         else
             arrow.Text = "<"
-            listWrap.Size = UDim2.new(1, 0, 0, 0)
-            wrap.Size     = UDim2.new(1, 0, 0, ROW_HEIGHT)
+            -- animiertes Zuklappen
+            local closedSize = UDim2.new(1, 0, 0, 0)
+            PlayTween(listBg,   {Size = closedSize}, 0.12)
+            PlayTween(listWrap, {Size = closedSize}, 0.12)
+            PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT)}, 0.12)
+            PlayTween(arrow,    {Rotation = 0}, 0.12)
         end
     end
 
+    rebuild()
+
     head.MouseButton1Click:Connect(function()
         setOpen(not open)
+    end)
+
+    -- kleines Hover-Feedback für den Kopf des Dropdowns
+    head.MouseEnter:Connect(function()
+        PlayTween(head, {BackgroundColor3 = win.Theme.Track}, 0.08)
+    end)
+    head.MouseLeave:Connect(function()
+        PlayTween(head, {BackgroundColor3 = win.Theme.Field}, 0.12)
     end)
 
     local function syncProfile()
