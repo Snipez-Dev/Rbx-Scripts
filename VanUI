@@ -1353,6 +1353,14 @@ function Section:CreateDropdown(cfg)
         Parent        = listBg,
     })
 
+    -- kleine Hover-Animation für den Kopf
+    head.MouseEnter:Connect(function()
+        PlayTween(head, {BackgroundColor3 = win.Theme.Track}, 0.08)
+    end)
+    head.MouseLeave:Connect(function()
+        PlayTween(head, {BackgroundColor3 = win.Theme.Field}, 0.1)
+    end)
+
     local function applySelectionForCurrentProfile(sel, callCallback)
         current = sel
         selectedByProfile[getProfileKey()] = sel
@@ -1385,10 +1393,12 @@ function Section:CreateDropdown(cfg)
             b.MouseButton1Click:Connect(function()
                 applySelectionForCurrentProfile(opt, true)
                 rebuild()
+                -- beim Klick auch mit Animation schließen
                 open = false
-                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.12)
-                PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT)}, 0.12)
                 arrow.Text = "<"
+                PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.12)
+                PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, 0)}, 0.12)
+                PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT)}, 0.12)
             end)
         end
     end
@@ -1406,13 +1416,16 @@ function Section:CreateDropdown(cfg)
                 contentHeight = math.min(contentHeight, maxHeight)
             end
 
-            listBg.Size   = UDim2.new(1, 0, 0, contentHeight)
-            listWrap.Size = UDim2.new(1, 0, 0, contentHeight)
-            wrap.Size     = UDim2.new(1, 0, 0, ROW_HEIGHT + contentHeight)
+            -- animiertes Aufklappen
+            PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, contentHeight)}, 0.12)
+            PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, contentHeight)}, 0.12)
+            PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT + contentHeight)}, 0.12)
         else
             arrow.Text = "<"
-            listWrap.Size = UDim2.new(1, 0, 0, 0)
-            wrap.Size     = UDim2.new(1, 0, 0, ROW_HEIGHT)
+            -- animiertes Zuklappen
+            PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.12)
+            PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, 0)}, 0.12)
+            PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT)}, 0.12)
         end
     end
 
