@@ -1,4 +1,4 @@
--- Vanith UI Library
+-- Vanith UI Library (slightly cleaned up / restyled)
 
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -16,12 +16,12 @@ Tab.__index   = Tab
 local Section = {}
 Section.__index = Section
 
--- helpers
+-- small helpers ------------------------------------------------------
 
 local function New(className, props)
     local inst = Instance.new(className)
 
-    -- force all UI we create to NOT be auto localized by Roblox
+    -- prevent automatic localization on UI we create
     pcall(function()
         inst.AutoLocalize = false
     end)
@@ -82,28 +82,28 @@ local function GetRootParent()
     return lp and lp:FindFirstChildOfClass("PlayerGui") or nil
 end
 
--- theme
+-- theme --------------------------------------------------------------
 
 local DEFAULT_THEME = {
-    Accent  = Color3.fromRGB(165, 105, 255),
+    Accent  = Color3.fromRGB(145, 110, 255),
 
-    BG0     = Color3.fromRGB(4, 4, 6),
-    BG1     = Color3.fromRGB(10, 10, 14),
-    BG2     = Color3.fromRGB(10, 10, 14),
+    BG0     = Color3.fromRGB(6, 8, 14),
+    BG1     = Color3.fromRGB(12, 14, 22),
+    BG2     = Color3.fromRGB(16, 18, 28),
 
-    Stroke  = Color3.fromRGB(40, 40, 50),
+    Stroke  = Color3.fromRGB(52, 60, 85),
 
-    Text    = Color3.fromRGB(230, 230, 238),
-    Muted   = Color3.fromRGB(140, 140, 150),
-    DimText = Color3.fromRGB(95, 95, 110),
+    Text    = Color3.fromRGB(235, 235, 245),
+    Muted   = Color3.fromRGB(150, 155, 170),
+    DimText = Color3.fromRGB(110, 115, 135),
 
-    Track   = Color3.fromRGB(22, 22, 28),
-    Field   = Color3.fromRGB(16, 16, 20),
+    Track   = Color3.fromRGB(32, 34, 50),
+    Field   = Color3.fromRGB(20, 22, 32),
+
+    Danger  = Color3.fromRGB(230, 95, 115),
 }
 
-----------------------------------------------------------------------
--- notify
-----------------------------------------------------------------------
+-- notifications ------------------------------------------------------
 
 local notifyState = {
     Gui    = nil,
@@ -272,9 +272,7 @@ function Window:Notify(cfg)
     return DoNotify(self.Theme, cfg)
 end
 
-----------------------------------------------------------------------
--- window helpers
-----------------------------------------------------------------------
+-- window helpers -----------------------------------------------------
 
 function Window:_track(inst, prop, key)
     table.insert(self._themeBindings, {inst = inst, prop = prop, key = key})
@@ -328,7 +326,7 @@ function Window:Destroy()
     end
 end
 
--- drag
+-- drag ---------------------------------------------------------------
 
 function Window:_enableDrag(handle, target)
     local dragging
@@ -375,7 +373,7 @@ function Window:_enableDrag(handle, target)
     end)
 end
 
--- resize
+-- resize -------------------------------------------------------------
 
 function Window:_enableResize(handle, target)
     local minSize = self.MinSize or Vector2.new(649, 417)
@@ -425,7 +423,7 @@ function Window:_enableResize(handle, target)
     end)
 end
 
--- top tab button
+-- top tab button (middle strip) -------------------------------------
 
 function Window:_makeTopTabButton(text)
     local holder = self.TopTabsHolder
@@ -467,9 +465,7 @@ function Window:_makeTopTabButton(text)
     return t
 end
 
-----------------------------------------------------------------------
--- left side tabs
-----------------------------------------------------------------------
+-- left side tabs -----------------------------------------------------
 
 function Window:CreateTab(name)
     local row = New("TextButton", {
@@ -568,9 +564,7 @@ function Window:SelectTab(tab)
     end
 end
 
-----------------------------------------------------------------------
--- tab methods / sections
-----------------------------------------------------------------------
+-- tab methods / sections ---------------------------------------------
 
 function Tab:CreateTopTab(name)
     local win = self.Window
@@ -754,9 +748,7 @@ function Tab:CreateSection(title, slot, topTabNameOrObj)
     return sec
 end
 
-----------------------------------------------------------------------
--- controls: slider
-----------------------------------------------------------------------
+-- controls: slider ---------------------------------------------------
 
 function Section:CreateSlider(cfg)
     local win   = self.Window
@@ -938,9 +930,7 @@ function Section:CreateSlider(cfg)
     return obj
 end
 
-----------------------------------------------------------------------
--- controls: toggle
-----------------------------------------------------------------------
+-- controls: toggle ---------------------------------------------------
 
 function Section:CreateToggle(cfg)
     local win   = self.Window
@@ -1082,11 +1072,14 @@ function Section:CreateToggle(cfg)
 
             if animated then
                 PlayTween(fill, {BackgroundColor3 = col}, 0.12)
-                PlayTween(knob, {Position = state and posOn or posOff, BackgroundColor3 = Color3.new(1,1,1)}, 0.12)
+                PlayTween(knob, {
+                    Position = state and posOn or posOff,
+                    BackgroundColor3 = Color3.new(1, 1, 1),
+                }, 0.12)
             else
                 fill.BackgroundColor3 = col
                 knob.Position         = state and posOn or posOff
-                knob.BackgroundColor3 = Color3.new(1,1,1)
+                knob.BackgroundColor3 = Color3.new(1, 1, 1)
             end
         end
 
@@ -1130,9 +1123,7 @@ function Section:CreateToggle(cfg)
     return obj
 end
 
-----------------------------------------------------------------------
--- controls: button
-----------------------------------------------------------------------
+-- controls: button ---------------------------------------------------
 
 function Section:CreateButton(cfg)
     local win   = self.Window
@@ -1169,9 +1160,7 @@ function Section:CreateButton(cfg)
     return btn
 end
 
-----------------------------------------------------------------------
--- controls: textbox
-----------------------------------------------------------------------
+-- controls: textbox --------------------------------------------------
 
 function Section:CreateTextbox(cfg)
     local win   = self.Window
@@ -1244,9 +1233,7 @@ function Section:CreateTextbox(cfg)
     return obj
 end
 
-----------------------------------------------------------------------
--- controls: dropdown
-----------------------------------------------------------------------
+-- controls: dropdown -------------------------------------------------
 
 function Section:CreateDropdown(cfg)
     local win   = self.Window
@@ -1330,7 +1317,7 @@ function Section:CreateDropdown(cfg)
         Position = UDim2.new(1, -22, 0, 0),
         Size = UDim2.fromOffset(20, ROW_HEIGHT),
         Font = Enum.Font.GothamBold,
-        Text = "<", -- closed by default
+        Text = "<",
         TextSize = 14,
         Parent = head,
     })
@@ -1478,9 +1465,7 @@ function Section:CreateDropdown(cfg)
     return obj
 end
 
-----------------------------------------------------------------------
--- CreateWindow  (brand + control keep size, tabs in the middle)
-----------------------------------------------------------------------
+-- CreateWindow -------------------------------------------------------
 
 function Vanith:CreateWindow(opts)
     opts = opts or {}
@@ -1553,7 +1538,7 @@ function Vanith:CreateWindow(opts)
 
     local glass = New("Frame", {
         BackgroundColor3 = Color3.new(1, 1, 1),
-        BackgroundTransparency = 0.97,
+        BackgroundTransparency = 0.965,
         BorderSizePixel = 0,
         Size = UDim2.fromScale(1, 1),
         Parent = main,
@@ -1585,7 +1570,7 @@ function Vanith:CreateWindow(opts)
     end
     local miniLabelText = opts.MinimizeText or ("Open " .. shortName)
 
-    -- left brand box
+    -- brand box (links oben)
     local brand = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(12, 10),
@@ -1687,7 +1672,7 @@ function Vanith:CreateWindow(opts)
     tabsHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTopTabsLayout)
     task.defer(updateTopTabsLayout)
 
-    -- right control box
+    -- control box rechts oben (minimize / close)
     local controlBox = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.new(1, -96, 0, 10),
@@ -1697,34 +1682,38 @@ function Vanith:CreateWindow(opts)
     })
     self:_track(controlBox, "BackgroundColor3", "BG2")
     New("UICorner", {CornerRadius = UDim.new(0, 8), Parent = controlBox})
-    local cbStroke = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = controlBox})
+    local cbStroke = New("UIStroke", {Thickness = 1, Transparency = 0.35, Parent = controlBox})
     self:_track(cbStroke, "Color", "Stroke")
 
     local minimizeBtn = New("TextButton", {
         AutoButtonColor = false,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0.5, 0, 1, 0),
-        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 0,
+        Size = UDim2.new(0.5, -6, 1, -8),
+        Position = UDim2.new(0, 4, 0, 4),
         Font = Enum.Font.GothamBold,
-        Text = "–",
+        Text = "─",
         TextSize = 16,
         Parent = controlBox,
         ZIndex = 4,
     })
-    self:_track(minimizeBtn, "TextColor3", "Accent")
+    self:_track(minimizeBtn, "BackgroundColor3", "BG1")
+    self:_track(minimizeBtn, "TextColor3", "Text")
+    New("UICorner", {CornerRadius = UDim.new(0, 6), Parent = minimizeBtn})
 
     local closeBtn = New("TextButton", {
         AutoButtonColor = false,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0.5, 0, 1, 0),
-        Position = UDim2.new(0.5, 0, 0, 0),
+        BackgroundTransparency = 0,
+        Size = UDim2.new(0.5, -6, 1, -8),
+        Position = UDim2.new(0.5, 2, 0, 4),
         Font = Enum.Font.GothamBold,
-        Text = "X",
+        Text = "✕",
         TextSize = 16,
         Parent = controlBox,
         ZIndex = 4,
     })
-    self:_track(closeBtn, "TextColor3", "Accent")
+    closeBtn.BackgroundColor3 = theme.Danger
+    closeBtn.TextColor3 = Color3.fromRGB(250, 250, 255)
+    New("UICorner", {CornerRadius = UDim.new(0, 6), Parent = closeBtn})
 
     minimizeBtn.MouseButton1Click:Connect(function()
         self:Minimize()
@@ -1737,20 +1726,22 @@ function Vanith:CreateWindow(opts)
     end)
 
     minimizeBtn.MouseEnter:Connect(function()
-        PlayTween(minimizeBtn, {TextColor3 = self.Theme.Text}, 0.08)
+        PlayTween(minimizeBtn, {BackgroundColor3 = self.Theme.BG2}, 0.08)
+        PlayTween(minimizeBtn, {TextColor3 = self.Theme.Accent}, 0.08)
     end)
     minimizeBtn.MouseLeave:Connect(function()
-        PlayTween(minimizeBtn, {TextColor3 = self.Theme.Accent}, 0.1)
+        PlayTween(minimizeBtn, {BackgroundColor3 = self.Theme.BG1}, 0.1)
+        PlayTween(minimizeBtn, {TextColor3 = self.Theme.Text}, 0.1)
     end)
 
     closeBtn.MouseEnter:Connect(function()
-        PlayTween(closeBtn, {TextColor3 = Color3.fromRGB(255, 120, 120)}, 0.08)
+        PlayTween(closeBtn, {BackgroundColor3 = Color3.fromRGB(255, 115, 135)}, 0.08)
     end)
     closeBtn.MouseLeave:Connect(function()
-        PlayTween(closeBtn, {TextColor3 = self.Theme.Accent}, 0.1)
+        PlayTween(closeBtn, {BackgroundColor3 = self.Theme.Danger}, 0.1)
     end)
 
-    -- sidebar / pages
+    -- sidebar / pages ------------------------------------------------
 
     local sidebar = New("Frame", {
         BorderSizePixel = 0,
@@ -1826,13 +1817,13 @@ function Vanith:CreateWindow(opts)
         scale.Scale = 1
     end
 
+    -- mini open button (wenn Fenster minimiert ist) ------------------
 
     local miniButton = New("Frame", {
         Name = "VanithMini",
         BackgroundTransparency = 0,
-        Size = UDim2.fromOffset(190, 40),
+        Size = UDim2.fromOffset(200, 40),
 
-        -- immer oben in der Mitte starten
         AnchorPoint = Vector2.new(0.5, 0),
         Position    = UDim2.new(0.5, 0, 0, 24),
 
@@ -1850,6 +1841,19 @@ function Vanith:CreateWindow(opts)
     })
     self:_track(miniStroke, "Color", "Stroke")
 
+    local miniGradient = New("UIGradient", {
+        Rotation = 0,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 22, 32)),
+            ColorSequenceKeypoint.new(1, theme.Accent),
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.25),
+            NumberSequenceKeypoint.new(1, 0.35),
+        }),
+        Parent = miniButton,
+    })
+
     local grip = New("Frame", {
         BorderSizePixel = 0,
         Size = UDim2.new(0, 40, 1, 0),
@@ -1860,7 +1864,7 @@ function Vanith:CreateWindow(opts)
     New("UICorner", {CornerRadius = UDim.new(0, 10), Parent = grip})
     local gripStroke = New("UIStroke", {
         Thickness = 1,
-        Transparency = 0.35,
+        Transparency = 0.4,
         Parent = grip,
     })
     self:_track(gripStroke, "Color", "Stroke")
@@ -1869,7 +1873,7 @@ function Vanith:CreateWindow(opts)
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
         Font = Enum.Font.GothamBold,
-        Text = "▢",
+        Text = "≡",
         TextSize = 16,
         TextXAlignment = Enum.TextXAlignment.Center,
         TextYAlignment = Enum.TextYAlignment.Center,
@@ -1914,10 +1918,12 @@ function Vanith:CreateWindow(opts)
     end)
 
     miniButton.MouseEnter:Connect(function()
-        PlayTween(miniButton, {BackgroundColor3 = self.Theme.BG1}, 0.12)
+        PlayTween(miniButton, {BackgroundTransparency = 0}, 0.12)
+        PlayTween(miniLabel, {TextColor3 = self.Theme.Accent}, 0.12)
     end)
     miniButton.MouseLeave:Connect(function()
-        PlayTween(miniButton, {BackgroundColor3 = self.Theme.BG2}, 0.12)
+        PlayTween(miniButton, {BackgroundTransparency = 0.03}, 0.12)
+        PlayTween(miniLabel, {TextColor3 = self.Theme.Text}, 0.12)
     end)
 
     local autoLoad = opts.AutoLoadConfig or opts.AutoloadConfig
@@ -1934,9 +1940,7 @@ end
 
 Vanith.Createwindow = Vanith.CreateWindow
 
-----------------------------------------------------------------------
--- config helpers
-----------------------------------------------------------------------
+-- config helpers -----------------------------------------------------
 
 function Window:_ensureConfigFolder()
     local folder = self.ConfigFolder or "VanithConfigs"
@@ -1956,7 +1960,7 @@ function Window:_getConfigPath(name)
     return string.format("%s/%s.%s", folder, cfgName, ext)
 end
 
--- FIX: only list real config files (correct extension), ignore things like "assets"
+-- only list real config files (correct extension)
 function Window:ListConfigs()
     local folder = self:_ensureConfigFolder()
     local result = {}
@@ -1970,7 +1974,6 @@ function Window:ListConfigs()
                 ext = ext:lower()
 
                 for _, fullPath in ipairs(files) do
-                    -- skip subfolders
                     local isDir = false
                     if isfolder then
                         local okDir, dirResult = pcall(isfolder, fullPath)
@@ -2167,9 +2170,7 @@ function Window:DeleteConfig(name)
     return true
 end
 
-----------------------------------------------------------------------
--- Vanith:Config  (builds config UI in a section)
-----------------------------------------------------------------------
+-- Vanith:Config helper (UI) -----------------------------------------
 
 function Vanith:Config(cfg)
     cfg = cfg or {}
