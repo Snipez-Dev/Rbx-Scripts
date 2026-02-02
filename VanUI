@@ -1458,7 +1458,7 @@ function Section:CreateDropdown(cfg)
         Position = UDim2.new(1, -22, 0, 0),
         Size = UDim2.fromOffset(20, ROW_HEIGHT),
         Font = Enum.Font.GothamBold,
-        Text = "<", -- closed by default
+        Text = "<",
         TextSize = 14,
         Parent = head,
     })
@@ -1496,7 +1496,6 @@ function Section:CreateDropdown(cfg)
         Parent        = listBg,
     })
 
-    -- kleiner Hover effekt
     head.MouseEnter:Connect(function()
         if not locked then
             PlayTween(head, {BackgroundColor3 = win.Theme.Track}, 0.08)
@@ -1635,7 +1634,7 @@ function Section:CreateDropdown(cfg)
 end
 
 ----------------------------------------------------------------------
--- CreateWindow  (brand + control keep size, tabs in der Mitte)
+-- CreateWindow
 ----------------------------------------------------------------------
 
 function Vanith:CreateWindow(opts)
@@ -1741,7 +1740,6 @@ function Vanith:CreateWindow(opts)
     end
     local miniLabelText = opts.MinimizeText or ("Open " .. shortName)
 
-    -- left brand box
     local brand = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(12, 10),
@@ -1784,7 +1782,6 @@ function Vanith:CreateWindow(opts)
     brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
     fitTitle()
 
-    -- middle strip with top tabs
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
@@ -1843,7 +1840,6 @@ function Vanith:CreateWindow(opts)
     tabsHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTopTabsLayout)
     task.defer(updateTopTabsLayout)
 
-    -- right control box
     local controlBox = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.new(1, -96, 0, 10),
@@ -1905,8 +1901,6 @@ function Vanith:CreateWindow(opts)
     closeBtn.MouseLeave:Connect(function()
         PlayTween(closeBtn, {TextColor3 = self.Theme.Accent}, 0.1)
     end)
-
-    -- sidebar / pages
 
     local sidebar = New("Frame", {
         BorderSizePixel = 0,
@@ -1986,10 +1980,8 @@ function Vanith:CreateWindow(opts)
         Name = "VanithMini",
         BackgroundTransparency = 0,
         Size = UDim2.fromOffset(190, 40),
-
         AnchorPoint = Vector2.new(0.5, 0),
         Position    = UDim2.new(0.5, 0, 0, 24),
-
         Parent  = gui,
         Visible = false,
         ZIndex  = 10,
@@ -2124,7 +2116,6 @@ function Window:ListConfigs()
                 ext = ext:lower()
 
                 for _, fullPath in ipairs(files) do
-                    -- skip subfolders
                     local isDir = false
                     if isfolder then
                         local okDir, dirResult = pcall(isfolder, fullPath)
@@ -2170,6 +2161,9 @@ function Window:_buildConfigData()
             }
 
             for ci, ctrl in ipairs(sec._controls or {}) do
+                -- ensure the array is dense so JSONEncode keeps numeric indices
+                local ctrlData = {}
+
                 local pv = rawget(ctrl, "_profileValues")
                 if type(pv) == "table" then
                     local profiles = {}
@@ -2186,10 +2180,10 @@ function Window:_buildConfigData()
                             profiles[keyName] = val
                         end
                     end
-                    sEntry.controls[ci] = {
-                        profiles = profiles,
-                    }
+                    ctrlData.profiles = profiles
                 end
+
+                sEntry.controls[ci] = ctrlData
             end
 
             tEntry.sections[si] = sEntry
@@ -2213,7 +2207,8 @@ function Window:_applyConfigData(data)
                 local sEntry = tEntry.sections[si]
                 if sEntry and type(sEntry.controls) == "table" then
                     for ci, ctrl in ipairs(sec._controls or {}) do
-                        local cEntry = sEntry.controls[ci]
+                        -- handle both array indices and configs saved with string indices
+                        local cEntry = sEntry.controls[ci] or sEntry.controls[tostring(ci)]
                         if cEntry and type(cEntry.profiles) == "table" and ctrl._profileValues then
                             local newPV = {}
                             for profName, val in pairs(cEntry.profiles) do
