@@ -16,12 +16,12 @@ Tab.__index   = Tab
 local Section = {}
 Section.__index = Section
 
--- helpers ------------------------------------------------------------
+-- helpers
 
 local function New(className, props)
     local inst = Instance.new(className)
 
-    -- damit nix auto-lokalisiert wird
+    -- force all UI we create to NOT be auto localized by Roblox
     pcall(function()
         inst.AutoLocalize = false
     end)
@@ -82,7 +82,7 @@ local function GetRootParent()
     return lp and lp:FindFirstChildOfClass("PlayerGui") or nil
 end
 
--- theme --------------------------------------------------------------
+-- theme
 
 local DEFAULT_THEME = {
     Accent  = Color3.fromRGB(165, 105, 255),
@@ -101,7 +101,9 @@ local DEFAULT_THEME = {
     Field   = Color3.fromRGB(16, 16, 20),
 }
 
--- notify -------------------------------------------------------------
+----------------------------------------------------------------------
+-- notify
+----------------------------------------------------------------------
 
 local notifyState = {
     Gui    = nil,
@@ -270,7 +272,9 @@ function Window:Notify(cfg)
     return DoNotify(self.Theme, cfg)
 end
 
--- window helpers -----------------------------------------------------
+----------------------------------------------------------------------
+-- window helpers
+----------------------------------------------------------------------
 
 function Window:_track(inst, prop, key)
     table.insert(self._themeBindings, {inst = inst, prop = prop, key = key})
@@ -324,7 +328,7 @@ function Window:Destroy()
     end
 end
 
--- drag ---------------------------------------------------------------
+-- drag
 
 function Window:_enableDrag(handle, target)
     local dragging
@@ -371,7 +375,7 @@ function Window:_enableDrag(handle, target)
     end)
 end
 
--- resize -------------------------------------------------------------
+-- resize
 
 function Window:_enableResize(handle, target)
     local minSize = self.MinSize or Vector2.new(649, 417)
@@ -421,7 +425,7 @@ function Window:_enableResize(handle, target)
     end)
 end
 
--- top strip tab button -----------------------------------------------
+-- top tab button
 
 function Window:_makeTopTabButton(text)
     local holder = self.TopTabsHolder
@@ -463,7 +467,9 @@ function Window:_makeTopTabButton(text)
     return t
 end
 
--- left side tabs -----------------------------------------------------
+----------------------------------------------------------------------
+-- left side tabs
+----------------------------------------------------------------------
 
 function Window:CreateTab(name)
     local row = New("TextButton", {
@@ -562,7 +568,9 @@ function Window:SelectTab(tab)
     end
 end
 
--- tab methods / sections ---------------------------------------------
+----------------------------------------------------------------------
+-- tab methods / sections
+----------------------------------------------------------------------
 
 function Tab:CreateTopTab(name)
     local win = self.Window
@@ -746,13 +754,27 @@ function Tab:CreateSection(title, slot, topTabNameOrObj)
     return sec
 end
 
--- controls: slider ---------------------------------------------------
+----------------------------------------------------------------------
+-- controls: slider
+----------------------------------------------------------------------
 
 function Section:CreateSlider(cfg)
     local win   = self.Window
     local inner = self.Inner
     local tab   = self.Tab
     local c     = cfg or {}
+
+    local locked = (c.Locked == true) or (c.locked == true)
+
+    local function notifyLocked()
+        if win and win.Notify then
+            win:Notify({
+                Title    = "Vanith",
+                Text     = "This function is locked.",
+                Duration = 3,
+            })
+        end
+    end
 
     local minv  = c.Min or 0
     local maxv  = c.Max or 100
@@ -876,6 +898,10 @@ function Section:CreateSlider(cfg)
     end
 
     local function begin(input)
+        if locked then
+            notifyLocked()
+            return
+        end
         dragging    = true
         activeInput = input
         PlayTween(knob, {BackgroundColor3 = win.Theme.Accent}, 0.1)
@@ -922,19 +948,39 @@ function Section:CreateSlider(cfg)
     function obj:_syncProfile()
         syncProfile()
     end
+    function obj:SetLocked(v)
+        locked = v and true or false
+    end
+    function obj:IsLocked()
+        return locked
+    end
     obj._profileValues = valuesByProfile
 
     table.insert(self._controls, obj)
     return obj
 end
 
--- controls: toggle ---------------------------------------------------
+----------------------------------------------------------------------
+-- controls: toggle
+----------------------------------------------------------------------
 
 function Section:CreateToggle(cfg)
     local win   = self.Window
     local inner = self.Inner
     local tab   = self.Tab
     local c     = cfg or {}
+
+    local locked = (c.Locked == true) or (c.locked == true)
+
+    local function notifyLocked()
+        if win and win.Notify then
+            win:Notify({
+                Title    = "Vanith",
+                Text     = "This function is locked.",
+                Duration = 3,
+            })
+        end
+    end
 
     local function getProfileKey()
         if tab and tab._activeTopTab then
@@ -1014,6 +1060,10 @@ function Section:CreateToggle(cfg)
         syncProfile()
 
         row.MouseButton1Click:Connect(function()
+            if locked then
+                notifyLocked()
+                return
+            end
             state = not state
             stateByProfile[getProfileKey()] = state
             render(true)
@@ -1032,6 +1082,12 @@ function Section:CreateToggle(cfg)
         end
         function obj:_syncProfile()
             syncProfile()
+        end
+        function obj:SetLocked(v)
+            locked = v and true or false
+        end
+        function obj:IsLocked()
+            return locked
         end
         obj._profileValues = stateByProfile
     else
@@ -1072,12 +1128,12 @@ function Section:CreateToggle(cfg)
                 PlayTween(fill, {BackgroundColor3 = col}, 0.12)
                 PlayTween(knob, {
                     Position = state and posOn or posOff,
-                    BackgroundColor3 = Color3.new(1, 1, 1),
+                    BackgroundColor3 = Color3.new(1,1,1),
                 }, 0.12)
             else
                 fill.BackgroundColor3 = col
                 knob.Position         = state and posOn or posOff
-                knob.BackgroundColor3 = Color3.new(1, 1, 1)
+                knob.BackgroundColor3 = Color3.new(1,1,1)
             end
         end
 
@@ -1095,6 +1151,10 @@ function Section:CreateToggle(cfg)
         syncProfile()
 
         row.MouseButton1Click:Connect(function()
+            if locked then
+                notifyLocked()
+                return
+            end
             state = not state
             stateByProfile[getProfileKey()] = state
             render(true)
@@ -1114,6 +1174,12 @@ function Section:CreateToggle(cfg)
         function obj:_syncProfile()
             syncProfile()
         end
+        function obj:SetLocked(v)
+            locked = v and true or false
+        end
+        function obj:IsLocked()
+            return locked
+        end
         obj._profileValues = stateByProfile
     end
 
@@ -1121,12 +1187,26 @@ function Section:CreateToggle(cfg)
     return obj
 end
 
--- controls: button ---------------------------------------------------
+----------------------------------------------------------------------
+-- controls: button
+----------------------------------------------------------------------
 
 function Section:CreateButton(cfg)
     local win   = self.Window
     local inner = self.Inner
     local c     = cfg or {}
+
+    local locked = (c.Locked == true) or (c.locked == true)
+
+    local function notifyLocked()
+        if win and win.Notify then
+            win:Notify({
+                Title    = "Vanith",
+                Text     = "This function is locked.",
+                Duration = 3,
+            })
+        end
+    end
 
     local btn = New("TextButton", {
         AutoButtonColor = false,
@@ -1144,6 +1224,10 @@ function Section:CreateButton(cfg)
     win:_track(st, "Color", "Stroke")
 
     btn.MouseButton1Click:Connect(function()
+        if locked then
+            notifyLocked()
+            return
+        end
         PlayTween(btn, {BackgroundColor3 = win.Theme.Track}, 0.08)
         if c.Callback then
             task.spawn(c.Callback)
@@ -1155,16 +1239,39 @@ function Section:CreateButton(cfg)
         end)
     end)
 
-    return btn
+    local obj = {}
+    function obj:SetLocked(v)
+        locked = v and true or false
+    end
+    function obj:IsLocked()
+        return locked
+    end
+
+    table.insert(self._controls, obj)
+    return obj
 end
 
--- controls: textbox --------------------------------------------------
+----------------------------------------------------------------------
+-- controls: textbox
+----------------------------------------------------------------------
 
 function Section:CreateTextbox(cfg)
     local win   = self.Window
     local inner = self.Inner
     local tab   = self.Tab
     local c     = cfg or {}
+
+    local locked = (c.Locked == true) or (c.locked == true)
+
+    local function notifyLocked()
+        if win and win.Notify then
+            win:Notify({
+                Title    = "Vanith",
+                Text     = "This function is locked.",
+                Duration = 3,
+            })
+        end
+    end
 
     local function getProfileKey()
         if tab and tab._activeTopTab then
@@ -1206,7 +1313,23 @@ function Section:CreateTextbox(cfg)
 
     syncProfile()
 
+    box.Focused:Connect(function()
+        if locked then
+            notifyLocked()
+            task.defer(function()
+                if box and box.Parent then
+                    box:ReleaseFocus()
+                    syncProfile()
+                end
+            end)
+        end
+    end)
+
     box.FocusLost:Connect(function(enterPressed)
+        if locked then
+            syncProfile()
+            return
+        end
         valuesByProfile[getProfileKey()] = box.Text
         if c.Callback then
             task.spawn(c.Callback, box.Text, enterPressed)
@@ -1225,19 +1348,39 @@ function Section:CreateTextbox(cfg)
     function obj:_syncProfile()
         syncProfile()
     end
+    function obj:SetLocked(v)
+        locked = v and true or false
+    end
+    function obj:IsLocked()
+        return locked
+    end
     obj._profileValues = valuesByProfile
 
     table.insert(self._controls, obj)
     return obj
 end
 
--- controls: dropdown -------------------------------------------------
+----------------------------------------------------------------------
+-- controls: dropdown
+----------------------------------------------------------------------
 
 function Section:CreateDropdown(cfg)
     local win   = self.Window
     local inner = self.Inner
     local tab   = self.Tab
     local c     = cfg or {}
+
+    local locked = (c.Locked == true) or (c.locked == true)
+
+    local function notifyLocked()
+        if win and win.Notify then
+            win:Notify({
+                Title    = "Vanith",
+                Text     = "This function is locked.",
+                Duration = 3,
+            })
+        end
+    end
 
     local function getProfileKey()
         if tab and tab._activeTopTab then
@@ -1315,7 +1458,7 @@ function Section:CreateDropdown(cfg)
         Position = UDim2.new(1, -22, 0, 0),
         Size = UDim2.fromOffset(20, ROW_HEIGHT),
         Font = Enum.Font.GothamBold,
-        Text = "<",
+        Text = "<", -- closed by default
         TextSize = 14,
         Parent = head,
     })
@@ -1353,12 +1496,16 @@ function Section:CreateDropdown(cfg)
         Parent        = listBg,
     })
 
-    -- kleine Hover-Animation für den Kopf
+    -- kleiner Hover effekt
     head.MouseEnter:Connect(function()
-        PlayTween(head, {BackgroundColor3 = win.Theme.Track}, 0.08)
+        if not locked then
+            PlayTween(head, {BackgroundColor3 = win.Theme.Track}, 0.08)
+        end
     end)
     head.MouseLeave:Connect(function()
-        PlayTween(head, {BackgroundColor3 = win.Theme.Field}, 0.1)
+        if not locked then
+            PlayTween(head, {BackgroundColor3 = win.Theme.Field}, 0.1)
+        end
     end)
 
     local function applySelectionForCurrentProfile(sel, callCallback)
@@ -1391,9 +1538,12 @@ function Section:CreateDropdown(cfg)
             b.TextColor3 = (opt == current) and win.Theme.Accent or win.Theme.Text
 
             b.MouseButton1Click:Connect(function()
+                if locked then
+                    notifyLocked()
+                    return
+                end
                 applySelectionForCurrentProfile(opt, true)
                 rebuild()
-                -- beim Klick auch mit Animation schließen
                 open = false
                 arrow.Text = "<"
                 PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.12)
@@ -1416,13 +1566,11 @@ function Section:CreateDropdown(cfg)
                 contentHeight = math.min(contentHeight, maxHeight)
             end
 
-            -- animiertes Aufklappen
             PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, contentHeight)}, 0.12)
             PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, contentHeight)}, 0.12)
             PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT + contentHeight)}, 0.12)
         else
             arrow.Text = "<"
-            -- animiertes Zuklappen
             PlayTween(listWrap, {Size = UDim2.new(1, 0, 0, 0)}, 0.12)
             PlayTween(listBg,   {Size = UDim2.new(1, 0, 0, 0)}, 0.12)
             PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT)}, 0.12)
@@ -1430,6 +1578,10 @@ function Section:CreateDropdown(cfg)
     end
 
     head.MouseButton1Click:Connect(function()
+        if locked then
+            notifyLocked()
+            return
+        end
         setOpen(not open)
     end)
 
@@ -1470,13 +1622,21 @@ function Section:CreateDropdown(cfg)
     function obj:_syncProfile()
         syncProfile()
     end
+    function obj:SetLocked(v)
+        locked = v and true or false
+    end
+    function obj:IsLocked()
+        return locked
+    end
     obj._profileValues = selectedByProfile
 
     table.insert(self._controls, obj)
     return obj
 end
 
--- CreateWindow -------------------------------------------------------
+----------------------------------------------------------------------
+-- CreateWindow  (brand + control keep size, tabs in der Mitte)
+----------------------------------------------------------------------
 
 function Vanith:CreateWindow(opts)
     opts = opts or {}
@@ -1581,7 +1741,7 @@ function Vanith:CreateWindow(opts)
     end
     local miniLabelText = opts.MinimizeText or ("Open " .. shortName)
 
-    -- brand box links
+    -- left brand box
     local brand = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(12, 10),
@@ -1624,7 +1784,7 @@ function Vanith:CreateWindow(opts)
     brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
     fitTitle()
 
-    -- middle strip mit top tabs
+    -- middle strip with top tabs
     local strip = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(160, 10),
@@ -1683,8 +1843,7 @@ function Vanith:CreateWindow(opts)
     tabsHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTopTabsLayout)
     task.defer(updateTopTabsLayout)
 
-    -- control box rechts (minimize / close) - wie vorher --------------
-
+    -- right control box
     local controlBox = New("Frame", {
         BorderSizePixel = 0,
         Position = UDim2.new(1, -96, 0, 10),
@@ -1716,7 +1875,7 @@ function Vanith:CreateWindow(opts)
         Size = UDim2.new(0.5, 0, 1, 0),
         Position = UDim2.new(0.5, 0, 0, 0),
         Font = Enum.Font.GothamBold,
-        Text = "X",  -- normales X wie gewünscht
+        Text = "X",
         TextSize = 16,
         Parent = controlBox,
         ZIndex = 4,
@@ -1747,7 +1906,7 @@ function Vanith:CreateWindow(opts)
         PlayTween(closeBtn, {TextColor3 = self.Theme.Accent}, 0.1)
     end)
 
-    -- sidebar / pages ------------------------------------------------
+    -- sidebar / pages
 
     local sidebar = New("Frame", {
         BorderSizePixel = 0,
@@ -1823,14 +1982,11 @@ function Vanith:CreateWindow(opts)
         scale.Scale = 1
     end
 
-    -- mini open button wenn minimiert --------------------------------
-
     local miniButton = New("Frame", {
         Name = "VanithMini",
         BackgroundTransparency = 0,
         Size = UDim2.fromOffset(190, 40),
 
-        -- oben in der Mitte
         AnchorPoint = Vector2.new(0.5, 0),
         Position    = UDim2.new(0.5, 0, 0, 24),
 
@@ -1932,7 +2088,9 @@ end
 
 Vanith.Createwindow = Vanith.CreateWindow
 
--- config helpers -----------------------------------------------------
+----------------------------------------------------------------------
+-- config helpers
+----------------------------------------------------------------------
 
 function Window:_ensureConfigFolder()
     local folder = self.ConfigFolder or "VanithConfigs"
@@ -1952,8 +2110,7 @@ function Window:_getConfigPath(name)
     return string.format("%s/%s.%s", folder, cfgName, ext)
 end
 
--- nur echte config files listen (richtige extension)
-
+-- FIX: only list real config files (correct extension), ignore things like "assets"
 function Window:ListConfigs()
     local folder = self:_ensureConfigFolder()
     local result = {}
@@ -1967,6 +2124,7 @@ function Window:ListConfigs()
                 ext = ext:lower()
 
                 for _, fullPath in ipairs(files) do
+                    -- skip subfolders
                     local isDir = false
                     if isfolder then
                         local okDir, dirResult = pcall(isfolder, fullPath)
@@ -2163,7 +2321,9 @@ function Window:DeleteConfig(name)
     return true
 end
 
--- Vanith:Config helper -----------------------------------------------
+----------------------------------------------------------------------
+-- Vanith:Config  (builds config UI in a section)
+----------------------------------------------------------------------
 
 function Vanith:Config(cfg)
     cfg = cfg or {}
