@@ -54,7 +54,7 @@ local function RoundStep(v, minv, step)
     return (math.floor(n + 0.5) * step) + minv
 end
 
--- automatisch Text kleiner machen, wenn der Container zu klein ist
+-- nur für Slider-Texte und Fenster-Titel
 local function AutoFitText(label, maxSize, minSize, padding)
     if not label or not (label:IsA("TextLabel") or label:IsA("TextButton")) then
         return
@@ -474,7 +474,7 @@ function Window:_makeTopTabButton(text)
         ZIndex = 5,
         TextColor3 = self.Theme.DimText,
     })
-    AutoFitText(label, 12, 8, 4)
+    -- kein AutoFit hier (nur Slider!)
 
     local underline = New("Frame", {
         BorderSizePixel = 0,
@@ -534,7 +534,7 @@ function Window:CreateTab(name)
         ZIndex = 3,
     })
     self:_track(label, "TextColor3", "Muted")
-    AutoFitText(label, 12, 8, 4)
+    -- kein AutoFit hier
 
     local page = New("Frame", {
         BackgroundTransparency = 1,
@@ -710,7 +710,7 @@ function Tab:CreateSection(title, slot, topTabNameOrObj)
         Parent = frame,
     })
     win:_track(head, "TextColor3", "Accent")
-    AutoFitText(head, 11, 9, 4)
+    -- kein AutoFit hier
 
     local inner = New("ScrollingFrame", {
         BorderSizePixel = 0,
@@ -817,6 +817,7 @@ function Section:CreateSlider(cfg)
         Parent = row,
     })
     win:_track(label, "TextColor3", "DimText")
+    -- Slider-Label auto-fit
     AutoFitText(label, 11, 8, 4)
 
     local valueText = New("TextLabel", {
@@ -829,6 +830,7 @@ function Section:CreateSlider(cfg)
         Parent = row,
     })
     win:_track(valueText, "TextColor3", "Accent")
+    -- Slider-Wert auto-fit
     AutoFitText(valueText, 11, 8, 4)
 
     local track = New("Frame", {
@@ -998,7 +1000,7 @@ function Section:CreateToggle(cfg)
         Parent = row,
     })
     win:_track(label, "TextColor3", "Text")
-    AutoFitText(label, 11, 8, 4)
+    -- kein AutoFit
 
     local obj = {}
 
@@ -1173,7 +1175,7 @@ function Section:CreateButton(cfg)
     New("UICorner", {CornerRadius = UDim.new(0, 3), Parent = btn})
     local st = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = btn})
     win:_track(st, "Color", "Stroke")
-    AutoFitText(btn, 11, 9, 6)
+    -- kein AutoFit
 
     btn.MouseButton1Click:Connect(function()
         PlayTween(btn, {BackgroundColor3 = win.Theme.Track}, 0.08)
@@ -1326,7 +1328,7 @@ function Section:CreateDropdown(cfg)
         Parent = head,
     })
     win:_track(nameLbl, "TextColor3", "DimText")
-    AutoFitText(nameLbl, 11, 8, 4)
+    -- kein AutoFit
 
     local valLbl = New("TextLabel", {
         BackgroundTransparency = 1,
@@ -1339,7 +1341,7 @@ function Section:CreateDropdown(cfg)
         Parent = head,
     })
     win:_track(valLbl, "TextColor3", "Text")
-    AutoFitText(valLbl, 11, 8, 4)
+    -- kein AutoFit
 
     local arrow = New("TextLabel", {
         BackgroundTransparency = 1,
@@ -1554,7 +1556,7 @@ function Section:CreateDropdown(cfg)
                     updateButton()
                     valLbl.Text = getDisplayText()
                     fireCallback()
-                    -- Multi: offen lassen
+                    -- Multi bleibt offen
                 end)
             else
                 local function updateButton()
@@ -1569,7 +1571,7 @@ function Section:CreateDropdown(cfg)
                     valLbl.Text = tostring(opt)
                     fireCallback()
                     rebuild()
-                    -- Single: nach Auswahl schließen
+                    -- Single: schließen nach Klick
                     setOpen(false)
                 end)
             end
@@ -1685,7 +1687,7 @@ function Section:CreateText(cfg)
         Parent = inner,
     })
     win:_track(lbl, "TextColor3", "DimText")
-    AutoFitText(lbl, size, 9, 4)
+    -- kein AutoFit
 
     local obj = {}
     function obj:SetText(t)
@@ -1829,7 +1831,7 @@ function Vanith:CreateWindow(opts)
         ZIndex = 4,
     })
     self:_track(brandLabel, "TextColor3", "Accent")
-    -- Titel auto-fit, damit er IMMER im Rahmen bleibt
+    -- Fenster-Titel auto-fit, damit er nicht aus dem Rahmen geht
     AutoFitText(brandLabel, 14, 8, 8)
 
     -- middle strip mit top tabs
@@ -1970,7 +1972,7 @@ function Vanith:CreateWindow(opts)
     local sbStroke = New("UIStroke", {Thickness = 1, Transparency = 0.25, Parent = sidebar})
     self:_track(sbStroke, "Color", "Stroke")
 
-    -- Tabliste als ScrollFrame -> scrollbare Tabs (auch Mobile)
+    -- Tabs als ScrollFrame -> scrollbare Tab-Liste (auch Mobile)
     local sideList = New("ScrollingFrame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
@@ -2105,7 +2107,7 @@ function Vanith:CreateWindow(opts)
         ZIndex = 11,
     })
     self:_track(miniLabel, "TextColor3", "Text")
-    AutoFitText(miniLabel, 12, 9, 4)
+    -- mini Button Text nicht auto-fit, fix Größe reicht
 
     local clickArea = New("TextButton", {
         AutoButtonColor = false,
