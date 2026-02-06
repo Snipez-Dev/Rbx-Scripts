@@ -453,14 +453,14 @@ end
 function Window:_makeTopTabButton(text)
     local holder = self.TopTabsHolder
 
+    -- Feste Breite, damit ALLE TopTabs gleich groß sind
     local btn = New("TextButton", {
-        AutoButtonColor = false,
+        AutoButtonColor       = false,
         BackgroundTransparency = 1,
-        Text = "",
-        Size = UDim2.new(0, 0, 1, 0),
-        AutomaticSize = Enum.AutomaticSize.X,
-        Parent = holder,
-        ZIndex = 4,
+        Text                  = "",
+        Size                  = UDim2.new(0, 72, 1, 0), -- << fixed width
+        Parent                = holder,
+        ZIndex                = 4,
     })
 
     local label = New("TextLabel", {
@@ -474,7 +474,7 @@ function Window:_makeTopTabButton(text)
         ZIndex = 5,
         TextColor3 = self.Theme.DimText,
     })
-    -- kein AutoFit hier (nur Slider!)
+    -- kein AutoFit hier
 
     local underline = New("Frame", {
         BorderSizePixel = 0,
@@ -710,7 +710,7 @@ function Tab:CreateSection(title, slot, topTabNameOrObj)
         Parent = frame,
     })
     win:_track(head, "TextColor3", "Accent")
-    -- kein AutoFit hier
+    -- kein AutoFit
 
     local inner = New("ScrollingFrame", {
         BorderSizePixel = 0,
@@ -2107,7 +2107,6 @@ function Vanith:CreateWindow(opts)
         ZIndex = 11,
     })
     self:_track(miniLabel, "TextColor3", "Text")
-    -- mini Button Text nicht auto-fit, fix Größe reicht
 
     local clickArea = New("TextButton", {
         AutoButtonColor = false,
@@ -2170,8 +2169,6 @@ function Window:_getConfigPath(name)
     local ext     = (self.ConfigExtension or "json"):gsub("^%.+", "")
     return string.format("%s/%s.%s", folder, cfgName, ext)
 end
-
--- nur echte config files listen (richtige extension)
 
 function Window:ListConfigs()
     local folder = self:_ensureConfigFolder()
