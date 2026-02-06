@@ -54,6 +54,33 @@ local function RoundStep(v, minv, step)
     return (math.floor(n + 0.5) * step) + minv
 end
 
+-- passt Text automatisch an, wenn der Container kleiner wird
+local function AutoFitText(label, maxSize, minSize, padding)
+    if not label or not (label:IsA("TextLabel") or label:IsA("TextButton")) then
+        return
+    end
+
+    maxSize = maxSize or label.TextSize or 12
+    minSize = minSize or 8
+    padding = padding or 4
+
+    local function update()
+        local w = label.AbsoluteSize.X
+        if w <= 0 then return end
+
+        for size = maxSize, minSize, -1 do
+            label.TextSize = size
+            if label.TextBounds.X <= (w - padding) then
+                break
+            end
+        end
+    end
+
+    label:GetPropertyChangedSignal("Text"):Connect(update)
+    label:GetPropertyChangedSignal("AbsoluteSize"):Connect(update)
+    task.defer(update)
+end
+
 local function PlayTween(inst, props, time)
     if not inst then return end
     time = time or 0.15
@@ -506,6 +533,7 @@ function Window:CreateTab(name)
         ZIndex = 3,
     })
     self:_track(label, "TextColor3", "Muted")
+    AutoFitText(label, 12, 9, 4)
 
     local page = New("Frame", {
         BackgroundTransparency = 1,
@@ -681,6 +709,7 @@ function Tab:CreateSection(title, slot, topTabNameOrObj)
         Parent = frame,
     })
     win:_track(head, "TextColor3", "Accent")
+    AutoFitText(head, 11, 9, 4)
 
     local inner = New("ScrollingFrame", {
         BorderSizePixel = 0,
@@ -787,6 +816,7 @@ function Section:CreateSlider(cfg)
         Parent = row,
     })
     win:_track(label, "TextColor3", "DimText")
+    AutoFitText(label, 11, 8, 4)
 
     local valueText = New("TextLabel", {
         BackgroundTransparency = 1,
@@ -798,6 +828,7 @@ function Section:CreateSlider(cfg)
         Parent = row,
     })
     win:_track(valueText, "TextColor3", "Accent")
+    AutoFitText(valueText, 11, 8, 4)
 
     local track = New("Frame", {
         BorderSizePixel = 0,
@@ -887,7 +918,7 @@ function Section:CreateSlider(cfg)
         end)
     end
 
-    -- Slider lässt sich jetzt über die ganze Reihe starten, nicht nur exakt auf dem Track
+    -- Slider lässt sich über die ganze Reihe starten, nicht nur exakt auf dem Track
     row.InputBegan:Connect(function(input)
         if IsMouse(input.UserInputType) or IsTouch(input.UserInputType) then
             begin(input)
@@ -900,7 +931,7 @@ function Section:CreateSlider(cfg)
         end
     end)
 
-    -- stabileres Dragging: wir folgen einfach der Maus/Touch solange dragging == true
+    -- Dragging
     UserInputService.InputChanged:Connect(function(input)
         if not dragging then return end
         if input.UserInputType == Enum.UserInputType.MouseMovement
@@ -968,6 +999,7 @@ function Section:CreateToggle(cfg)
         Parent = row,
     })
     win:_track(label, "TextColor3", "Text")
+    AutoFitText(label, 11, 8, 4)
 
     local obj = {}
 
@@ -1142,6 +1174,7 @@ function Section:CreateButton(cfg)
     New("UICorner", {CornerRadius = UDim.new(0, 3), Parent = btn})
     local st = New("UIStroke", {Thickness = 1, Transparency = 0.55, Parent = btn})
     win:_track(st, "Color", "Stroke")
+    AutoFitText(btn, 11, 9, 6)
 
     btn.MouseButton1Click:Connect(function()
         PlayTween(btn, {BackgroundColor3 = win.Theme.Track}, 0.08)
@@ -1231,13 +1264,15 @@ function Section:CreateTextbox(cfg)
     return obj
 end
 
--- controls: dropdown -------------------------------------------------
+-- controls: dropdown (single + multi) -------------------------------
 
 function Section:CreateDropdown(cfg)
     local win   = self.Window
     local inner = self.Inner
     local tab   = self.Tab
     local c     = cfg or {}
+
+    local isMulti = c.Multi == true
 
     local function getProfileKey()
         if tab and tab._activeTopTab then
@@ -1247,13 +1282,8 @@ function Section:CreateDropdown(cfg)
     end
 
     local options           = c.Options or {}
-    local defaultSelection  = c.Default or options[1] or "None"
     local selectedByProfile = {}
-    selectedByProfile[getProfileKey()] = defaultSelection
-
-    local current   = defaultSelection
-    local open      = false
-    local maxHeight = c.MaxHeight
+    local maxHeight         = c.MaxHeight
 
     local ROW_HEIGHT   = 24
     local ITEM_HEIGHT  = 20
@@ -1297,18 +1327,20 @@ function Section:CreateDropdown(cfg)
         Parent = head,
     })
     win:_track(nameLbl, "TextColor3", "DimText")
+    AutoFitText(nameLbl, 11, 8, 4)
 
     local valLbl = New("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.new(0.6, 0, 0, 0),
         Size = UDim2.new(0.4, -26, 1, 0),
         Font = Enum.Font.GothamBold,
-        Text = tostring(current),
+        Text = "",
         TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Right,
         Parent = head,
     })
     win:_track(valLbl, "TextColor3", "Text")
+    AutoFitText(valLbl, 11, 8, 4)
 
     local arrow = New("TextLabel", {
         BackgroundTransparency = 1,
@@ -1353,12 +1385,132 @@ function Section:CreateDropdown(cfg)
         Parent        = listBg,
     })
 
-    local function applySelectionForCurrentProfile(sel, callCallback)
-        current = sel
-        selectedByProfile[getProfileKey()] = sel
-        valLbl.Text = tostring(current)
-        if callCallback and c.Callback then
-            task.spawn(c.Callback, current)
+    -- Profile Value holen/initialisieren
+    local function getOrInitProfileValue()
+        local key = getProfileKey()
+        local v   = selectedByProfile[key]
+
+        if isMulti then
+            if type(v) ~= "table" or v.__multi ~= true or type(v.values) ~= "table" then
+                local map = {}
+                if type(c.Default) == "table" then
+                    for _, opt in ipairs(c.Default) do
+                        if table.find(options, opt) then
+                            map[opt] = true
+                        end
+                    end
+                elseif c.Default ~= nil then
+                    if table.find(options, c.Default) then
+                        map[c.Default] = true
+                    end
+                end
+                v = { __multi = true, values = map }
+                selectedByProfile[key] = v
+            end
+        else
+            if v == nil or type(v) ~= "string" then
+                local d = c.Default or options[1] or "None"
+                v = d
+                selectedByProfile[key] = v
+            end
+        end
+
+        return v
+    end
+
+    local function getDisplayText()
+        if isMulti then
+            local entry = getOrInitProfileValue()
+            local map   = entry.values or {}
+            local listVals  = {}
+
+            for _, opt in ipairs(options) do
+                if map[opt] then
+                    table.insert(listVals, tostring(opt))
+                end
+            end
+
+            if #listVals == 0 then
+                return "None"
+            elseif #listVals <= 2 then
+                return table.concat(listVals, ", ")
+            else
+                return tostring(#listVals) .. " selected"
+            end
+        else
+            local v = getOrInitProfileValue()
+            return tostring(v)
+        end
+    end
+
+    local function fireCallback()
+        if not c.Callback then return end
+
+        if isMulti then
+            local entry = getOrInitProfileValue()
+            local map   = entry.values or {}
+            local out   = {}
+            for _, opt in ipairs(options) do
+                if map[opt] then
+                    table.insert(out, opt)
+                end
+            end
+            task.spawn(c.Callback, out)
+        else
+            task.spawn(c.Callback, getOrInitProfileValue())
+        end
+    end
+
+    local function cleanupSelections()
+        if isMulti then
+            for key, entry in pairs(selectedByProfile) do
+                if type(entry) ~= "table" or entry.__multi ~= true or type(entry.values) ~= "table" then
+                    selectedByProfile[key] = nil
+                else
+                    local newMap = {}
+                    for _, opt in ipairs(options) do
+                        if entry.values[opt] then
+                            newMap[opt] = true
+                        end
+                    end
+                    entry.values = newMap
+                end
+            end
+        else
+            for key, val in pairs(selectedByProfile) do
+                if not table.find(options, val) then
+                    selectedByProfile[key] = options[1] or "None"
+                end
+            end
+        end
+    end
+
+    local open = false
+
+    local function setOpen(state)
+        if state == open then return end
+        open = state
+
+        if open then
+            arrow.Text = "v"
+            local contentHeight = calcContentHeight()
+            if maxHeight and maxHeight > 0 then
+                contentHeight = math.min(contentHeight, maxHeight)
+            end
+
+            local targetSize = UDim2.new(1, 0, 0, contentHeight)
+
+            PlayTween(listBg,   {Size = targetSize}, 0.12)
+            PlayTween(listWrap, {Size = targetSize}, 0.12)
+            PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT + contentHeight)}, 0.12)
+            PlayTween(arrow,    {Rotation = 90}, 0.12)
+        else
+            arrow.Text = "<"
+            local closedSize = UDim2.new(1, 0, 0, 0)
+            PlayTween(listBg,   {Size = closedSize}, 0.12)
+            PlayTween(listWrap, {Size = closedSize}, 0.12)
+            PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT)}, 0.12)
+            PlayTween(arrow,    {Rotation = 0}, 0.12)
         end
     end
 
@@ -1380,53 +1532,56 @@ function Section:CreateDropdown(cfg)
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Parent = listBg,
             })
-            b.TextColor3 = (opt == current) and win.Theme.Accent or win.Theme.Text
+            b.TextColor3 = win.Theme.Text
 
-            b.MouseButton1Click:Connect(function()
-                applySelectionForCurrentProfile(opt, true)
-                rebuild()
-                -- beim Auswählen schön zu-animieren
-                setOpen(false)
-            end)
-        end
-    end
+            if isMulti then
+                local function updateButton()
+                    local entry = getOrInitProfileValue()
+                    local map   = entry.values or {}
+                    local sel   = map[opt] and true or false
+                    b.Text = (sel and "● " or "○ ") .. tostring(opt)
+                    b.TextColor3 = sel and win.Theme.Accent or win.Theme.Text
+                end
 
-    local function setOpen(state)
-        if state == open then return end
-        open = state
+                updateButton()
 
-        if open then
-            arrow.Text = "v"
-            local contentHeight = calcContentHeight()
-            if maxHeight and maxHeight > 0 then
-                contentHeight = math.min(contentHeight, maxHeight)
+                b.MouseButton1Click:Connect(function()
+                    local entry = getOrInitProfileValue()
+                    local map   = entry.values
+                    if map[opt] then
+                        map[opt] = nil
+                    else
+                        map[opt] = true
+                    end
+                    updateButton()
+                    valLbl.Text = getDisplayText()
+                    fireCallback()
+                    -- Multi: Dropdown bleibt offen
+                end)
+            else
+                local function updateButton()
+                    local current = getOrInitProfileValue()
+                    b.TextColor3 = (current == opt) and win.Theme.Accent or win.Theme.Text
+                end
+
+                updateButton()
+
+                b.MouseButton1Click:Connect(function()
+                    selectedByProfile[getProfileKey()] = opt
+                    valLbl.Text = tostring(opt)
+                    fireCallback()
+                    rebuild()
+                    -- Single: nach Auswahl schließen
+                    setOpen(false)
+                end)
             end
-
-            local targetSize = UDim2.new(1, 0, 0, contentHeight)
-
-            -- animiertes Aufklappen
-            PlayTween(listBg,   {Size = targetSize}, 0.12)
-            PlayTween(listWrap, {Size = targetSize}, 0.12)
-            PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT + contentHeight)}, 0.12)
-            PlayTween(arrow,    {Rotation = 90}, 0.12)
-        else
-            arrow.Text = "<"
-            -- animiertes Zuklappen
-            local closedSize = UDim2.new(1, 0, 0, 0)
-            PlayTween(listBg,   {Size = closedSize}, 0.12)
-            PlayTween(listWrap, {Size = closedSize}, 0.12)
-            PlayTween(wrap,     {Size = UDim2.new(1, 0, 0, ROW_HEIGHT)}, 0.12)
-            PlayTween(arrow,    {Rotation = 0}, 0.12)
         end
     end
-
-    rebuild()
 
     head.MouseButton1Click:Connect(function()
         setOpen(not open)
     end)
 
-    -- kleines Hover-Feedback für den Kopf des Dropdowns
     head.MouseEnter:Connect(function()
         PlayTween(head, {BackgroundColor3 = win.Theme.Track}, 0.08)
     end)
@@ -1435,14 +1590,9 @@ function Section:CreateDropdown(cfg)
     end)
 
     local function syncProfile()
-        local key = getProfileKey()
-        local sel = selectedByProfile[key]
-        if sel == nil then
-            sel = defaultSelection
-            selectedByProfile[key] = sel
-        end
-        current = sel
-        valLbl.Text = tostring(current)
+        cleanupSelections()
+        getOrInitProfileValue()
+        valLbl.Text = getDisplayText()
         rebuild()
     end
 
@@ -1451,27 +1601,101 @@ function Section:CreateDropdown(cfg)
     local obj = {}
     function obj:SetOptions(opts)
         options = opts or {}
-        if not table.find(options, current) then
-            current = options[1] or "None"
-            selectedByProfile[getProfileKey()] = current
-            valLbl.Text = tostring(current)
-        end
+        cleanupSelections()
+        valLbl.Text = getDisplayText()
         rebuild()
         setOpen(false)
     end
+
     function obj:Set(v)
-        if table.find(options, v) then
-            applySelectionForCurrentProfile(v, false)
-            rebuild()
+        if isMulti then
+            local map = {}
+            if type(v) == "table" then
+                for _, opt in ipairs(v) do
+                    if table.find(options, opt) then
+                        map[opt] = true
+                    end
+                end
+            elseif v ~= nil and table.find(options, v) then
+                map[v] = true
+            end
+            selectedByProfile[getProfileKey()] = { __multi = true, values = map }
+        else
+            if v ~= nil and table.find(options, v) then
+                selectedByProfile[getProfileKey()] = v
+            end
+        end
+        valLbl.Text = getDisplayText()
+        rebuild()
+    end
+
+    function obj:Get()
+        if isMulti then
+            local entry = getOrInitProfileValue()
+            local map   = entry.values or {}
+            local out   = {}
+            for _, opt in ipairs(options) do
+                if map[opt] then
+                    table.insert(out, opt)
+                end
+            end
+            return out
+        else
+            return getOrInitProfileValue()
         end
     end
-    function obj:Get()
-        return current
-    end
+
     function obj:_syncProfile()
         syncProfile()
     end
+
     obj._profileValues = selectedByProfile
+
+    table.insert(self._controls, obj)
+    return obj
+end
+
+-- controls: text (reiner Info-Text) ---------------------------------
+
+function Section:CreateText(cfg)
+    local win   = self.Window
+    local inner = self.Inner
+    local c     = cfg or {}
+
+    local text    = c.Text or c.Value or "Text"
+    local align   = (c.Align or c.Alignment or "left"):lower()
+    local size    = c.Size or 11
+    local wrapped = c.Wrap ~= false
+
+    local xAlign = Enum.TextXAlignment.Left
+    if align == "center" then
+        xAlign = Enum.TextXAlignment.Center
+    elseif align == "right" then
+        xAlign = Enum.TextXAlignment.Right
+    end
+
+    local lbl = New("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Font = Enum.Font.Gotham,
+        Text = text,
+        TextWrapped = wrapped,
+        TextXAlignment = xAlign,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        TextSize = size,
+        Parent = inner,
+    })
+    win:_track(lbl, "TextColor3", "DimText")
+    AutoFitText(lbl, size, 9, 4)
+
+    local obj = {}
+    function obj:SetText(t)
+        lbl.Text = t or ""
+    end
+    function obj:GetText()
+        return lbl.Text
+    end
 
     table.insert(self._controls, obj)
     return obj
@@ -1684,7 +1908,7 @@ function Vanith:CreateWindow(opts)
     tabsHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTopTabsLayout)
     task.defer(updateTopTabsLayout)
 
-    -- control box rechts (minimize / close) - wie vorher --------------
+    -- control box rechts (minimize / close)
 
     local controlBox = New("Frame", {
         BorderSizePixel = 0,
@@ -1717,7 +1941,7 @@ function Vanith:CreateWindow(opts)
         Size = UDim2.new(0.5, 0, 1, 0),
         Position = UDim2.new(0.5, 0, 0, 0),
         Font = Enum.Font.GothamBold,
-        Text = "X",  -- normales X wie gewünscht
+        Text = "X",
         TextSize = 16,
         Parent = controlBox,
         ZIndex = 4,
@@ -1831,7 +2055,6 @@ function Vanith:CreateWindow(opts)
         BackgroundTransparency = 0,
         Size = UDim2.fromOffset(190, 40),
 
-        -- oben in der Mitte
         AnchorPoint = Vector2.new(0.5, 0),
         Position    = UDim2.new(0.5, 0, 0, 24),
 
@@ -1890,6 +2113,7 @@ function Vanith:CreateWindow(opts)
         ZIndex = 11,
     })
     self:_track(miniLabel, "TextColor3", "Text")
+    AutoFitText(miniLabel, 12, 9, 4)
 
     local clickArea = New("TextButton", {
         AutoButtonColor = false,
@@ -1989,6 +2213,8 @@ function Window:ListConfigs()
     return result
 end
 
+-- Config serialisieren -----------------------------------------------
+
 function Window:_buildConfigData()
     local data = {
         _meta = {
@@ -2012,10 +2238,13 @@ function Window:_buildConfigData()
                 controls = {},
             }
 
-            for ci, ctrl in ipairs(sec._controls or {}) do
+            local controlIndex = 0
+
+            for _, ctrl in ipairs(sec._controls or {}) do
                 local pv = rawget(ctrl, "_profileValues")
                 if type(pv) == "table" then
                     local profiles = {}
+
                     for key, val in pairs(pv) do
                         local keyName
                         if key == "__default" then
@@ -2025,11 +2254,17 @@ function Window:_buildConfigData()
                         else
                             keyName = tostring(key)
                         end
-                        if type(val) == "boolean" or type(val) == "number" or type(val) == "string" then
+
+                        if type(val) == "boolean"
+                        or type(val) == "number"
+                        or type(val) == "string"
+                        or type(val) == "table" then
                             profiles[keyName] = val
                         end
                     end
-                    sEntry.controls[ci] = {
+
+                    controlIndex = controlIndex + 1
+                    sEntry.controls[controlIndex] = {
                         profiles = profiles,
                     }
                 end
@@ -2044,6 +2279,8 @@ function Window:_buildConfigData()
     return data
 end
 
+-- Config anwenden ----------------------------------------------------
+
 function Window:_applyConfigData(data)
     if type(data) ~= "table" or type(data.tabs) ~= "table" then
         return
@@ -2055,29 +2292,65 @@ function Window:_applyConfigData(data)
             for si, sec in ipairs(tab._sections or {}) do
                 local sEntry = tEntry.sections[si]
                 if sEntry and type(sEntry.controls) == "table" then
-                    for ci, ctrl in ipairs(sec._controls or {}) do
-                        local cEntry = sEntry.controls[ci]
-                        if cEntry and type(cEntry.profiles) == "table" and ctrl._profileValues then
-                            local newPV = {}
-                            for profName, val in pairs(cEntry.profiles) do
-                                local key
-                                if profName == "__default" then
-                                    key = "__default"
-                                else
-                                    for _, tt in ipairs(tab._topTabs or {}) do
-                                        if tt.Label and tt.Label.Text == profName then
-                                            key = tt
-                                            break
+                    local controlsData = sEntry.controls
+
+                    -- alte Saves: string-Keys ("1","2",...)
+                    local needsFix = false
+                    for k, _ in pairs(controlsData) do
+                        if type(k) ~= "number" then
+                            needsFix = true
+                            break
+                        end
+                    end
+
+                    if needsFix then
+                        local fixed = {}
+                        for k, v in pairs(controlsData) do
+                            local idx = tonumber(k)
+                            if idx then
+                                fixed[idx] = v
+                            end
+                        end
+                        controlsData = fixed
+                        sEntry.controls = fixed
+                    end
+
+                    local controlIndex = 0
+
+                    for _, ctrl in ipairs(sec._controls or {}) do
+                        if type(ctrl._profileValues) == "table" then
+                            controlIndex = controlIndex + 1
+                            local cEntry = controlsData[controlIndex]
+
+                            if cEntry and type(cEntry.profiles) == "table" then
+                                local pv = ctrl._profileValues
+
+                                -- altes Table leeren, Referenzen behalten
+                                for k in pairs(pv) do
+                                    pv[k] = nil
+                                end
+
+                                for profName, val in pairs(cEntry.profiles) do
+                                    local key
+                                    if profName == "__default" then
+                                        key = "__default"
+                                    else
+                                        for _, tt in ipairs(tab._topTabs or {}) do
+                                            if tt.Label and tt.Label.Text == profName then
+                                                key = tt
+                                                break
+                                            end
                                         end
                                     end
+
+                                    if key then
+                                        pv[key] = val
+                                    end
                                 end
-                                if key then
-                                    newPV[key] = val
+
+                                if ctrl._syncProfile then
+                                    ctrl:_syncProfile()
                                 end
-                            end
-                            ctrl._profileValues = newPV
-                            if ctrl._syncProfile then
-                                ctrl:_syncProfile()
                             end
                         end
                     end
