@@ -54,7 +54,7 @@ local function RoundStep(v, minv, step)
     return (math.floor(n + 0.5) * step) + minv
 end
 
--- passt Text automatisch an, wenn der Container kleiner wird
+-- automatisch Text kleiner machen, wenn der Container zu klein ist
 local function AutoFitText(label, maxSize, minSize, padding)
     if not label or not (label:IsA("TextLabel") or label:IsA("TextButton")) then
         return
@@ -474,6 +474,7 @@ function Window:_makeTopTabButton(text)
         ZIndex = 5,
         TextColor3 = self.Theme.DimText,
     })
+    AutoFitText(label, 12, 8, 4)
 
     local underline = New("Frame", {
         BorderSizePixel = 0,
@@ -533,7 +534,7 @@ function Window:CreateTab(name)
         ZIndex = 3,
     })
     self:_track(label, "TextColor3", "Muted")
-    AutoFitText(label, 12, 9, 4)
+    AutoFitText(label, 12, 8, 4)
 
     local page = New("Frame", {
         BackgroundTransparency = 1,
@@ -918,7 +919,6 @@ function Section:CreateSlider(cfg)
         end)
     end
 
-    -- Slider lässt sich über die ganze Reihe starten, nicht nur exakt auf dem Track
     row.InputBegan:Connect(function(input)
         if IsMouse(input.UserInputType) or IsTouch(input.UserInputType) then
             begin(input)
@@ -931,7 +931,6 @@ function Section:CreateSlider(cfg)
         end
     end)
 
-    -- Dragging
     UserInputService.InputChanged:Connect(function(input)
         if not dragging then return end
         if input.UserInputType == Enum.UserInputType.MouseMovement
@@ -1385,7 +1384,6 @@ function Section:CreateDropdown(cfg)
         Parent        = listBg,
     })
 
-    -- Profile Value holen/initialisieren
     local function getOrInitProfileValue()
         local key = getProfileKey()
         local v   = selectedByProfile[key]
@@ -1556,7 +1554,7 @@ function Section:CreateDropdown(cfg)
                     updateButton()
                     valLbl.Text = getDisplayText()
                     fireCallback()
-                    -- Multi: Dropdown bleibt offen
+                    -- Multi: offen lassen
                 end)
             else
                 local function updateButton()
@@ -1831,23 +1829,8 @@ function Vanith:CreateWindow(opts)
         ZIndex = 4,
     })
     self:_track(brandLabel, "TextColor3", "Accent")
-
-    local function fitTitle()
-        local maxSize = 14
-        local minSize = 10
-        for size = maxSize, minSize, -1 do
-            brandLabel.TextSize = size
-            if brand.AbsoluteSize.X > 0 then
-                if brandLabel.TextBounds.X <= (brand.AbsoluteSize.X - 8) then
-                    break
-                end
-            end
-        end
-    end
-
-    brand:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitTitle)
-    brandLabel:GetPropertyChangedSignal("Text"):Connect(fitTitle)
-    fitTitle()
+    -- Titel auto-fit, damit er IMMER im Rahmen bleibt
+    AutoFitText(brandLabel, 14, 8, 8)
 
     -- middle strip mit top tabs
     local strip = New("Frame", {
@@ -1987,13 +1970,22 @@ function Vanith:CreateWindow(opts)
     local sbStroke = New("UIStroke", {Thickness = 1, Transparency = 0.25, Parent = sidebar})
     self:_track(sbStroke, "Color", "Stroke")
 
-    local sideList = New("Frame", {
+    -- Tabliste als ScrollFrame -> scrollbare Tabs (auch Mobile)
+    local sideList = New("ScrollingFrame", {
         BackgroundTransparency = 1,
+        BorderSizePixel = 0,
         Position = UDim2.fromOffset(10, 14),
         Size = UDim2.new(1, -20, 1, -24),
         Parent = sidebar,
+        ScrollBarThickness = 3,
+        ScrollBarImageTransparency = 0.3,
+        ScrollBarImageColor3 = theme.Accent,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
     })
     self.SideList = sideList
+
     local sideLayout = New("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
         Padding   = UDim.new(0, 6),
