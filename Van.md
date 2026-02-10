@@ -795,7 +795,7 @@ Window:SetAccent(Color3.fromRGB(255, 0, 255))
 - Check that `ConfigFolder` doesn't contain invalid characters
 
 **"UI not showing"**
-- Check that your executor supports `gethui()` or `CoreGui`
+- Check that your executor supports `gethui()`
 - Verify the script loaded without errors
 
 **"Theme not applying"**
@@ -843,7 +843,7 @@ Contributions are welcome! Feel free to:
 ## 💬 Support
 
 For support and updates, join the community:
-- **Discord**: [Your Discord Link]
+- **Discord**: [Discord](https://discord.gg/GY69av8Uqb)
 - **GitHub Issues**: [Report Issues](https://github.com/Snipez-Dev/Rbx-Scripts/issues)
 
 ---
@@ -853,5 +853,6 @@ For support and updates, join the community:
 - **Author**: Snipez-Dev
 - **Library Name**: VanUI / Vanith
 - **Version**: 1.0
+
 
 ---
