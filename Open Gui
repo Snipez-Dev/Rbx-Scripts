@@ -7,7 +7,9 @@ local GUIData = (function()
 	-- Variables
 	_V = 1.11
 	
-	local screenGui = (script:FindFirstChild("ScreenGui")) or game:GetObjects("rbxassetid://2718157603")[1]:FindFirstChild("ScreenGui", true)
+	local screenGui
+	pcall(function() screenGui = script:FindFirstChild("ScreenGui") end)
+	screenGui = screenGui or game:GetObjects("rbxassetid://2718157603")[1]:FindFirstChild("ScreenGui", true)
 	  local Container = screenGui.Frame
 	    local Opt = Container.OptionsFrame
 	    local Checkbox = Opt.Checkbox
