@@ -1,4 +1,10 @@
+--[[
+	Vex+
+	VEX Explorer (by Vez), modified by Snypez, with a staged loading screen in the Vex look.
 
+	Everything the explorer needs (icons, version, interface, search index) is loaded behind the
+	loading screen, so nothing streams in while the explorer is already open.
+]]
 
 getgenv().VexExecutedCheck = false
 
@@ -210,183 +216,211 @@ end
 
 
 -- ════════════════════════════════════════════════════════
--- Loading screen, taken from Dex++ (Main.CreateIntro).
--- Everything below the intro (assets, version, UI, search index) now loads behind it
+-- Loading screen in the Vex look (same palette, fonts and 1px borders as the explorer windows).
+-- Everything below the intro (assets, version, UI, search index) loads behind it
 -- instead of streaming in while the explorer is already in use.
 -- ════════════════════════════════════════════════════════
 do
     local TweenService = Services.TweenService
-    local RunService = Services.RunService
 
-    local function create(data)
-        local insts = {}
-        for _, v in pairs(data) do insts[v[1]] = Instance.new(v[2]) end
-        for _, v in pairs(data) do
-            for prop, val in pairs(v[3]) do
-                if type(val) == "table" then
-                    insts[v[1]][prop] = insts[val[1]]
-                else
-                    insts[v[1]][prop] = val
-                end
-            end
+    local Palette = {
+        Window = Color3.fromRGB(20, 20, 23);
+        TitleBar = Color3.fromRGB(13, 13, 15);
+        Border = Color3.fromRGB(34, 34, 38);
+        Field = Color3.fromRGB(28, 28, 32);
+        Accent = Color3.fromRGB(232, 55, 55);
+        Text = Color3.fromRGB(232, 232, 236);
+        TextDim = Color3.fromRGB(150, 150, 160);
+        TextFaded = Color3.fromRGB(110, 110, 120);
+    }
+
+    local function make(ClassName, Properties, Parent)
+        local Object = Instance.new(ClassName)
+        if Object:IsA("TextLabel") then
+            Object.AutoLocalize = false
         end
-        return insts[1]
+
+        for Key, Value in Properties do
+            Object[Key] = Value
+        end
+
+        Object.Parent = Parent
+        return Object
     end
 
-    function Services.CreateIntro(initStatus)
-        local gui = create({
-            {1,"ScreenGui",{Name="VexIntro",DisplayOrder=2147483647,IgnoreGuiInset=true,ResetOnSpawn=false,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,}},
-            {2,"Frame",{Active=true,BackgroundColor3=Color3.new(0.20392157137394,0.20392157137394,0.20392157137394),BorderSizePixel=0,Name="Main",Parent={1},Position=UDim2.new(0.5,-175,0.5,-100),Size=UDim2.new(0,350,0,200),}},
-            {3,"Frame",{BackgroundColor3=Color3.new(0.17647059261799,0.17647059261799,0.17647059261799),BorderSizePixel=0,ClipsDescendants=true,Name="Holder",Parent={2},Size=UDim2.new(1,0,1,0),}},
-            {4,"UIGradient",{Parent={3},Rotation=30,Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
-            {5,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=4,Name="Title",Parent={3},Position=UDim2.new(0,-190,0,15),Size=UDim2.new(0,100,0,50),Text="Vex+",TextColor3=Color3.new(1,1,1),TextSize=50,TextTransparency=1,}},
-            {6,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Desc",Parent={3},Position=UDim2.new(0,-230,0,60),Size=UDim2.new(0,180,0,25),Text="Ultimate Debugging Suite",TextColor3=Color3.new(1,1,1),TextSize=18,TextTransparency=1,}},
-            {7,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="StatusText",Parent={3},Position=UDim2.new(0,20,0,110),Size=UDim2.new(0,260,0,25),Text="Fetching API",TextColor3=Color3.new(1,1,1),TextSize=14,TextTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,}},
-            {8,"Frame",{BackgroundColor3=Color3.new(0.20392157137394,0.20392157137394,0.20392157137394),BorderSizePixel=0,Name="ProgressBar",Parent={3},Position=UDim2.new(0,110,0,145),Size=UDim2.new(0,0,0,4),}},
-            {9,"Frame",{BackgroundColor3=Color3.new(0.2392156869173,0.56078433990479,0.86274510622025),BorderSizePixel=0,Name="Bar",Parent={8},Size=UDim2.new(0,0,1,0),}},
-            {10,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image="rbxassetid://2764171053",ImageColor3=Color3.new(0.17647059261799,0.17647059261799,0.17647059261799),Parent={8},ScaleType=1,Size=UDim2.new(1,0,1,0),SliceCenter=Rect.new(2,2,254,254),}},
-            {11,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Creator",Parent={2},Position=UDim2.new(1,-215,1,-20),Size=UDim2.new(0,210,0,20),Text="Based on VEX by Vez",TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=1,}},
-            {12,"UIGradient",{Parent={11},Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
-            {13,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Version",Parent={2},Position=UDim2.new(1,-110,1,-35),Size=UDim2.new(0,105,0,20),Text="Loading",TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=1,}},
-            {14,"UIGradient",{Parent={13},Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
-            {15,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,BorderSizePixel=0,Image="rbxassetid://1427967925",Name="Outlines",Parent={2},Position=UDim2.new(0,-5,0,-5),ScaleType=1,Size=UDim2.new(1,10,1,10),SliceCenter=Rect.new(6,6,25,25),TileSize=UDim2.new(0,20,0,20),}},
-            {16,"UIGradient",{Parent={15},Rotation=-30,Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
-            {17,"UIGradient",{Parent={2},Rotation=-30,Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
+    local function stroke(Parent, Color)
+        return make("UIStroke", {
+            Color = Color or Palette.Border;
+            Thickness = 1;
+            Transparency = 1;
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+        }, Parent)
+    end
+
+    local FadeInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local BarInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+    function Services.CreateIntro(InitStatus)
+        local Gui = make("ScreenGui", {
+            Name = "VexIntro";
+            DisplayOrder = 2147483647;
+            IgnoreGuiInset = true;
+            ResetOnSpawn = false;
+            ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
         })
 
         local Good, Host = pcall(gethui)
-        gui.Parent = (Good and Host) or Services.CoreGui
+        Gui.Parent = (Good and Host) or Services.CoreGui
 
-        local backGradient = gui.Main.UIGradient
-        local outlinesGradient = gui.Main.Outlines.UIGradient
-        local holderGradient = gui.Main.Holder.UIGradient
-        local titleText = gui.Main.Holder.Title
-        local descText = gui.Main.Holder.Desc
-        local versionText = gui.Main.Version
-        local versionGradient = versionText.UIGradient
-        local creatorText = gui.Main.Creator
-        local creatorGradient = creatorText.UIGradient
-        local statusText = gui.Main.Holder.StatusText
-        local progressBar = gui.Main.Holder.ProgressBar
+        local Card = make("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5);
+            Position = UDim2.new(0.5, 0, 0.5, 10);
+            Size = UDim2.fromOffset(380, 150);
+            BackgroundColor3 = Palette.Window;
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+            ClipsDescendants = true;
+        }, Gui)
+        local CardStroke = stroke(Card)
 
-        local renderStepped = RunService.RenderStepped
-        local signalWait = renderStepped.Wait
-        local function fastwait(Seconds)
-            if not Seconds then return signalWait(renderStepped) end
-            local Start = tick()
-            while tick() - Start < Seconds do signalWait(renderStepped) end
+        local TitleBar = make("Frame", {
+            Size = UDim2.new(1, 0, 0, 36);
+            BackgroundColor3 = Palette.TitleBar;
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+        }, Card)
+
+        local Brand = make("Frame", {
+            Size = UDim2.new(1, -24, 1, 0);
+            Position = UDim2.fromOffset(12, 0);
+            BackgroundTransparency = 1;
+        }, TitleBar)
+        local BrandLayout = make("UIListLayout", {
+            FillDirection = Enum.FillDirection.Horizontal;
+            Padding = UDim.new(0, 6);
+            SortOrder = Enum.SortOrder.LayoutOrder;
+            VerticalAlignment = Enum.VerticalAlignment.Center;
+        }, Brand)
+
+        local function brandText(Text, Color, Order, Size)
+            return make("TextLabel", {
+                AutomaticSize = Enum.AutomaticSize.X;
+                Size = UDim2.new(0, 0, 0, 18);
+                BackgroundTransparency = 1;
+                Font = Enum.Font.GothamBold;
+                Text = Text;
+                TextColor3 = Color;
+                TextSize = Size or 13;
+                TextTransparency = 1;
+                LayoutOrder = Order;
+            }, Brand)
         end
 
-        statusText.Text = initStatus
+        local BrandName = brandText("Vex+", Palette.Text, 1)
+        local BrandDash = brandText("-", Palette.TextFaded, 2)
+        local BrandState = brandText("Loading", Palette.Accent, 3)
 
-        local function tweenNumber(Goal, Info, Callback)
-            local Value = Instance.new("IntValue")
-            Value.Value = 0
-            Value.Changed:Connect(Callback)
-            local Tween = TweenService:Create(Value, Info, {Value = Goal})
-            Tween:Play()
-            Tween.Completed:Connect(function()
-                Value:Destroy()
-            end)
+        local TitleLine = make("Frame", {
+            Position = UDim2.new(0, 0, 0, 36);
+            Size = UDim2.new(1, 0, 0, 1);
+            BackgroundColor3 = Palette.Border;
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+        }, Card)
+
+        local Status = make("TextLabel", {
+            Position = UDim2.fromOffset(16, 52);
+            Size = UDim2.new(1, -84, 0, 16);
+            BackgroundTransparency = 1;
+            Font = Enum.Font.GothamMedium;
+            Text = InitStatus or "";
+            TextColor3 = Palette.TextDim;
+            TextSize = 12;
+            TextTransparency = 1;
+            TextXAlignment = Enum.TextXAlignment.Left;
+            TextTruncate = Enum.TextTruncate.AtEnd;
+        }, Card)
+
+        local Percent = make("TextLabel", {
+            AnchorPoint = Vector2.new(1, 0);
+            Position = UDim2.new(1, -16, 0, 52);
+            Size = UDim2.fromOffset(52, 16);
+            BackgroundTransparency = 1;
+            Font = Enum.Font.RobotoMono;
+            Text = "0%";
+            TextColor3 = Palette.Accent;
+            TextSize = 11;
+            TextTransparency = 1;
+            TextXAlignment = Enum.TextXAlignment.Right;
+        }, Card)
+
+        local Track = make("Frame", {
+            Position = UDim2.fromOffset(16, 78);
+            Size = UDim2.new(1, -32, 0, 6);
+            BackgroundColor3 = Palette.Field;
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+        }, Card)
+        local TrackStroke = stroke(Track)
+
+        local Fill = make("Frame", {
+            Size = UDim2.new(0, 0, 1, 0);
+            BackgroundColor3 = Palette.Accent;
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+        }, Track)
+
+        local Footer = make("TextLabel", {
+            AnchorPoint = Vector2.new(0.5, 1);
+            Position = UDim2.new(0.5, 0, 1, -14);
+            Size = UDim2.new(1, -24, 0, 16);
+            BackgroundTransparency = 1;
+            Font = Enum.Font.GothamMedium;
+            Text = "Vex modifyd by Snypez";
+            TextColor3 = Palette.TextFaded;
+            TextSize = 11;
+            TextTransparency = 1;
+        }, Card)
+
+        local function fade(Visible, Time)
+            local Info = Time and TweenInfo.new(Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out) or FadeInfo
+            local Hidden = Visible and 0 or 1
+
+            local function tween(Object, Properties)
+                TweenService:Create(Object, Info, Properties):Play()
+            end
+
+            tween(Card, {BackgroundTransparency = Hidden})
+            tween(CardStroke, {Transparency = Hidden})
+            tween(TitleBar, {BackgroundTransparency = Hidden})
+            tween(TitleLine, {BackgroundTransparency = Hidden})
+            tween(Track, {BackgroundTransparency = Hidden})
+            tween(TrackStroke, {Transparency = Hidden})
+            tween(Fill, {BackgroundTransparency = Hidden})
+            for _, Label in {BrandName, BrandDash, BrandState, Status, Percent, Footer} do
+                tween(Label, {TextTransparency = Hidden})
+            end
         end
 
-        local ti = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        tweenNumber(100, ti, function(val)
-            val = val / 200
-            local start = NumberSequenceKeypoint.new(0, 0)
-            local a1 = NumberSequenceKeypoint.new(val, 0)
-            local a2 = NumberSequenceKeypoint.new(math.min(0.5, val + math.min(0.05, val)), 1)
-            if a1.Time == a2.Time then a2 = a1 end
-            local b1 = NumberSequenceKeypoint.new(1 - val, 0)
-            local b2 = NumberSequenceKeypoint.new(math.max(0.5, 1 - val - math.min(0.05, val)), 1)
-            if b1.Time == b2.Time then b2 = b1 end
-            local goal = NumberSequenceKeypoint.new(1, 0)
-            backGradient.Transparency = NumberSequence.new({start, a1, a2, b2, b1, goal})
-            outlinesGradient.Transparency = NumberSequence.new({start, a1, a2, b2, b1, goal})
-        end)
+        fade(true)
+        TweenService:Create(Card, FadeInfo, {Position = UDim2.fromScale(0.5, 0.5)}):Play()
+        task.wait(0.3)
 
-        fastwait(0.4)
-
-        tweenNumber(100, ti, function(val)
-            val = val / 166.66
-            local start = NumberSequenceKeypoint.new(0, 0)
-            local a1 = NumberSequenceKeypoint.new(val, 0)
-            local a2 = NumberSequenceKeypoint.new(val + 0.01, 1)
-            local goal = NumberSequenceKeypoint.new(1, 1)
-            holderGradient.Transparency = NumberSequence.new({start, a1, a2, goal})
-        end)
-
-        TweenService:Create(titleText, ti, {Position = UDim2.new(0, 60, 0, 15), TextTransparency = 0}):Play()
-        TweenService:Create(descText, ti, {Position = UDim2.new(0, 20, 0, 60), TextTransparency = 0}):Play()
-
-        local function rightTextTransparency(obj)
-            tweenNumber(100, ti, function(val)
-                val = val / 100
-                local a1 = NumberSequenceKeypoint.new(1 - val, 0)
-                local a2 = NumberSequenceKeypoint.new(math.max(0, 1 - val - 0.01), 1)
-                if a1.Time == a2.Time then a2 = a1 end
-                local start = NumberSequenceKeypoint.new(0, a1 == a2 and 0 or 1)
-                local goal = NumberSequenceKeypoint.new(1, 0)
-                obj.Transparency = NumberSequence.new({start, a2, a1, goal})
-            end)
-        end
-        rightTextTransparency(versionGradient)
-        rightTextTransparency(creatorGradient)
-
-        fastwait(0.9)
-
-        local progressTI = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-
-        TweenService:Create(statusText, progressTI, {Position = UDim2.new(0, 20, 0, 120), TextTransparency = 0}):Play()
-        TweenService:Create(progressBar, progressTI, {Position = UDim2.new(0, 60, 0, 145), Size = UDim2.new(0, 100, 0, 4)}):Play()
-
-        fastwait(0.25)
-
-        local function setProgress(text, n)
-            statusText.Text = text
-            TweenService:Create(progressBar.Bar, progressTI, {Size = UDim2.new(n, 0, 1, 0)}):Play()
+        local function setProgress(Text, Progress)
+            Progress = math.clamp(Progress or 0, 0, 1)
+            Status.Text = Text
+            Percent.Text = `{math.floor(Progress * 100 + 0.5)}%`
+            TweenService:Create(Fill, BarInfo, {Size = UDim2.new(Progress, 0, 1, 0)}):Play()
         end
 
         local function close()
-            TweenService:Create(titleText, progressTI, {TextTransparency = 1}):Play()
-            TweenService:Create(descText, progressTI, {TextTransparency = 1}):Play()
-            TweenService:Create(versionText, progressTI, {TextTransparency = 1}):Play()
-            TweenService:Create(creatorText, progressTI, {TextTransparency = 1}):Play()
-            TweenService:Create(statusText, progressTI, {TextTransparency = 1}):Play()
-            TweenService:Create(progressBar, progressTI, {BackgroundTransparency = 1}):Play()
-            TweenService:Create(progressBar.Bar, progressTI, {BackgroundTransparency = 1}):Play()
-            TweenService:Create(progressBar.ImageLabel, progressTI, {ImageTransparency = 1}):Play()
-
-            tweenNumber(100, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), function(val)
-                val = val / 250
-                local start = NumberSequenceKeypoint.new(0, 0)
-                local a1 = NumberSequenceKeypoint.new(0.6 + val, 0)
-                local a2 = NumberSequenceKeypoint.new(math.min(1, 0.601 + val), 1)
-                if a1.Time == a2.Time then a2 = a1 end
-                local goal = NumberSequenceKeypoint.new(1, a1 == a2 and 0 or 1)
-                holderGradient.Transparency = NumberSequence.new({start, a1, a2, goal})
-            end)
-
-            fastwait(0.5)
-            gui.Main.BackgroundTransparency = 1
-            outlinesGradient.Rotation = 30
-
-            tweenNumber(100, ti, function(val)
-                val = val / 100
-                local start = NumberSequenceKeypoint.new(0, 1)
-                local a1 = NumberSequenceKeypoint.new(val, 1)
-                local a2 = NumberSequenceKeypoint.new(math.min(1, val + math.min(0.05, val)), 0)
-                if a1.Time == a2.Time then a2 = a1 end
-                local goal = NumberSequenceKeypoint.new(1, a1 == a2 and 1 or 0)
-                outlinesGradient.Transparency = NumberSequence.new({start, a1, a2, goal})
-                holderGradient.Transparency = NumberSequence.new({start, a1, a2, goal})
-            end)
-
-            fastwait(0.45)
-            gui:Destroy()
+            fade(false)
+            TweenService:Create(Card, FadeInfo, {Position = UDim2.new(0.5, 0, 0.5, -10)}):Play()
+            task.wait(0.3)
+            Gui:Destroy()
         end
 
-        return {SetProgress = setProgress, Close = close, Object = gui}
+        return {SetProgress = setProgress, Close = close, Object = Gui}
     end
 
     Services.VexIntro = Services.CreateIntro("Initializing")
